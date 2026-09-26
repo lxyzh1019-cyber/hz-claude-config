@@ -1,0 +1,13 @@
+{
+  "name": "hz-config",
+  "owner": {
+    "name": "Master H"
+  },
+  "plugins": [
+    {
+      "name": "hz-rules",
+      "source": "./plugins/hz-rules",
+      "description": "Global working rules, hooks, executor agent and audit skills."
+    }
+  ]
+}

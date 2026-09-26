@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""PreToolUse hook on Edit/Write: log every edit attempt; in enforce mode, block source edits that
+do not come from the executor subagent unless the main session is explicitly authorized.
+observe mode only logs — run ROUTING-TEST.md (hz-claude-config) to learn which input fields mark a subagent
+before switching to enforce."""
+import os, sys
+from _common import read_hook_input, load_config, is_governance_path, deny_tool, log, STATE_DIR
+
+data = read_hook_input()
+cfg = load_config()
+mode = cfg.get("routing_guard_mode", "observe")
+if mode == "off":
+    sys.exit(0)
+inp = data.get("input") or data.get("tool_input") or {}
+path = inp.get("file_path") or inp.get("path") or ""
+# Fields observed in the hook input that could identify a subagent; recorded for the test.
+subagent_markers = {k: data.get(k) for k in ("agent_id", "agent_name", "agent_type", "subagent", "parent_session_id", "session_id") if k in data}
+env_markers = {k: v for k, v in os.environ.items() if "AGENT" in k.upper()}
+log("routing-guard", {"mode": mode, "tool": data.get("tool_name"), "path": path,
+                      "hook_keys": sorted(data.keys()), "markers": subagent_markers, "env": env_markers})
+if mode != "enforce":
+    sys.exit(0)
+if is_governance_path(path, cfg):
+    sys.exit(0)
+if os.path.exists(os.path.join(STATE_DIR, "main-session-edit-authorized")):
+    sys.exit(0)
+is_worker = any(v for v in subagent_markers.values() if v and str(v) != str(data.get("session_id")))
+marker_fields = cfg.get("subagent_marker_fields") or []
+if marker_fields:
+    is_worker = any(data.get(f) for f in marker_fields)
+if is_worker:
+    sys.exit(0)
+deny_tool(f"Routing rule: source edits must run through the opus-worker subagent ({path}). Delegate this change, "
+          "or ask the user to authorize main-session execution (touch .claude/state/main-session-edit-authorized).")

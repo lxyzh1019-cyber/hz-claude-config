@@ -1,0 +1,101 @@
+{
+  "_comment": "Deterministic skill invocation. Keywords are case-insensitive substrings; patterns are regex. Edit freely; keep it short. Skills not found under .claude/skills/ are invoked with account_skill_prefix.",
+  "account_skill_prefix": "anthropic-skills:",
+  "skills": {
+    "hz-guarantee-audit": {
+      "keywords": [
+        "is this working",
+        "does this work",
+        "why isn't",
+        "why doesn't",
+        "not working",
+        "guarantee",
+        "audit this",
+        "check this",
+        "review the",
+        "review my",
+        "look at the"
+      ],
+      "patterns": [
+        "\\.(md|html|js|sql|json|xlsx)\\b",
+        "\\bv\\d+\\b"
+      ],
+      "note": "whole-artifact verdict first, then the specific point"
+    },
+    "hz-plan-regression-guard": {
+      "keywords": [
+        "update the plan",
+        "revise",
+        "new version",
+        "add this to",
+        "change the",
+        "edit the",
+        "v2 of",
+        "v3 of"
+      ],
+      "patterns": [
+        "\\bv\\d+\\b.*\\b(update|revise|add|change)"
+      ],
+      "note": "manifest before edit, regression table after"
+    },
+    "hz-outcome-audit": {
+      "keywords": [
+        "keeps breaking",
+        "still broken",
+        "again",
+        "every version",
+        "is this actually working",
+        "stayed broken",
+        "polishing"
+      ],
+      "note": "audit, no build this turn"
+    },
+    "hz-web-app-audit": {
+      "keywords": [
+        "index.html",
+        "safe to deploy",
+        "dead code",
+        "github pages",
+        "firebase app",
+        "firestore"
+      ],
+      "patterns": [
+        "\\.(html|js)\\b"
+      ],
+      "note": "deep mode for single-file Firebase apps"
+    },
+    "hz-task-planner": {
+      "keywords": [
+        "build me",
+        "generate a",
+        "create a",
+        "make a script",
+        "add this feature",
+        "large file"
+      ],
+      "note": "model, effort, chunking before any large artifact"
+    },
+    "hz-sql-excel-auditor": {
+      "keywords": [
+        "stored procedure",
+        "t-sql",
+        "vba",
+        "macro",
+        "formula",
+        "crq",
+        "query is slow"
+      ],
+      "note": ""
+    },
+    "hz-chat-handoff": {
+      "keywords": [
+        "new chat",
+        "handoff",
+        "getting too long",
+        "fresh window",
+        "continue elsewhere"
+      ],
+      "note": ""
+    }
+  }
+}
