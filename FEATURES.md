@@ -1,20 +1,20 @@
-# FEATURES — hz-claude-config — manifest v1 — confirmed 2026-09-25
+# FEATURES — hz-claude-config — manifest v2 — confirmed 2026-09-25
 
-## Central rules plugin (plugins/hz-rules)
-- Rules text in `rules/CLAUDE-rules.md`; version lives only in `.claude-plugin/plugin.json`
-- Hooks: session-start (rules injection unless loaded natively, version, per-repo checks, hotspot alerts), plan-gate (plan tier, read-history, fix-count reminder, hotspot alerts), skill-router, routing-guard (observe mode), record-guard (manifest, record, regression table), validation-line
-- Agent `opus-worker` (model opus, effort medium)
-- Skills `hz-guarantee-audit`, `hz-plan-regression-guard`
-- Seed templates `FEATURES.md`, `WORKING_RECORD.md`
-- Hook test suite `hooks/replay-hooks.sh`, isolated temp project, all checks must pass
+## Central content (central/) — fetched by every repo's loader at session start
+- `MANIFEST.txt`: first line `version: X.Y.Z` (the only place the version lives), then every file the loader fetches; rebuilt with `tools/build_manifest.py`
+- Rules text `rules/CLAUDE-rules.md`, injected at session start
+- Hooks: session-start (rules, version, worker/skills paths, per-repo checks, hotspot alerts), plan-gate, skill-router (points to central skill files), routing-guard (observe mode), record-guard, validation-line
+- Worker instructions `agents/opus-worker-instructions.md`
+- Skills `hz-guarantee-audit`, `hz-plan-regression-guard`; seed templates `FEATURES.md`, `WORKING_RECORD.md`
+- Test suite `hooks/replay-hooks.sh` (isolated temp project; manifest consistency; loader fetch, cache, offline and refusal paths)
 
-## Delivery
-- Marketplace catalog `.claude-plugin/marketplace.json` (name `hz-config`) for local user-scope install
-- Cloud installer `cloud/install-cloud.sh` + `cloud/setup-script.txt`: pinned release, installs into every home's `~/.claude`, idempotent, keeps user keys, writes a stop-and-report CLAUDE.md on failure
-- Local user settings `docs/local-user-settings.json` (model, permissions)
+## Stub (stub/) — installed once per repository, stable
+- `hz-loader.py`: fetch MANIFEST + files from public raw GitHub, cache per version (keep 3), run hook scripts, offline fallback, stop message when nothing cached
+- `settings.json` (model, permissions, hooks → loader), thin `opus-worker.md`, `CLAUDE-pointer.md`
+- `install-stub.sh`: one-command install per repo — retire v2 copies and probe files, restore an overwritten README, unmerge v2 settings, merge stub settings, pointer CLAUDE.md, seed per-repo files, smoke test
 
-## One-time migration (retire after all repos migrated)
-- `scripts/sync.sh` + `workflow-migrate.yml`: removes rules-v2 copies (`retired.txt`), unmerges v2 settings, adds pointer `CLAUDE.md` (keeps a repo's own content), restores an overwritten README, seeds per-repo files, one PR per repo
+## This repository
+- Carries the same stub at its root, so rules apply when editing it
 
 ## Regression table format
 | Feature | vOld → vNew | Note |
