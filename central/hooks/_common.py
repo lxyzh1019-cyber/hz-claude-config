@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {
     "routing_guard_mode": "observe",          # observe | enforce | off
     "record_file": "WORKING_RECORD.md",
     "features_file": "FEATURES.md",
-    "governance_files": ["CLAUDE.md", "WORKING_RECORD.md", "FEATURES.md", ".claude/", "docs/", "plans/"],
+    "governance_files": ["CLAUDE.md", "WORKING_RECORD.md", "FEATURES.md", "ARCHITECTURE.md", ".claude/", "docs/", "plans/"],
     "regression_table_pattern": r"(?is)regression\s*table|\|\s*(kept|added|removed|missing)\s*\|",
     "validation_line_pattern": r"Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated(\s*—\s*\S.*)?|Uncertain)\s*$",
     "design_triggers": ["redesign", "architecture", "data model", "schema", "migration", "sync layer", "firestore rules", "shared state", "regression", "keeps breaking", "again", "still broken", "refactor"],
@@ -209,7 +209,8 @@ def hotspot_alerts(cfg):
             i = col(key)
             if i is not None and i < len(r) and _int(r[i]) >= limit:
                 hits.append(f"{key}s {_int(r[i])} (limit {limit})")
-        reviewed = r[reviewed_i].lower() if reviewed_i is not None and reviewed_i < len(r) else ""
+        reviewed = r[reviewed_i] if reviewed_i is not None and reviewed_i < len(r) else ""
+        reviewed = re.sub(r"^[^A-Za-z0-9]+", "", reviewed).lower()  # tolerate **yes**, _yes_, ✅ yes
         if hits and not reviewed.startswith("yes"):
             alerts.append(f"Area '{area}' has hit the redesign threshold ({'; '.join(hits)}). "
                           "No patch until the rewrite-vs-repair comparison is presented and the row is marked reviewed.")

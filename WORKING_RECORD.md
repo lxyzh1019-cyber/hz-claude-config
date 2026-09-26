@@ -15,18 +15,23 @@
 ## Hotspot counter
 | Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |
 |---|---|---|---|---|---|---|
-| rules distribution | 5 | 0 | 0 | 0 | v4 relied on cloud behaviour the docs rule out | yes 2026-09-25 (Plan v5, probe-verified) |
+| rules distribution | 5 | 0 | 0 | 1 |
+| record guard | 2 | 0 | 1 | 0 | lost shell-write detection (regression vs local v2) | no | v4 relied on cloud behaviour the docs rule out | yes 2026-09-25 (Plan v5, probe-verified) |
 Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 workarounds/exceptions → no further patch until the rewrite-vs-repair comparison is presented; then set the last cell to "yes <date>". The hooks read this table: keep the header words.
 
 ## Deliverable ledger
 | Deliverable | State | Evidence |
 |---|---|---|
 | central v3.1.0 + stub built | COMPLETE | replay 41/41; install-stub simulated on 3 repo states |
+| v3.1.1: installer keeps repo sections of a v2 CLAUDE.md; central version bump as update test | COMPLETE | 4 repo states incl. Weekly-Planner copy; re-runs unchanged; replay 41/41 |
 | hz-claude-config updated on main | NOT STARTED | |
 | Pilot app repo | NOT STARTED | |
 | Other app repos | NOT STARTED | |
 
 ## Checks and evidence
+- 2026-09-25 Weekly-Planner pilot: INSTALL OK, smoke line v3.1.0, npm test green, PR #98. Found 3 regressions versus that repo's locally improved v2 hooks (ARCHITECTURE.md exemption, shell-updated record, **yes review cells) — central was built without reading the repo's current hooks. Fixed in 3.1.3 (replay 48/48); installer now refuses when v2 files were locally changed.
+- 2026-09-25 Weekly-Planner: safety check refused `curl | bash` without explicit permission (expected; Step B prompt now includes it). v2 record-guard flagged a turn that changed nothing (plan file outside the repo + worker attempt) — same logic was in central; fixed in 3.1.2, replay 44/44.
+- 2026-09-25 Weekly-Planner session read the installer first and found its CLAUDE.md had a repo section under the v2 rules; installer fixed in v3.1.1 to keep such sections.
 - 2026-09-25 cloud probe (user): SessionStart hook ran (python 3.11.15, cloud=true); raw fetch from hz-claude-config OK; Stop hook forced a correction once.
 - 2026-09-25 replay-hooks.sh 41/41.
 

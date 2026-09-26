@@ -1,4 +1,4 @@
-version: 3.1.0
+version: 3.1.3
 agents/opus-worker-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
