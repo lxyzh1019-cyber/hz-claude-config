@@ -1,0 +1,20 @@
+name: Migrate app repos to central rules (one-time)
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Optional: sync just this owner/repo (overrides repos.txt)"
+        required: false
+        default: ""
+permissions:
+  contents: read
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Migrate repos and open PRs
+        env:
+          GH_TOKEN: ${{ secrets.RULES_SYNC_TOKEN }}
+          ONLY: ${{ inputs.only }}
+        run: bash scripts/sync.sh

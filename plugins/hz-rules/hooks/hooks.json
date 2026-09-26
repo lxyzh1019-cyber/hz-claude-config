@@ -1,0 +1,54 @@
+{
+  "description": "hz-rules enforcement hooks",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py\"'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"${CLAUDE_PLUGIN_ROOT}/hooks/plan-gate.py\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"${CLAUDE_PLUGIN_ROOT}/hooks/skill-router.py\"'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"${CLAUDE_PLUGIN_ROOT}/hooks/routing-guard.py\"'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"${CLAUDE_PLUGIN_ROOT}/hooks/record-guard.py\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"${CLAUDE_PLUGIN_ROOT}/hooks/validation-line.py\"'"
+          }
+        ]
+      }
+    ]
+  }
+}
