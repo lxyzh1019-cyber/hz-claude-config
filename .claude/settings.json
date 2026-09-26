@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" \"$CLAUDE_PROJECT_DIR/.claude/probe.py\" start'" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" \"$CLAUDE_PROJECT_DIR/.claude/probe.py\" stop'" } ] }
+    ]
+  }
+}
