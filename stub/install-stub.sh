@@ -8,10 +8,35 @@ BASE="${HZ_BASE_URL:-https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 get(){ curl -fsSL "$BASE/$1" -o "$T/$(basename "$1")"; }
 for f in stub/hz-loader.py stub/settings.json stub/opus-worker.md stub/CLAUDE-pointer.md stub/retired.txt \
-         stub/merge_settings.py stub/unmerge_settings.py stub/v2-managed-settings.json \
+         stub/merge_settings.py stub/unmerge_settings.py stub/v2-managed-settings.json stub/split_claude_md.py stub/v2-known-files.txt \
          central/seed/FEATURES.md central/seed/WORKING_RECORD.md; do get "$f"; done
 [ -d .git ] || { echo "Run this from the repository root."; exit 1; }
 say(){ echo "- $*"; }
+
+# 0. stop if this repo's own sessions changed any rules-v2 file (their improvements would be lost)
+if [ "${HZ_ALLOW_LOCAL_HOOK_CHANGES:-0}" != "1" ]; then
+  changed="$(python3 - "$T/v2-known-files.txt" <<'PY'
+import hashlib, os, sys
+known = {l.strip() for l in open(sys.argv[1]) if l.strip() and not l.startswith("#")}
+out = []
+for base in (".claude/hooks", ".claude/skills/hz-guarantee-audit", ".claude/skills/hz-plan-regression-guard",
+             ".claude/agents/opus-worker.md", "tests/replay-hooks.sh", "tests/test-routing-hook.md", "test/hooks.test.mjs"):
+    files = [base] if os.path.isfile(base) else [os.path.join(d, f) for d, _, fs in os.walk(base) if "__pycache__" not in d for f in fs]
+    for p in files:
+        if hashlib.sha256(open(p, "rb").read()).hexdigest() not in known:
+            out.append(p)
+print("\n".join(out))
+PY
+)"
+  if [ -n "$changed" ]; then
+    echo "LOCAL CHANGES FOUND in rules-v2 files — this repo's sessions improved them after the v2 install:"
+    echo "$changed" | sed 's/^/  /'
+    echo "Nothing was changed. Show the user what each file changed (git log -p on it) so the improvements can be"
+    echo "added to hz-claude-config first. To install anyway: HZ_ALLOW_LOCAL_HOOK_CHANGES=1."
+    echo "NOT INSTALLED"
+    exit 1
+  fi
+fi
 
 # 1. retire rules-v2 copies and probe files
 while IFS= read -r f; do
@@ -34,8 +59,12 @@ cp "$T/hz-loader.py" .claude/hz-loader.py
 cp "$T/opus-worker.md" .claude/agents/opus-worker.md
 say "installed .claude/settings.json, .claude/hz-loader.py, .claude/agents/opus-worker.md"
 
-# 4. pointer CLAUDE.md (a repo's own CLAUDE.md content is kept)
-if [ ! -f CLAUDE.md ] || head -1 CLAUDE.md | grep -q '^# Global Working Rules'; then cp "$T/CLAUDE-pointer.md" CLAUDE.md; say "CLAUDE.md is now the pointer"
+# 4. pointer CLAUDE.md — a repo's own content is kept: sections added under the v2 rules, or a whole own CLAUDE.md
+if [ ! -f CLAUDE.md ]; then cp "$T/CLAUDE-pointer.md" CLAUDE.md; say "CLAUDE.md created as the pointer"
+elif head -1 CLAUDE.md | grep -q '^# Global Working Rules'; then
+  kept="$(python3 "$T/split_claude_md.py" CLAUDE.md "$T/CLAUDE-pointer.md")"
+  if [ -n "$kept" ]; then say "CLAUDE.md is now the pointer; kept this repo's own sections after it: $(echo "$kept" | paste -sd ';' -)"
+  else say "CLAUDE.md is now the pointer"; fi
 elif ! grep -q 'hz-loader.py' CLAUDE.md; then printf '\n' >> CLAUDE.md; cat "$T/CLAUDE-pointer.md" >> CLAUDE.md; say "kept this repo's CLAUDE.md content, appended the pointer"; fi
 
 # 5. per-repo files, created only if missing

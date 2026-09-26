@@ -9,6 +9,7 @@ unset CLAUDE_PLUGIN_ROOT
 cp "$H/config.json" "$T/config.bak"
 trap 'cp "$T/config.bak" "$H/config.json"; rm -rf "$PROJ" "$T" "$FAKEHOME"' EXIT
 cd "$PROJ"
+git init -q . && git config user.email t@t && git config user.name t
 pass=0; fail=0
 check(){ # name expected_substring actual
   if grep -q -- "$2" <<<"$3"; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 -> ${3:0:200}"; fail=$((fail+1)); fi; }
@@ -16,25 +17,25 @@ printf '# FEATURES — test app — manifest v1\n- login\n' > FEATURES.md
 printf '# WORKING RECORD\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|---|---|\n' > WORKING_RECORD.md
 
 # --- transcripts
-cat > "$T/ok.jsonl" <<'J'
+cat > "$T/ok.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"fix the bug"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/repo/js/app.js"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/repo/WORKING_RECORD.md"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/WORKING_RECORD.md"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\nRegression table\n| Feature | Status |\n| login | kept |\n\nConfidence: Medium · Status: Validated — npm test 12/12"}]}}
 J
-cat > "$T/noline.jsonl" <<'J'
+cat > "$T/noline.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hello"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Here is the answer without a validation line."}]}}
 J
-cat > "$T/norecord.jsonl" <<'J'
+cat > "$T/norecord.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"fix the bug"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/repo/js/app.js"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Fixed.\n\nConfidence: High · Status: Checked"}]}}
 J
-cat > "$T/gov.jsonl" <<'J'
+cat > "$T/gov.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"update the rules"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/repo/CLAUDE.md"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/CLAUDE.md"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Updated.\n\nConfidence: High · Status: Checked"}]}}
 J
 
@@ -52,6 +53,23 @@ printf '# FEATURES — test app — manifest v1\n- login\n' > FEATURES.md
 # --- SessionStart
 o=$(echo '{}' | python3 $H/session-start.py); check "session-start injects version" "Rules v" "$o"
 check "session-start reports routing mode" "routing guard mode" "$o"
+# --- record-guard: only real repository changes count
+cat > "$T/planfile.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"plan this"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/root/.claude/plans/plan-1.md"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Plan v1 — awaiting approval"}]}}
+J
+o=$(echo "{\"transcript_path\":\"$T/planfile.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard ignores files outside the repo" "^$" "$o"
+cat > "$T/dispatch.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"install it"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Agent","input":{"subagent_type":"opus-worker"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The worker could not run the command."}]}}
+J
+git add -A >/dev/null 2>&1; git commit -qm base >/dev/null 2>&1
+o=$(echo "{\"transcript_path\":\"$T/dispatch.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard allows a worker turn that changed nothing" "^$" "$o"
+mkdir -p js && echo "x" > js/app.js
+o=$(echo "{\"transcript_path\":\"$T/dispatch.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard catches a worker turn that changed files" "record is incomplete" "$o"
+rm -rf js
 # --- UserPromptSubmit: plan gate
 o=$(echo '{"prompt":"please:\n- add a button\n- fix colour\n- change the schema"}' | python3 $H/plan-gate.py); check "plan-gate full tier on 3 bullets" "Full 'Plan vN" "$o"
 o=$(echo '{"prompt":"- rename the label on the home tab"}' | python3 $H/plan-gate.py); check "plan-gate micro tier on 1 bullet" "Micro-plan" "$o"
@@ -103,13 +121,32 @@ if [ -f "$L" ]; then
   o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\"}" | HZ_CACHE_DIR="$C" python3 "$L" validation-line.py); check "loader relays a Stop block" '"decision": "block"' "$o"
   o=$(echo '{}' | HZ_CACHE_DIR="$C" python3 "$L" ../../etc/passwd); check "loader refuses unsafe script names" "^$" "$o"
 fi
+# --- v3.1.3 regressions from the Weekly-Planner install
+cat > "$T/arch.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"update the architecture doc"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/ARCHITECTURE.md"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Updated."}]}}
+J
+o=$(echo "{\"transcript_path\":\"$T/arch.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "ARCHITECTURE.md edits are exempt" "^$" "$o"
+cat > "$T/shellrec.jsonl" <<J
+{"type":"user","timestamp":"2000-01-01T00:00:00Z","message":{"role":"user","content":"fix it"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"cat >> WORKING_RECORD.md"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\n| Feature | Status |\n| login | kept |"}]}}
+J
+touch -d '1999-01-01' WORKING_RECORD.md
+o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record not touched this turn still blocks" "update WORKING_RECORD.md" "$o"
+touch WORKING_RECORD.md
+o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record updated by a shell command counts" "^$" "$o"
+rec "$NEWH" "$NEWS" '| Pocket money | 3 | 0 | 0 | 0 | x | **yes** 2026-09-20 |'
+o=$(echo '{}' | python3 $H/session-start.py); check "bold **yes** counts as reviewed" "clean" "$(echo "$o" | grep -c 'has hit the redesign threshold' | sed 's/^0$/clean/')"
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard
-o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"/repo/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard observe mode allows" "^$" "$o"
+o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard observe mode allows" "^$" "$o"
 sed -i 's/"observe"/"enforce"/' $H/config.json
-o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"/repo/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard enforce denies main-session source edit" '"deny"' "$o"
-o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"/repo/CLAUDE.md"}}' | python3 $H/routing-guard.py); check "routing-guard enforce allows governance edit" "^$" "$o"
+o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard enforce denies main-session source edit" '"deny"' "$o"
+o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/CLAUDE.md"}}' | python3 $H/routing-guard.py); check "routing-guard enforce allows governance edit" "^$" "$o"
 sed -i 's/"enforce"/"observe"/' $H/config.json
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
