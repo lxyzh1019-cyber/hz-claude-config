@@ -17,8 +17,8 @@
 ## Hotspot counter
 | Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |
 |---|---|---|---|---|---|---|
-| rules distribution | 5 | 0 | 0 | 1 |
-| record guard | 2 | 0 | 1 | 0 | lost shell-write detection (regression vs local v2) | no | v4 relied on cloud behaviour the docs rule out | yes 2026-09-25 (Plan v5, probe-verified) |
+| rules distribution | 5 | 0 | 0 | 1 | v4 relied on cloud behaviour the docs rule out | yes 2026-09-25 (Plan v5, probe-verified) |
+| record guard | 2 | 0 | 1 | 0 | lost shell-write detection (regression vs local v2) | yes 2026-09-25 (repair chosen over rewrite; comparison in chat) |
 Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 workarounds/exceptions → no further patch until the rewrite-vs-repair comparison is presented; then set the last cell to "yes <date>". The hooks read this table: keep the header words.
 
 ## Deliverable ledger
