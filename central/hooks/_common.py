@@ -4,24 +4,26 @@ import os
 import re
 import sys
 
-# Hook scripts live in the hz-rules plugin (local) or ~/.claude/hz-rules (cloud install);
-# per-repo files (FEATURES.md, WORKING_RECORD.md, state) live in the project.
+# Hook scripts run from the loader's cache (~/.cache/hz-rules/<version>/hooks); per-repo files
+# (FEATURES.md, WORKING_RECORD.md, .claude/state) live in the project.
 PROJECT_DIR = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
 HOOK_DIR = os.path.dirname(os.path.abspath(__file__))
-PLUGIN_ROOT = os.path.dirname(HOOK_DIR)
-PLUGIN_MODE = bool(os.environ.get("CLAUDE_PLUGIN_ROOT"))
+CENTRAL_ROOT = os.path.dirname(HOOK_DIR)
 STATE_DIR = os.path.join(PROJECT_DIR, ".claude", "state")
 CONFIG_PATH = os.path.join(HOOK_DIR, "config.json")
-RULES_PATH = os.path.join(PLUGIN_ROOT, "rules", "CLAUDE-rules.md")
-SEED_DIR = os.path.join(PLUGIN_ROOT, "seed")
-RULES_MARKER = "# Global Working Rules"
+RULES_PATH = os.path.join(CENTRAL_ROOT, "rules", "CLAUDE-rules.md")
+SEED_DIR = os.path.join(CENTRAL_ROOT, "seed")
+SKILLS_DIR = os.path.join(CENTRAL_ROOT, "skills")
+WORKER_PATH = os.path.join(CENTRAL_ROOT, "agents", "opus-worker-instructions.md")
 
 
-def plugin_version():
+def central_version():
+    """Version from the first line of MANIFEST.txt ('version: X.Y.Z')."""
     try:
-        with open(os.path.join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
-            return json.load(f).get("version", "unknown")
-    except (OSError, ValueError):
+        with open(os.path.join(CENTRAL_ROOT, "MANIFEST.txt"), encoding="utf-8") as f:
+            first = f.readline().strip()
+        return first.split(":", 1)[1].strip() if first.lower().startswith("version:") else "unknown"
+    except OSError:
         return "unknown"
 
 DEFAULT_CONFIG = {

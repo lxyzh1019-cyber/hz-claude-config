@@ -1,4 +1,0 @@
-# Paste into the cloud environment's "Setup script" field. Replace OWNER once.
-# To update the rules: change V to the new release tag. Editing this script rebuilds the environment.
-V=v3.0.0; OWNER=REPLACE_WITH_YOUR_GITHUB_USERNAME
-rm -rf /tmp/hzc && mkdir -p /tmp/hzc && if curl -fsSL "https://github.com/$OWNER/hz-claude-config/archive/refs/tags/$V.tar.gz" | tar xz -C /tmp/hzc && bash /tmp/hzc/*/cloud/install-cloud.sh; then :; else mkdir -p ~/.claude && printf '# Central rules NOT INSTALLED\n\nThe central hz-rules setup failed in this cloud environment (release %s). Before any work, tell the user: "Central rules failed to install — check the environment setup script." Do nothing else until they respond.\n' "$V" > ~/.claude/CLAUDE.md; fi

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """UserPromptSubmit hook: deterministic skill invocation from keyword rules in skill-router.json."""
 import json, os, re, sys
-from _common import read_hook_input, add_context, log, HOOK_DIR, PLUGIN_ROOT, PLUGIN_MODE
+from _common import read_hook_input, add_context, log, HOOK_DIR, SKILLS_DIR
 
 RULES = os.path.join(HOOK_DIR, "skill-router.json")
 data = read_hook_input()
@@ -20,11 +20,12 @@ if not hits:
     sys.exit(0)
 log("skill-router", {"hits": [h[0] for h in hits]})
 prefix = rules.get("account_skill_prefix", "")
-def resolve(name):
-    # bundled skill: namespaced when running as a plugin, bare when installed into ~/.claude/skills (cloud)
-    if os.path.isdir(os.path.join(PLUGIN_ROOT, "skills", name)):
-        return ("hz-rules:" + name) if PLUGIN_MODE else name
-    return prefix + name
-lines = [f"- Invoke skill `{resolve(s)}`" + (f" — {n}" if n else "") for s, n in hits]
+def describe(name):
+    """Bundled central skill: point at its file in the loader cache. Otherwise: an account skill."""
+    path = os.path.join(SKILLS_DIR, name, "SKILL.md")
+    if os.path.isfile(path):
+        return f"`{name}` — read {path}"
+    return f"`{prefix}{name}`"
+lines = [f"- Use skill {describe(s)}" + (f" ({n})" if n else "") for s, n in hits]
 add_context("UserPromptSubmit", "[skill-router] Matched skills for this prompt:\n" + "\n".join(lines) +
             "\nIf a matched skill does not fit, say why in one line rather than silently skipping it.")

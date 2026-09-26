@@ -1,8 +1,0 @@
-{
-  "name": "hz-rules",
-  "version": "3.0.0",
-  "description": "Master H's global working rules for Claude Code: rules text, enforcement hooks, the opus-worker executor, and the hz-guarantee-audit and hz-plan-regression-guard skills.",
-  "author": {
-    "name": "Master H"
-  }
-}

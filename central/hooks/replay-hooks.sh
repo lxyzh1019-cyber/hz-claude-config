@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Replays synthetic hook inputs through every hz-rules hook in an isolated temporary project.
-# Run from anywhere: bash plugins/hz-rules/hooks/replay-hooks.sh  (never touches a real repo)
+# Replays synthetic hook inputs through every central hook and the loader in an isolated temporary project.
+# Run from anywhere: bash central/hooks/replay-hooks.sh  (never touches a real repo)
 set -u
 H="$(cd "$(dirname "$0")" && pwd)"
 PROJ=$(mktemp -d); T=$(mktemp -d); FAKEHOME=$(mktemp -d)
@@ -76,24 +76,35 @@ o=$(echo '{}' | python3 $H/session-start.py); check "blank seed row is ignored" 
 o=$(echo '{"prompt":"the timer is broken again"}' | python3 $H/plan-gate.py); check "fix words trigger counter reminder" "+1 fix round" "$o"
 check "fix words trigger read-history step" "Checked against:" "$o"
 o=$(echo '{"prompt":"- rename the home tab label"}' | python3 $H/plan-gate.py); check "micro-plan asks for both new lines" "Removes/consolidates:" "$o"
-# --- Central install behaviour
-o=$(echo '{}' | python3 $H/session-start.py); check "session-start reports plugin version" "Rules v3.0.0" "$o"
-check "rules injected when not loaded natively" "injected by the hz-rules" "$o"
-check "injected text contains the rules" "My Environment" "$o"
-mkdir -p "$FAKEHOME/.claude" && printf '# Global Working Rules — hz-rules v3\n' > "$FAKEHOME/.claude/CLAUDE.md"
-o=$(echo '{}' | python3 $H/session-start.py); check "native rules detected" "loaded as ~/.claude/CLAUDE.md" "$o"
-check "no double injection when native" "clean" "$(echo "$o" | grep -c 'My Environment' | sed 's/^0$/clean/')"
-rm -f "$FAKEHOME/.claude/CLAUDE.md"
+# --- Central content: manifest, session start, router
+CENTRAL="$(cd "$H/.." && pwd)"
+VER="$(head -1 "$CENTRAL/MANIFEST.txt" | sed 's/^version: *//')"
+listed="$(tail -n +2 "$CENTRAL/MANIFEST.txt" | sort)"
+actual="$(cd "$CENTRAL" && find . -type f ! -name MANIFEST.txt ! -path '*__pycache__*' | sed 's#^\./##' | sort)"
+check "MANIFEST lists exactly the central files" "same" "$([ "$listed" = "$actual" ] && echo same || echo "differs: run tools/build_manifest.py")"
+o=$(echo '{}' | python3 $H/session-start.py); check "session-start reports manifest version" "Rules v$VER loaded" "$o"
+check "rules text injected" "My Environment" "$o"
+check "worker instructions path given" "Worker instructions: .*opus-worker-instructions.md" "$o"
 mv FEATURES.md F.bak
 o=$(echo '{}' | python3 $H/session-start.py); check "missing per-repo file reported" "Missing per-repo files: FEATURES.md" "$o"
 o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard points to seed templates" "seed" "$o"
 mv F.bak FEATURES.md
-o=$(echo '{"prompt":"review my index.html, is this working?"}' | CLAUDE_PLUGIN_ROOT="$H/.." python3 $H/skill-router.py); check "plugin mode namespaces bundled skill" "hz-rules:hz-guarantee-audit" "$o"
-o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "cloud mode keeps bundled skill bare" "\`hz-guarantee-audit\`" "$o"
+o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "router points to central skill file" "hz-guarantee-audit.*read .*skills/hz-guarantee-audit/SKILL.md" "$o"
+check "router prefixes account skill" "anthropic-skills:hz-web-app-audit" "$o"
+# --- Loader (only in the hz-claude-config checkout)
+L="$CENTRAL/../stub/hz-loader.py"
+if [ -f "$L" ]; then
+  C="$T/cache"; U="file://$CENTRAL/"
+  o=$(echo '{}' | HZ_CENTRAL_URL="$U" HZ_CACHE_DIR="$C" python3 "$L" session-start.py); check "loader fetches and injects rules" "Rules v$VER loaded" "$o"
+  check "loader cached this version" "yes" "$([ -f "$C/$VER/.complete" ] && [ "$(cat "$C/current")" = "$VER" ] && echo yes)"
+  o=$(echo '{"prompt":"- a\n- b\n- c"}' | HZ_CENTRAL_URL="$U" HZ_CACHE_DIR="$C" python3 "$L" plan-gate.py); check "loader runs later hooks from cache" "Full 'Plan vN" "$o"
+  o=$(echo '{}' | HZ_CENTRAL_URL="file:///nonexistent/" HZ_CACHE_DIR="$C" python3 "$L" session-start.py); check "offline uses cached version" "offline: using cached v$VER" "$o"
+  o=$(echo '{}' | HZ_CENTRAL_URL="file:///nonexistent/" HZ_CACHE_DIR="$T/empty" python3 "$L" session-start.py); check "offline with no cache says stop" "Central rules NOT loaded" "$o"
+  o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\"}" | HZ_CACHE_DIR="$C" python3 "$L" validation-line.py); check "loader relays a Stop block" '"decision": "block"' "$o"
+  o=$(echo '{}' | HZ_CACHE_DIR="$C" python3 "$L" ../../etc/passwd); check "loader refuses unsafe script names" "^$" "$o"
+fi
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
-check "skill-router prefixes account skill" "anthropic-skills:hz-web-app-audit" "$o"
-check "skill-router keeps repo skill bare" "\`hz-guarantee-audit\`" "$o"
 # --- PreToolUse: routing guard
 o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"/repo/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard observe mode allows" "^$" "$o"
 sed -i 's/"observe"/"enforce"/' $H/config.json

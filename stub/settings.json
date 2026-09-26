@@ -27,7 +27,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"{ROOT}/hooks/session-start.py\"'"
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" session-start.py'",
+            "timeout": 60
           }
         ]
       }
@@ -37,11 +38,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"{ROOT}/hooks/plan-gate.py\"'"
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" plan-gate.py'"
           },
           {
             "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"{ROOT}/hooks/skill-router.py\"'"
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" skill-router.py'"
           }
         ]
       }
@@ -52,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"{ROOT}/hooks/routing-guard.py\"'"
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" routing-guard.py'"
           }
         ]
       }
@@ -62,11 +63,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"{ROOT}/hooks/record-guard.py\"'"
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" record-guard.py'"
           },
           {
             "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"{ROOT}/hooks/validation-line.py\"'"
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" validation-line.py'"
           }
         ]
       }
