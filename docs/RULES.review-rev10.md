@@ -1,6 +1,6 @@
-> **Rules review copy for central v3.1.4 — Rev 9 marked with 🟦** (palette cycles back to blue). Rev 8 and earlier are approved and unmarked.
+> **Rules review copy for central v3.1.5 — Rev 10 marked with 🟩.** Rev 9 and earlier are approved and unmarked.
 >
-> Rev 9 summary — why: the environment block still said "no local repo folders, no terminal, no Git Bash", contradicting the GitHub Desktop clones and the local sessions that now run the hooks; and plan numbering was undefined across conversations. Changed: My Environment rewritten (local sessions on clones, start them from `main`, how changes move in both directions); new numbering rule (Plan vN per conversation, R-numbers per repository). Removed: "No local repo folders, no terminal, no Git Bash. I cannot run commands on my PC." and "only via Push origin".
+> Rev 10 summary — why: while background workers ran, the Stop hook forced every pause into the final-report format, so an interim update looked like finished work with a Confidence/Status line that covered only one part. Changed: two report types (progress report while workers run, ending with a Progress line; final report only when nothing runs); the validation line must cover the whole task. Hooks: the Progress line is accepted only in a session that dispatched a worker; progress turns need the record update but no regression table. Removed: nothing.
 
 # Global Working Rules — hz-rules v3 (exact version: see the session-start line)
 
@@ -8,10 +8,10 @@ Apply these rules across projects. Skills, subagents, and project instructions c
 
 ## My Environment
 
-- 🟦 **Rev 9** Claude Code through the Windows desktop app: mainly cloud sessions on GitHub repos, plus local sessions on clones managed with GitHub Desktop.
-- 🟦 **Rev 9** Local Claude Code sessions run on those clones and can run commands on my PC; I don't use a terminal myself.
-- 🟦 **Rev 9** Start a local session only on `main` or a branch made from the current `main`; older branches carry outdated rules and hooks.
-- 🟦 **Rev 9** Changes reach GitHub through a cloud session, the GitHub web UI (upload, edit, pull request, merge), or a push from a local clone (**Push origin** in GitHub Desktop, or a push by a local session), always followed by a pull request. Local clones receive changes via **Pull origin**.
+- Claude Code through the Windows desktop app: mainly cloud sessions on GitHub repos, plus local sessions on clones managed with GitHub Desktop.
+- Local Claude Code sessions run on those clones and can run commands on my PC; I don't use a terminal myself.
+- Start a local session only on `main` or a branch made from the current `main`; older branches carry outdated rules and hooks.
+- Changes reach GitHub through a cloud session, the GitHub web UI (upload, edit, pull request, merge), or a push from a local clone (**Push origin** in GitHub Desktop, or a push by a local session), always followed by a pull request. Local clones receive changes via **Pull origin**.
 - Cloud sessions start from the default branch unless told otherwise. These rules, the hook logic, the worker instructions and the audit skills live only in `hz-claude-config`. Each repository keeps a small stable stub — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md` and a pointer `CLAUDE.md` — and the loader fetches the current central version at every session start, in cloud and local sessions alike.
 
 At session start the SessionStart hook injects the rules version, branch, missing per-repo files, and manifest status; state the version and branch in your first reply. Each app repository holds only a short `CLAUDE.md` pointer, `FEATURES.md`, and `WORKING_RECORD.md`. Report missing per-repo files before dependent work; if these rules themselves are missing, stop and report.
@@ -61,7 +61,7 @@ Design analysis does not authorize implementation. Smallest diff must not bias a
 
 Lead with the decision, plan, blocker, or next step in everyday language. Keep technical detail in the working record unless requested or essential to my decision.
 
-🟦 **Rev 9** **Numbering.** Plan numbers restart at v1 in each new conversation and increase by one with each revision in it. R-numbers in `WORKING_RECORD.md` count the repository's work rounds and never restart. Don't use one for the other.
+**Numbering.** Plan numbers restart at v1 in each new conversation and increase by one with each revision in it. R-numbers in `WORKING_RECORD.md` count the repository's work rounds and never restart. Don't use one for the other.
 
 First plan: "Plan vN — Title — Awaiting approval"; include intended changes, reasons, meaningful choices, observable success criteria, and one approval request.
 
@@ -110,7 +110,8 @@ Fable is planner and checker; Opus is implementation executor through `opus-work
 - Define success before implementation. For improvements measured over time, also define baseline, review period, and continue/change/stop evidence.
 - Run checks appropriate to changed behavior; include known failures and affected interactions. Report passed, failed, and untested. Mark anything you couldn't confirm and say where you looked.
 - **Review pass before merge.** Before I merge, review the branch diff against `main` and list only problems you would block the merge for, each with file and line, why it's wrong, and how to show it fails.
-- **End-of-run report order.** Open with what you need from me (or "Nothing needed from you"), then what changed, then what you found; then the regression table and the validation line.
+- 🟩 **Rev 10** **Two report types.** While any dispatched worker is still running, every reply is a **progress report**: open with "In progress — not done", then what finished, what is running, and what comes next; include the deliverable ledger if useful; no regression table and no Confidence/Status line; end with `Progress: <n> of <total> done · Running: <names>`. Only when nothing is running is the reply a **final report**.
+- **End-of-run report order.** 🟩 **Rev 10** A final report opens with what you need from me (or "Nothing needed from you"), then what changed, then what you found; then the regression table and the validation line.
 - Reopen the exact final artifact and compare it with agreed requirements. Prior claims do not prove a file changed.
 - Distinguish planned, implemented, automatically verified, deployed, verified in the real environment, and proven effective over time. Claim only evidenced stages.
 - **Deploy stamp.** Every deployable page shows a visible version/date stamp (for example in the footer), updated in the same change that alters the page. After a merge to `main`, "deployed" is claimed only when the stamp has been read on the live GitHub Pages URL — by a session that fetches the page, or by me. Until then the status is "merged, not confirmed live".
@@ -118,7 +119,7 @@ Fable is planner and checker; Opus is implementation executor through `opus-work
 
 ## Required Validation Line
 
-End every final answer with: `Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain`
+End every final answer with: `Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain`🟩 **Rev 10** . A progress report ends with its Progress line instead; the Stop hook accepts that only in a session that dispatched a worker. The validation line always covers the whole task, never just a finished part.
 
 Confidence reflects evidence and unresolved assumptions. Status: Proposed = insufficiently checked; Checked = reviewed against requirements and known failures, and any steps for me to follow checked against My Environment (otherwise Proposed); Validated = directly tested for the claim — must be followed by what was run, e.g. `Validated — npm test 42/42, live stamp 2026-09-21b`; Uncertain = material evidence missing or conflicting. Identify mixed results and untested scope before the line. Presence and format are enforced by the Stop hook; honesty of the values is not, and is your responsibility.
 

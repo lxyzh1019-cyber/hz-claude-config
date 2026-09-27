@@ -145,6 +145,30 @@ rec "$NEWH" "$NEWS" '| Sister Sync invites | 4 | 0 | 0 | 0 | `currentDayKey \|\|
 o=$(echo '{}' | python3 $H/session-start.py); check "escaped pipe in a cell is not a column break" "clean" "$(echo "$o" | grep -c 'hotspot\]' | sed 's/^0$/clean/')"
 rec "$NEWH" "$NEWS" '| Sister Sync invites | 4 | 0 | 0 | 0 | a || b broken cell | Yes 2026-09-24 |'
 o=$(echo '{}' | python3 $H/session-start.py); check "malformed row is reported, not misread" "cells but the header has" "$o"
+# --- v3.1.5: progress reports while workers run
+cat > "$T/prog_nodispatch.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"status?"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"In progress — not done.\nProgress: 1 of 3 done · Running: 1B, 1C"}]}}
+J
+cat > "$T/prog_earlier.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Agent","input":{"subagent_type":"opus-worker","run_in_background":true}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Dispatched."}]}}
+{"type":"user","message":{"role":"user","content":"show me the status"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/css/app.css"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"In progress — not done. 1A committed.\nProgress: 1 of 3 done · Running: 1B, 1C"}]}}
+J
+o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "progress line accepted after a worker was dispatched" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/prog_nodispatch.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "progress line refused when no worker was dispatched" "only for reports while dispatched workers" "$o"
+o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "missing line explains both report types" "progress report" "$o"
+touch WORKING_RECORD.md
+o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "progress turn needs no regression table" "^$" "$o"
+touch -d '1999-01-01' WORKING_RECORD.md
+python3 - "$T/prog_earlier.jsonl" <<'PY'
+import sys; p=sys.argv[1]; l=open(p).read().replace('"content":"show me the status"}','"content":"show me the status"},"timestamp":"2000-01-01T00:00:00Z"',1); open(p,"w").write(l)
+PY
+o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "progress turn still needs the record update" "update WORKING_RECORD.md" "$o"
+touch WORKING_RECORD.md
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard
