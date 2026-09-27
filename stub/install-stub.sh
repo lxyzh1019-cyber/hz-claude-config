@@ -8,16 +8,17 @@ BASE="${HZ_BASE_URL:-https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 get(){ curl -fsSL "$BASE/$1" -o "$T/$(basename "$1")"; }
 for f in stub/hz-loader.py stub/settings.json stub/opus-worker.md stub/CLAUDE-pointer.md stub/retired.txt \
-         stub/merge_settings.py stub/unmerge_settings.py stub/v2-managed-settings.json stub/split_claude_md.py stub/v2-known-files.txt \
+         stub/merge_settings.py stub/unmerge_settings.py stub/v2-managed-settings.json stub/split_claude_md.py stub/v2-known-files.txt stub/retired-permissions.json \
          central/seed/FEATURES.md central/seed/WORKING_RECORD.md; do get "$f"; done
 [ -d .git ] || { echo "Run this from the repository root."; exit 1; }
 say(){ echo "- $*"; }
 
 # 0. stop if this repo's own sessions changed any rules-v2 file (their improvements would be lost)
 if [ "${HZ_ALLOW_LOCAL_HOOK_CHANGES:-0}" != "1" ]; then
-  changed="$(python3 - "$T/v2-known-files.txt" <<'PY'
+  changed="$(python3 - "$T/v2-known-files.txt" "$T/opus-worker.md" <<'PY'
 import hashlib, os, sys
 known = {l.strip() for l in open(sys.argv[1]) if l.strip() and not l.startswith("#")}
+known.add(hashlib.sha256(open(sys.argv[2], "rb").read()).hexdigest())  # the current stub's own worker file
 out = []
 for base in (".claude/hooks", ".claude/skills/hz-guarantee-audit", ".claude/skills/hz-plan-regression-guard",
              ".claude/agents/opus-worker.md", "tests/replay-hooks.sh", "tests/test-routing-hook.md", "test/hooks.test.mjs"):
@@ -54,6 +55,17 @@ fi
 # 3. settings: drop v2 entries, add the stub (keeps anything else this repo has)
 mkdir -p .claude/agents
 if [ -f .claude/settings.json ] && grep -q '\.claude/hooks/' .claude/settings.json; then python3 "$T/unmerge_settings.py" .claude/settings.json "$T/v2-managed-settings.json"; fi
+if [ -f .claude/settings.json ]; then python3 - .claude/settings.json "$T/retired-permissions.json" <<'PY'
+import json, sys
+p, r = sys.argv[1], json.load(open(sys.argv[2]))
+s = json.load(open(p)); perm = s.get("permissions", {})
+for key, gone in r.items():
+    if key in perm:
+        perm[key] = [x for x in perm[key] if x not in gone]
+        if not perm[key]: perm.pop(key)
+json.dump(s, open(p, "w"), indent=2)
+PY
+fi
 python3 "$T/merge_settings.py" "$T/settings.json" .claude/settings.json "hz-loader.py"
 cp "$T/hz-loader.py" .claude/hz-loader.py
 cp "$T/opus-worker.md" .claude/agents/opus-worker.md

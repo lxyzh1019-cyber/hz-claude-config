@@ -1,6 +1,6 @@
-> **Rules review copy for central v3.1.5 — Rev 10 marked with 🟩.** Rev 9 and earlier are approved and unmarked.
+> **Rules review copy for central v3.1.6 — Rev 11 marked with 🟧.** Rev 10 and earlier are approved and unmarked.
 >
-> Rev 10 summary — why: while background workers ran, the Stop hook forced every pause into the final-report format, so an interim update looked like finished work with a Confidence/Status line that covered only one part. Changed: two report types (progress report while workers run, ending with a Progress line; final report only when nothing runs); the validation line must cover the whole task. Hooks: the Progress line is accepted only in a session that dispatched a worker; progress turns need the record update but no regression table. Removed: nothing.
+> Rev 11 summary — why: `ask` rules for commit, push and merge prompted in auto mode on every branch push, although work always happens on a branch and you merge on GitHub yourself. Changed: commit, push, local merge and opening pull requests run without asking; `gh pr merge` is denied (merging stays yours); the new `git-guard` hook blocks commits on and pushes to `main` without prompting; deploys no longer prompt either and run only when you asked for one. Explicit "skip the plan" wording is now honoured by the plan-gate hook. Removed: "Commit, push, merge, and deploy commands prompt me for approval".
 
 # Global Working Rules — hz-rules v3 (exact version: see the session-start line)
 
@@ -22,7 +22,7 @@ At session start the SessionStart hook injects the rules version, branch, missin
 
 Every rule in this file has one of three enforcement grades. Know which applies; do not describe a prose rule as guaranteed.
 
-- **Native** — a Claude Code feature enforces it: plan mode blocks edits until approval; `permissions.ask/deny` gate git and deploy commands; `model:` in settings and agent frontmatter fixes the model.
+- **Native** — a Claude Code feature enforces it: plan mode blocks edits until approval; `permissions` 🟧 **Rev 11** deny destructive git commands and `gh pr merge`, (nothing prompts); `model:` in settings and agent frontmatter fixes the model.
 - **Hook** — a central hook script, run through the repository's loader, checks it deterministically: session facts (SessionStart), hotspot redesign alerts and fix-count reminders (SessionStart, UserPromptSubmit), validation line (Stop), plan gate (UserPromptSubmit), record and regression-table guard (Stop), skill router (UserPromptSubmit), routing guard (PreToolUse, observe mode — logs only until enforced).
 - **Prose** — depends on adherence. Only rules with no available mechanism remain prose below; treat them with extra care after compaction or in long sessions.
 
@@ -54,7 +54,7 @@ Design analysis does not authorize implementation. Smallest diff must not bias a
 
 - Plan mode is the default (Native). No edits, installations, or modifying commands happen until I approve the plan.
 - **Two-tier gate.** Micro-plan for requests of ≤2 bullets in Routine mode: target, files touched, one-line approach, one success check, plus the two check lines below — still awaiting my OK. Full "Plan vN" for anything else: >2 bullets, any Diagnostic or Redesign trigger, or any change touching shared state, configuration, or the data model. The plan-gate hook injects which tier applies; the tier is the floor, not a ceiling.
-- Skip planning only when I explicitly say so. Neither waives executor routing or Git restrictions.
+- 🟧 **Rev 11** Skip planning only when I explicitly say so ("skip the plan", "no plan", "run it directly"); the plan-gate hook then asks for no plan. Skipping the plan does not waive executor routing, hotspot blocks, git-guard or the Stop-hook checks.
 - **When to stop and when to keep going.** Approval persists: once a plan is approved, keep going through the approved work, resolve routine choices yourself, and put status notes in the same message as your next action. Stop and ask only when a plan needs my approval, you can't continue without me, a change would materially alter approved behavior, scope, cost, data handling, dependencies, compatibility, or risk, or before anything destructive (deleting data, force-pushing, changing anything outside this repository). Don't end a turn with a summary that announces the next step instead of taking it, an offer to continue, or a list of decisions that don't block the work. Discussion is not approval.
 
 ## Plans and Revision Markers
@@ -110,8 +110,8 @@ Fable is planner and checker; Opus is implementation executor through `opus-work
 - Define success before implementation. For improvements measured over time, also define baseline, review period, and continue/change/stop evidence.
 - Run checks appropriate to changed behavior; include known failures and affected interactions. Report passed, failed, and untested. Mark anything you couldn't confirm and say where you looked.
 - **Review pass before merge.** Before I merge, review the branch diff against `main` and list only problems you would block the merge for, each with file and line, why it's wrong, and how to show it fails.
-- 🟩 **Rev 10** **Two report types.** While any dispatched worker is still running, every reply is a **progress report**: open with "In progress — not done", then what finished, what is running, and what comes next; include the deliverable ledger if useful; no regression table and no Confidence/Status line; end with `Progress: <n> of <total> done · Running: <names>`. Only when nothing is running is the reply a **final report**.
-- **End-of-run report order.** 🟩 **Rev 10** A final report opens with what you need from me (or "Nothing needed from you"), then what changed, then what you found; then the regression table and the validation line.
+- **Two report types.** While any dispatched worker is still running, every reply is a **progress report**: open with "In progress — not done", then what finished, what is running, and what comes next; include the deliverable ledger if useful; no regression table and no Confidence/Status line; end with `Progress: <n> of <total> done · Running: <names>`. Only when nothing is running is the reply a **final report**.
+- **End-of-run report order.** A final report opens with what you need from me (or "Nothing needed from you"), then what changed, then what you found; then the regression table and the validation line.
 - Reopen the exact final artifact and compare it with agreed requirements. Prior claims do not prove a file changed.
 - Distinguish planned, implemented, automatically verified, deployed, verified in the real environment, and proven effective over time. Claim only evidenced stages.
 - **Deploy stamp.** Every deployable page shows a visible version/date stamp (for example in the footer), updated in the same change that alters the page. After a merge to `main`, "deployed" is claimed only when the stamp has been read on the live GitHub Pages URL — by a session that fetches the page, or by me. Until then the status is "merged, not confirmed live".
@@ -119,7 +119,7 @@ Fable is planner and checker; Opus is implementation executor through `opus-work
 
 ## Required Validation Line
 
-End every final answer with: `Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain`🟩 **Rev 10** . A progress report ends with its Progress line instead; the Stop hook accepts that only in a session that dispatched a worker. The validation line always covers the whole task, never just a finished part.
+End every final answer with: `Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain`. A progress report ends with its Progress line instead; the Stop hook accepts that only in a session that dispatched a worker. The validation line always covers the whole task, never just a finished part.
 
 Confidence reflects evidence and unresolved assumptions. Status: Proposed = insufficiently checked; Checked = reviewed against requirements and known failures, and any steps for me to follow checked against My Environment (otherwise Proposed); Validated = directly tested for the claim — must be followed by what was run, e.g. `Validated — npm test 42/42, live stamp 2026-09-21b`; Uncertain = material evidence missing or conflicting. Identify mixed results and untested scope before the line. Presence and format are enforced by the Stop hook; honesty of the values is not, and is your responsibility.
 
@@ -127,7 +127,7 @@ Confidence reflects evidence and unresolved assumptions. Status: Proposed = insu
 
 - Inspect status/diff before and after changes. Preserve user work; no unauthorized overwrite, discard, or reset.
 - Delete files only when explicitly in the approved plan. Remove code only when made unused by approved changes.
-- Commit, push, merge, and deploy commands prompt me for approval (Native `ask`); destructive git commands are denied (Native `deny`). Never commit directly to main; use a separate branch.
+- 🟧 **Rev 11** Work on a branch; commit and push it, and open pull requests, without asking me. I merge pull requests myself on GitHub: `gh pr merge` is denied. The `git-guard` hook blocks any commit on `main` and any push to `main`. Deploy only when I have asked for a deploy in this conversation; nothing prompts for it. Destructive git commands are denied (Native `deny`).
 
 ## Model Guidance Sources
 
