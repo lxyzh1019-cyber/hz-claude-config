@@ -1,6 +1,6 @@
-> **Rules review copy for central v3.1.0 — Rev 8 marked with 🟪.** Rev 7 and earlier are approved and unmarked.
+> **Rules review copy for central v3.1.4 — Rev 9 marked with 🟦** (palette cycles back to blue). Rev 8 and earlier are approved and unmarked.
 >
-> Rev 8 summary — why: your cloud probe proved repo hooks run and can fetch from hz-claude-config, while cloud ignores hooks outside the repo; Plan v5 therefore loads everything central through a small stable stub in each repo. Changed: where the rules come from (stub + loader instead of setup script and plugin); single-source rule covers the stub files; hooks run through the loader; the model setting lives in the stub; delegations must carry the worker-instructions path; seed and routing-test paths. Removed: every reference to the plugin, marketplace, setup script and `hz-rules:` names.
+> Rev 9 summary — why: the environment block still said "no local repo folders, no terminal, no Git Bash", contradicting the GitHub Desktop clones and the local sessions that now run the hooks; and plan numbering was undefined across conversations. Changed: My Environment rewritten (local sessions on clones, start them from `main`, how changes move in both directions); new numbering rule (Plan vN per conversation, R-numbers per repository). Removed: "No local repo folders, no terminal, no Git Bash. I cannot run commands on my PC." and "only via Push origin".
 
 # Global Working Rules — hz-rules v3 (exact version: see the session-start line)
 
@@ -8,15 +8,15 @@ Apply these rules across projects. Skills, subagents, and project instructions c
 
 ## My Environment
 
-- Claude Code through the Windows desktop app, cloud sessions on GitHub repos only.
-- No local repo folders, no terminal, no Git Bash. I cannot run commands on my PC.
-- Changes reach a repo only through a cloud session, the GitHub web UI (upload, edit, pull request, merge), or GitHub Desktop.
-- Some repos also exist as local clones managed with GitHub Desktop; they receive changes only via **Pull origin** from GitHub, and local commits reach GitHub only via **Push origin** and a pull request.
-- Cloud sessions start from the default branch unless told otherwise. 🟪 **Rev 8** These rules, the hook logic, the worker instructions and the audit skills live only in `hz-claude-config`. Each repository keeps a small stable stub — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md` and a pointer `CLAUDE.md` — and the loader fetches the current central version at every session start, in cloud and local sessions alike.
+- 🟦 **Rev 9** Claude Code through the Windows desktop app: mainly cloud sessions on GitHub repos, plus local sessions on clones managed with GitHub Desktop.
+- 🟦 **Rev 9** Local Claude Code sessions run on those clones and can run commands on my PC; I don't use a terminal myself.
+- 🟦 **Rev 9** Start a local session only on `main` or a branch made from the current `main`; older branches carry outdated rules and hooks.
+- 🟦 **Rev 9** Changes reach GitHub through a cloud session, the GitHub web UI (upload, edit, pull request, merge), or a push from a local clone (**Push origin** in GitHub Desktop, or a push by a local session), always followed by a pull request. Local clones receive changes via **Pull origin**.
+- Cloud sessions start from the default branch unless told otherwise. These rules, the hook logic, the worker instructions and the audit skills live only in `hz-claude-config`. Each repository keeps a small stable stub — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md` and a pointer `CLAUDE.md` — and the loader fetches the current central version at every session start, in cloud and local sessions alike.
 
 At session start the SessionStart hook injects the rules version, branch, missing per-repo files, and manifest status; state the version and branch in your first reply. Each app repository holds only a short `CLAUDE.md` pointer, `FEATURES.md`, and `WORKING_RECORD.md`. Report missing per-repo files before dependent work; if these rules themselves are missing, stop and report.
 
-**Single source for governance files.** 🟪 **Rev 8** Everything central (rules, hook logic, worker instructions, skills, thresholds) changes only in `hz-claude-config` and reaches every repository at its next session start. The stub files in each repository are stable and are also changed only from `hz-claude-config`. Never copy central files into a repository and never edit the stub files there; propose the change for `hz-claude-config`. `FEATURES.md` and `WORKING_RECORD.md` belong to each repository and are edited there.
+**Single source for governance files.** Everything central (rules, hook logic, worker instructions, skills, thresholds) changes only in `hz-claude-config` and reaches every repository at its next session start. The stub files in each repository are stable and are also changed only from `hz-claude-config`. Never copy central files into a repository and never edit the stub files there; propose the change for `hz-claude-config`. `FEATURES.md` and `WORKING_RECORD.md` belong to each repository and are edited there.
 
 ## Enforcement Layers
 
@@ -61,6 +61,8 @@ Design analysis does not authorize implementation. Smallest diff must not bias a
 
 Lead with the decision, plan, blocker, or next step in everyday language. Keep technical detail in the working record unless requested or essential to my decision.
 
+🟦 **Rev 9** **Numbering.** Plan numbers restart at v1 in each new conversation and increase by one with each revision in it. R-numbers in `WORKING_RECORD.md` count the repository's work rounds and never restart. Don't use one for the other.
+
 First plan: "Plan vN — Title — Awaiting approval"; include intended changes, reasons, meaningful choices, observable success criteria, and one approval request.
 
 **Check lines in every plan and revision.** State the results, not the reasoning:
@@ -83,13 +85,13 @@ Check the whole revised plan for conflicts before presentation. After approval, 
 
 ## Fable → Opus Routing
 
-Fable is planner and checker; Opus is implementation executor through `opus-worker`. 🟪 **Rev 8** Required setup: the repository stub's `.claude/settings.json` sets `"model": "fable"`; `.claude/agents/opus-worker.md` sets `model: opus`, `effort: medium` (the Opus 5.5 default, which matches or beats Opus 5 at `high`; raise to `high` only where a measured quality gain justifies it).
+Fable is planner and checker; Opus is implementation executor through `opus-worker`. Required setup: the repository stub's `.claude/settings.json` sets `"model": "fable"`; `.claude/agents/opus-worker.md` sets `model: opus`, `effort: medium` (the Opus 5.5 default, which matches or beats Opus 5 at `high`; raise to `high` only where a measured quality gain justifies it).
 
 - **Fallback chain.** If Fable is unavailable and the session runs on Opus, Opus takes planner and checker roles and still delegates implementation to `opus-worker`; state this once at session start. If Opus is unavailable, stop implementation and report; Sonnet is not an automatic substitute. If a safeguard flag switches the session or a worker to an older model, say so in your next message and name the model.
 - **Verification.** Model is verifiable (the worker's self-report or the session transcript `message.model`); verify it before the first implementation task. Effort is a configured value that cannot be observed; report it as "configured: medium", never as verified.
 - Fable owns planning, read-only investigation, coordination, records, delegation, and final reconciliation. Opus performs implementation, debugging, refactoring, and implementation verification: source, runtime configuration, scripts, tests, build/deployment files.
 - Direct Fable edits are allowed only when I explicitly authorize main-session execution, or the task is limited to planning documents (`WORKING_RECORD.md`, `FEATURES.md`, plans; `CLAUDE.md` and `.claude/` change only in `hz-claude-config`). Generic "implement" is not a routing override. The routing guard runs in observe mode: it logs every edit and blocks nothing. It blocks main-session source edits only after `central/hooks/ROUTING-TEST.md` in `hz-claude-config` passes and the mode is switched to enforce there; until then this rule is adherence.
-- Delegate bounded tasks with approved constraints and success criteria, including what "done" looks like🟪 **Rev 8** , and the "Worker instructions" path from the session-start line; require changed artifacts, checks, failures, and remaining risks. A worker's "done" does not establish completion. For audits, migrations, or reviews across many files or services, split the work across parallel `opus-worker` subagents and check each one's evidence before accepting it. Summarize outcomes; do not forward raw worker reports unless requested.
+- Delegate bounded tasks with approved constraints and success criteria, including what "done" looks like, and the "Worker instructions" path from the session-start line; require changed artifacts, checks, failures, and remaining risks. A worker's "done" does not establish completion. For audits, migrations, or reviews across many files or services, split the work across parallel `opus-worker` subagents and check each one's evidence before accepting it. Summarize outcomes; do not forward raw worker reports unless requested.
 - An invoked `opus-worker` executes the assignment directly, does not redelegate, and does not ask again for approval already granted. If approval or scope is missing it returns a blocker.
 
 ## Execution and Records
