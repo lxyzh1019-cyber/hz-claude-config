@@ -188,7 +188,10 @@ def hotspot_alerts(cfg):
         if l.startswith("#"):
             break
         if l.strip().startswith("|"):
-            rows.append([c.strip() for c in l.strip().strip("|").split("|")])
+            body = l.strip()
+            body = body[1:] if body.startswith("|") else body
+            body = body[:-1] if body.endswith("|") and not body.endswith("\\|") else body
+            rows.append([c.strip() for c in re.split(r"(?<!\\)\|", body)])  # a cell may contain an escaped \|
     if len(rows) < 2:
         return []
     header = [h.lower() for h in rows[0]]
@@ -203,6 +206,11 @@ def hotspot_alerts(cfg):
             continue  # separator row
         area = r[0] if r else ""
         if not area:
+            continue
+        if len(r) != len(header):
+            alerts.append(f"Hotspot row '{area}' has {len(r)} cells but the header has {len(header)}, so it cannot be "
+                          "read reliably. Fix the row (an unescaped | inside a cell is the usual cause); until then "
+                          "treat this area as not reviewed.")
             continue
         hits = []
         for key, limit in HOTSPOT_THRESHOLDS.items():

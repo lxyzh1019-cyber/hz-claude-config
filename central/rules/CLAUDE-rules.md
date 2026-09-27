@@ -4,10 +4,10 @@ Apply these rules across projects. Skills, subagents, and project instructions c
 
 ## My Environment
 
-- Claude Code through the Windows desktop app, cloud sessions on GitHub repos only.
-- No local repo folders, no terminal, no Git Bash. I cannot run commands on my PC.
-- Changes reach a repo only through a cloud session, the GitHub web UI (upload, edit, pull request, merge), or GitHub Desktop.
-- Some repos also exist as local clones managed with GitHub Desktop; they receive changes only via **Pull origin** from GitHub, and local commits reach GitHub only via **Push origin** and a pull request.
+- Claude Code through the Windows desktop app: mainly cloud sessions on GitHub repos, plus local sessions on clones managed with GitHub Desktop.
+- Local Claude Code sessions run on those clones and can run commands on my PC; I don't use a terminal myself.
+- Start a local session only on `main` or a branch made from the current `main`; older branches carry outdated rules and hooks.
+- Changes reach GitHub through a cloud session, the GitHub web UI (upload, edit, pull request, merge), or a push from a local clone (**Push origin** in GitHub Desktop, or a push by a local session), always followed by a pull request. Local clones receive changes via **Pull origin**.
 - Cloud sessions start from the default branch unless told otherwise. These rules, the hook logic, the worker instructions and the audit skills live only in `hz-claude-config`. Each repository keeps a small stable stub — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md` and a pointer `CLAUDE.md` — and the loader fetches the current central version at every session start, in cloud and local sessions alike.
 
 At session start the SessionStart hook injects the rules version, branch, missing per-repo files, and manifest status; state the version and branch in your first reply. Each app repository holds only a short `CLAUDE.md` pointer, `FEATURES.md`, and `WORKING_RECORD.md`. Report missing per-repo files before dependent work; if these rules themselves are missing, stop and report.
@@ -56,6 +56,8 @@ Design analysis does not authorize implementation. Smallest diff must not bias a
 ## Plans and Revision Markers
 
 Lead with the decision, plan, blocker, or next step in everyday language. Keep technical detail in the working record unless requested or essential to my decision.
+
+**Numbering.** Plan numbers restart at v1 in each new conversation and increase by one with each revision in it. R-numbers in `WORKING_RECORD.md` count the repository's work rounds and never restart. Don't use one for the other.
 
 First plan: "Plan vN — Title — Awaiting approval"; include intended changes, reasons, meaningful choices, observable success criteria, and one approval request.
 

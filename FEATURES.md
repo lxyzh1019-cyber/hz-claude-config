@@ -3,7 +3,7 @@
 ## Central content (central/) — fetched by every repo's loader at session start
 - `MANIFEST.txt`: first line `version: X.Y.Z` (the only place the version lives), then every file the loader fetches; rebuilt with `tools/build_manifest.py`
 - Rules text `rules/CLAUDE-rules.md`, injected at session start
-- Hooks: session-start (rules, version, worker/skills paths, per-repo checks, hotspot alerts), plan-gate, skill-router (points to central skill files), routing-guard (observe mode), record-guard (counts only changes inside the repo; worker turns only if git shows source changes; record updates by shell count; ARCHITECTURE.md exempt), validation-line
+- Hooks: session-start (rules, version, worker/skills paths, per-repo checks, hotspot alerts; table reader honours escaped pipes and reports malformed rows), plan-gate, skill-router (points to central skill files), routing-guard (observe mode), record-guard (counts only changes inside the repo; worker turns only if git shows source changes; record updates by shell count; ARCHITECTURE.md exempt), validation-line
 - Worker instructions `agents/opus-worker-instructions.md`
 - Skills `hz-guarantee-audit`, `hz-plan-regression-guard`; seed templates `FEATURES.md`, `WORKING_RECORD.md`
 - Test suite `hooks/replay-hooks.sh` (isolated temp project; manifest consistency; loader fetch, cache, offline and refusal paths)
