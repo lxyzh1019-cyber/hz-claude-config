@@ -3,14 +3,15 @@
 record must be updated and a regression table produced. Governance-only edits are exempt; files outside the
 repository (for example Claude Code's own plan files) never count."""
 import os, re, subprocess, sys
-from _common import (PROJECT_DIR, SEED_DIR, read_hook_input, load_config, read_transcript, last_turn, last_assistant_text,
+from _common import (PROJECT_DIR, SEED_DIR, is_progress_report, read_hook_input, load_config, read_transcript, last_turn, last_assistant_text,
                      tool_uses, is_governance_path, block)
 
 data = read_hook_input()
 if data.get("stop_hook_active"):
     sys.exit(0)
 cfg = load_config()
-turn = last_turn(read_transcript(data.get("transcript_path")))
+records_all = read_transcript(data.get("transcript_path"))
+turn = last_turn(records_all)
 edits = tool_uses(turn, {"Edit", "Write", "MultiEdit", "NotebookEdit"})
 dispatched = bool(tool_uses(turn, {"Agent", "Task"}))
 paths = [(e.get("input") or {}).get("file_path") or (e.get("input") or {}).get("path") or "" for e in edits]
@@ -89,7 +90,8 @@ if features_is_template:
           f"produce the regression table and update {cfg['record_file']}.")
 if not record_touched:
     problems.append(f"update {cfg['record_file']} (request ledger, hotspot counter, deliverable ledger)")
-if not re.search(cfg["regression_table_pattern"], text):
+progress = is_progress_report(text, records_all, cfg)
+if not progress and not re.search(cfg["regression_table_pattern"], text):
     problems.append("end with the regression table (kept / added / intentionally removed / missing) "
                     f"against {cfg['features_file']}, and update the manifest if features changed")
 if problems:

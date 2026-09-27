@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {
     "features_file": "FEATURES.md",
     "governance_files": ["CLAUDE.md", "WORKING_RECORD.md", "FEATURES.md", "ARCHITECTURE.md", ".claude/", "docs/", "plans/"],
     "regression_table_pattern": r"(?is)regression\s*table|\|\s*(kept|added|removed|missing)\s*\|",
+    "progress_line_pattern": r"Progress:\s*\d+\s+of\s+\d+\s+done\s*·\s*Running:\s*\S.*$",
     "validation_line_pattern": r"Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated(\s*—\s*\S.*)?|Uncertain)\s*$",
     "design_triggers": ["redesign", "architecture", "data model", "schema", "migration", "sync layer", "firestore rules", "shared state", "regression", "keeps breaking", "again", "still broken", "refactor"],
 }
@@ -223,3 +224,13 @@ def hotspot_alerts(cfg):
             alerts.append(f"Area '{area}' has hit the redesign threshold ({'; '.join(hits)}). "
                           "No patch until the rewrite-vs-repair comparison is presented and the row is marked reviewed.")
     return alerts
+
+
+def worker_dispatched(records):
+    """True if the session has dispatched a subagent at any point (background workers may still be running)."""
+    return bool(tool_uses(records, {"Agent", "Task"}))
+
+
+def is_progress_report(text, records, cfg):
+    """An interim report while workers run: ends with the Progress line, and a worker was actually dispatched."""
+    return bool(re.search(cfg["progress_line_pattern"], text or "")) and worker_dispatched(records)

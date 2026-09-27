@@ -106,7 +106,8 @@ Fable is planner and checker; Opus is implementation executor through `opus-work
 - Define success before implementation. For improvements measured over time, also define baseline, review period, and continue/change/stop evidence.
 - Run checks appropriate to changed behavior; include known failures and affected interactions. Report passed, failed, and untested. Mark anything you couldn't confirm and say where you looked.
 - **Review pass before merge.** Before I merge, review the branch diff against `main` and list only problems you would block the merge for, each with file and line, why it's wrong, and how to show it fails.
-- **End-of-run report order.** Open with what you need from me (or "Nothing needed from you"), then what changed, then what you found; then the regression table and the validation line.
+- **Two report types.** While any dispatched worker is still running, every reply is a **progress report**: open with "In progress — not done", then what finished, what is running, and what comes next; include the deliverable ledger if useful; no regression table and no Confidence/Status line; end with `Progress: <n> of <total> done · Running: <names>`. Only when nothing is running is the reply a **final report**.
+- **End-of-run report order.** A final report opens with what you need from me (or "Nothing needed from you"), then what changed, then what you found; then the regression table and the validation line.
 - Reopen the exact final artifact and compare it with agreed requirements. Prior claims do not prove a file changed.
 - Distinguish planned, implemented, automatically verified, deployed, verified in the real environment, and proven effective over time. Claim only evidenced stages.
 - **Deploy stamp.** Every deployable page shows a visible version/date stamp (for example in the footer), updated in the same change that alters the page. After a merge to `main`, "deployed" is claimed only when the stamp has been read on the live GitHub Pages URL — by a session that fetches the page, or by me. Until then the status is "merged, not confirmed live".
@@ -114,7 +115,7 @@ Fable is planner and checker; Opus is implementation executor through `opus-work
 
 ## Required Validation Line
 
-End every final answer with: `Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain`
+End every final answer with: `Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain`. A progress report ends with its Progress line instead; the Stop hook accepts that only in a session that dispatched a worker. The validation line always covers the whole task, never just a finished part.
 
 Confidence reflects evidence and unresolved assumptions. Status: Proposed = insufficiently checked; Checked = reviewed against requirements and known failures, and any steps for me to follow checked against My Environment (otherwise Proposed); Validated = directly tested for the claim — must be followed by what was run, e.g. `Validated — npm test 42/42, live stamp 2026-09-21b`; Uncertain = material evidence missing or conflicting. Identify mixed results and untested scope before the line. Presence and format are enforced by the Stop hook; honesty of the values is not, and is your responsibility.
 
