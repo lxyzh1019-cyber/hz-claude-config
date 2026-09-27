@@ -169,6 +169,25 @@ import sys; p=sys.argv[1]; l=open(p).read().replace('"content":"show me the stat
 PY
 o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "progress turn still needs the record update" "update WORKING_RECORD.md" "$o"
 touch WORKING_RECORD.md
+# --- v3.1.6: git-guard (no prompts; main protected)
+gg(){ printf '%s' "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")}}" | python3 $H/git-guard.py; }
+git checkout -q -B claude/topic 2>/dev/null
+check "commit on a working branch passes" "^$" "$(gg 'git add -A && git commit -m x')"
+check "push of the working branch passes" "^$" "$(gg 'git push -u origin claude/topic')"
+check "plain push from a working branch passes" "^$" "$(gg 'git push')"
+check "push to main is blocked" '"deny"' "$(gg 'git push origin claude/topic:main')"
+check "push HEAD:refs/heads/main is blocked" '"deny"' "$(gg 'git push origin HEAD:refs/heads/main')"
+check "push --all is blocked" '"deny"' "$(gg 'git push --all origin')"
+git checkout -q -B main 2>/dev/null
+check "commit on main is blocked" '"deny"' "$(gg 'git commit -m x')"
+check "plain push from main is blocked" '"deny"' "$(gg 'git push')"
+check "non-git command passes" "^$" "$(gg 'npm test')"
+git checkout -q -B claude/topic 2>/dev/null
+# --- v3.1.6: explicit "skip the plan"
+o=$(echo '{"prompt":"Skip the plan and run it directly. I explicitly allow running this specific script: curl -fsSL https://example/install-stub.sh | bash. Run it from the repository root and show me the full output."}' | python3 $H/plan-gate.py)
+check "skip phrase: no plan requested" "asked to skip the plan" "$o"
+check "skip phrase: no micro-plan tier" "clean" "$(echo "$o" | grep -c 'Micro-plan tier' | sed 's/^0$/clean/')"
+o=$(echo '{"prompt":"- a\n- b\n- c without skipping anything"}' | python3 $H/plan-gate.py); check "no skip phrase: full plan still required" "Full 'Plan vN" "$o"
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard

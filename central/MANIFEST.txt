@@ -1,8 +1,9 @@
-version: 3.1.5
+version: 3.1.6
 agents/opus-worker-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
 hooks/config.json
+hooks/git-guard.py
 hooks/plan-gate.py
 hooks/record-guard.py
 hooks/replay-hooks.sh

@@ -10,8 +10,15 @@ bullets = count_bullets(prompt)
 low = prompt.lower()
 triggers = [t for t in cfg["design_triggers"] if t in low]
 msgs = []
+SKIP_PHRASES = ("skip the plan", "skip plan", "no plan", "without a plan", "don't plan", "do not plan",
+                "run it directly", "run directly", "execute directly", "do it directly")
+skip = any(p in low for p in SKIP_PHRASES)
 
-if bullets >= 3 or triggers:
+if skip:
+    log("plan-gate", {"tier": "skipped by user"})
+    msgs.append("[plan-gate] The user explicitly asked to skip the plan: carry out the request directly. "
+                "Hotspot blocks, git-guard and the Stop-hook checks still apply.")
+elif bullets >= 3 or triggers:
     why = f"{bullets} bullets" if bullets >= 3 else "design/diagnostic trigger: " + ", ".join(triggers)
     log("plan-gate", {"tier": "full", "why": why})
     msgs.append(f"[plan-gate] Full 'Plan vN — Title — Awaiting approval' is required for this request ({why}). "
@@ -23,7 +30,7 @@ elif bullets >= 1 or len(prompt) > 200:
                 "'Checked against:' and 'Removes/consolidates:' lines — then wait for approval. Escalate to a full "
                 "Plan vN if the work touches shared state, config, or the data model.")
 
-if msgs or any(w in low for w in FIX_WORDS):
+if (msgs and not skip) or any(w in low for w in FIX_WORDS):
     msgs.append("[plan-gate] Before proposing: read the request ledger and hotspot rows in "
                 f"{cfg['record_file']} for the area this touches; state them under 'Checked against:'.")
 if any(w in low for w in FIX_WORDS):

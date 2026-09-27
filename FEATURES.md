@@ -10,7 +10,7 @@
 
 ## Stub (stub/) — installed once per repository, stable
 - `hz-loader.py`: fetch MANIFEST + files from public raw GitHub, cache per version (keep 3), run hook scripts, offline fallback, stop message when nothing cached
-- `settings.json` (model, permissions, hooks → loader), thin `opus-worker.md`, `CLAUDE-pointer.md`
+- `settings.json` (model, permissions: no prompts at all, destructive git and `gh pr merge` denied; hooks → loader incl. `git-guard`), thin `opus-worker.md`, `CLAUDE-pointer.md`
 - `install-stub.sh`: one-command install per repo — retire v2 copies and probe files, restore an overwritten README, unmerge v2 settings, merge stub settings, refuses when v2 rules files were locally changed (`v2-known-files.txt`), pointer CLAUDE.md keeping any repo-specific sections of a v2 CLAUDE.md (`split_claude_md.py`), seed per-repo files, smoke test
 
 ## This repository
