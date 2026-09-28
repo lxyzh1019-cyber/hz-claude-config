@@ -1,4 +1,4 @@
-# hz-claude-config — central working rules (v3.1.8)
+# hz-claude-config — central working rules (v3.1.10)
 
 Everything central lives here: the rules, the hook logic, the executors' shared instructions and the audit skills (`central/`). Each app repository keeps only a small **stable stub** — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md`, `.claude/agents/sonnet-worker.md`, a pointer `CLAUDE.md` — plus its own `FEATURES.md` and `WORKING_RECORD.md`.
 
@@ -18,24 +18,26 @@ These instructions live only here; chat replies point here. This repository must
 | `docs/` | rules review copy (revision markers), skill-trigger tuning procedure, claude.ai preference line |
 
 ## A. Update this repository (once)
-On github.com open `hz-claude-config` → **Add file → Upload files** → drag in `hz-claude-config-v3.1.8.zip` → commit. Start a cloud session on this repository and paste:
+**Permission mode for Steps A, B and E: default or plan, not auto.** These steps commit changes to `.claude/settings.json` and the hooks; in auto mode the classifier reads that as instruction poisoning and denies the commit (seen 2026-09-28). Approve the commit and push prompts yourself.
 
-> Skip the plan and run it directly. Delete every tracked file in this repository except `hz-claude-config-v3.1.8.zip`. Unzip that zip with Python into the repository root, then delete the zip. Run `bash central/hooks/replay-hooks.sh` and show the last line. Commit, push, and open a pull request.
+On github.com open `hz-claude-config` → **Add file → Upload files** → drag in `hz-claude-config-v3.1.10.zip` → commit. Start a cloud session on this repository and paste:
 
-Expect `passed=89 failed=0`. If the session asks you to approve a plan or a commit first, approve it. Merge the pull request on github.com — the loader reads `main`.
+> Skip the plan and run it directly. Delete every tracked file in this repository except `hz-claude-config-v3.1.10.zip`. Unzip that zip with Python into the repository root, then delete the zip. Run `bash central/hooks/replay-hooks.sh` and show the last line. Commit, push, and open a pull request.
+
+Expect `passed=94 failed=0`. If the session asks you to approve a plan or a commit first, approve it. Merge the pull request on github.com — the loader reads `main`.
 
 ## B. Pilot one app repository
 Start a cloud session on the pilot repository and paste:
 
 > Skip the plan and run it directly. I explicitly allow running this specific script: `curl -fsSL https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude-config/main/stub/install-stub.sh | bash`. I also authorize running it in this main session rather than through opus-worker, because a subagent cannot receive this permission. Run it from the repository root and show me the full output. If the last line is `INSTALL OK`, commit on a new branch, push, and open a pull request. If it is not, change nothing and stop.
 
-- The `SMOKE TEST: [session-start] Rules v3.1.8 loaded` line proves this repository's sessions can fetch from `hz-claude-config` — the one thing the probe did not cover.
+- The `SMOKE TEST: [session-start] Rules v3.1.10 loaded` line proves this repository's sessions can fetch from `hz-claude-config` — the one thing the probe did not cover.
 - The permission sentence is there because Claude Code's safety check refuses a downloaded script piped into bash without your explicit say-so; if it still asks, give it in your own words. If the session asks to approve a plan or a commit first (rules v2 may still be active in this repo), approve it.
 - Read the output: it lists what was removed and whether `README.md` was restored — check a restored README before merging.
 - If the output ends with `NOT INSTALLED` after "LOCAL CHANGES FOUND", that repo's own sessions improved the v2 rules files after installing them. Nothing was changed. Bring the listed files' history to Claude so the improvements go into `hz-claude-config` first, then rerun.
 - A repo's own sections under the old rules (for example "This Repository — read ARCHITECTURE.md too") are kept after the pointer; the output names them. If the session finds that README, FEATURES or WORKING_RECORD still describe removed files, let it correct those references in the same commit — and check in the diff that nothing else in them changed.
 
-Merge the pull request. Then start a **new** cloud session on the pilot and type `hi`. Pass = the first reply states **Rules v3.1.8 loaded** (or later) and the branch, and ends with the `Confidence: … · Status: …` line.
+Merge the pull request. Then start a **new** cloud session on the pilot and type `hi`. Pass = the first reply states **Rules v3.1.10 loaded** (or later) and the branch, and ends with the `Confidence: … · Status: …` line.
 
 ## C. The other app repositories
 Repeat B's paste-and-merge in each. Close any old `rules-v2` / `rules-sync/*` pull requests and delete those branches.
@@ -44,11 +46,11 @@ Repeat B's paste-and-merge in each. Close any old `rules-v2` / `rules-sync/*` pu
 For each cloned repository: set **Current Branch** to `main`, then **Fetch origin** → **Pull origin**. Start local sessions only on `main` or a branch made from the current `main`. Optional local check: open a local session in the desktop app on that folder and type `hi` — the same pass criteria prove Python and bash work on your PC. An error mentioning bash or python means one is missing (install Python from python.org).
 
 ## E. Every future update
-In a cloud session on this repository: make the change under `central/`, run `python3 tools/build_manifest.py <new version>` and `bash central/hooks/replay-hooks.sh`, commit, open a pull request, merge. Every repository loads the new version at its next session start; GitHub's raw-file cache can delay that by a few minutes.
+In a cloud session on this repository: make the change under `central/`, run `python3 tools/build_manifest.py <new version>` and `bash central/hooks/replay-hooks.sh`, commit, open a pull request (ready for review, not draft), merge. Every repository loads the new version at its next session start; GitHub's raw-file cache can delay that by a few minutes.
 
 **Rare:** a change to a stub file (`stub/`) — model, permissions, the loader itself — needs B's paste again in each repository. Everything else never does.
 
-**v3.1.8 is such a stub change** (session model `fable` → `opus` with Fable 5.1 as advisor (`advisorModel`); `.claude/agents/sonnet-worker.md`, the Sonnet 5.5 executor for Routine assignments; the `completion-guard` Stop hook registered; v3.1.6 before it removed the commit/push prompts and added `git-guard`). Re-run B's paste once in every repository installed before v3.1.8 — Weekly-Planner, Figure-Skate-Dryland-Timer, Swimming-Dryland-Timer; `hz-claude-config` gets it from Step A. Repositories installed later get it automatically.
+**v3.1.10 is such a stub change** (pull requests open ready for review, never as drafts — `git-guard` denies `--draft`, `gh pr ready` allowed; `permissions.allow` for branch `git add/commit/push` and `gh pr create`, so auto mode no longer sends routine commits to the classifier; plus, from 3.1.8: session model `opus` with Fable 5.1 as advisor, `sonnet-worker`, the `completion-guard` Stop hook). Re-run B's paste once in every repository installed before v3.1.10 — Weekly-Planner, Figure-Skate-Dryland-Timer, Swimming-Dryland-Timer; `hz-claude-config` gets it from Step A. Repositories installed later get it automatically.
 
 ## Troubleshooting
 | You see | Cause | Fix |

@@ -184,6 +184,11 @@ git checkout -q -B main 2>/dev/null
 check "commit on main is blocked" '"deny"' "$(gg 'git commit -m x')"
 check "plain push from main is blocked" '"deny"' "$(gg 'git push')"
 check "non-git command passes" "^$" "$(gg 'npm test')"
+check "draft pull request is blocked" '"deny"' "$(gg 'gh pr create --draft --title x --body y')"
+check "draft pull request -d is blocked" '"deny"' "$(gg 'git push -u origin claude/topic && gh pr create -d -t x -b y')"
+check "ready pull request passes" "^$" "$(gg 'gh pr create --title x --body y')"
+check "gh pr ready passes" "^$" "$(gg 'gh pr ready 12')"
+check "stub allows branch commit/push and pr create" "6" "$(python3 -c "import json;a=json.load(open('$H/../../stub/settings.json'))['permissions']['allow'];print(sum(1 for r in ['Bash(git status:*)','Bash(git add:*)','Bash(git commit:*)','Bash(git push:*)','Bash(gh pr create:*)','Bash(gh pr ready:*)'] if r in a))")"
 git checkout -q -B claude/topic 2>/dev/null
 # --- v3.1.6: explicit "skip the plan"
 o=$(echo '{"prompt":"Skip the plan and run it directly. I explicitly allow running this specific script: curl -fsSL https://example/install-stub.sh | bash. Run it from the repository root and show me the full output."}' | python3 $H/plan-gate.py)
