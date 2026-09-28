@@ -3,6 +3,14 @@
   "advisorModel": "fable",
   "permissions": {
     "defaultMode": "plan",
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr ready:*)"
+    ],
     "deny": [
       "Bash(git reset --hard:*)",
       "Bash(git checkout -- :*)",

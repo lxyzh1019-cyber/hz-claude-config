@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""PreToolUse hook (Bash): block a commit on main/master and any push to main/master, without prompting.
+"""PreToolUse hook (Bash): block a commit on main/master and any push to main/master, without prompting, and
+block opening a pull request as a draft (PRs open ready for review; the user merges on GitHub).
 Feature-branch commits and pushes pass through untouched. A hook "deny" is honoured in auto mode."""
 import re, shlex, subprocess, sys
 from _common import read_hook_input, deny_tool, PROJECT_DIR
@@ -7,7 +8,7 @@ from _common import read_hook_input, deny_tool, PROJECT_DIR
 PROTECTED = {"main", "master"}
 data = read_hook_input()
 cmd = ((data.get("tool_input") or data.get("input") or {}).get("command") or "")
-if "git" not in cmd:
+if "git" not in cmd and "gh" not in cmd:
     sys.exit(0)
 
 
@@ -40,8 +41,21 @@ def target_is_protected(ref):
     return dst in PROTECTED
 
 
+def is_draft_pr(segment):
+    try:
+        toks = shlex.split(segment)
+    except ValueError:
+        toks = segment.split()
+    while toks and re.match(r"^\w+=", toks[0]):
+        toks = toks[1:]
+    return toks[:3] == ["gh", "pr", "create"] and any(t in ("--draft", "-d") or t.startswith("--draft=") for t in toks[3:])
+
+
 branch = None
 for segment in re.split(r"&&|\|\||;|\n", cmd):
+    if is_draft_pr(segment.strip()):
+        deny_tool("git-guard: pull requests open ready for review, not as drafts. Run the same gh pr create without "
+                  "--draft/-d. If a draft PR already exists, mark it ready with gh pr ready <number>.")
     args = git_args(segment.strip())
     if not args:
         continue

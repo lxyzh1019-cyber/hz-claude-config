@@ -128,7 +128,7 @@ Confidence reflects evidence and unresolved assumptions. Status: Proposed = insu
 
 - Inspect status/diff before and after changes. Preserve user work; no unauthorized overwrite, discard, or reset.
 - Delete files only when explicitly in the approved plan. Remove code only when made unused by approved changes.
-- Work on a branch; commit and push it, and open pull requests, without asking me. I merge pull requests myself on GitHub: `gh pr merge` is denied. The `git-guard` hook blocks any commit on `main` and any push to `main`. Deploy only when I have asked for a deploy in this conversation; nothing prompts for it. Destructive git commands are denied (Native `deny`).
+- Work on a branch; commit and push it, and open pull requests, without asking me. Pull requests open **ready for review, never as drafts** — `git-guard` denies `gh pr create --draft`; a PR that was created as a draft by any other route is marked ready with `gh pr ready <number>` before the final report, which gives the PR link and says "ready for review". I merge pull requests myself on GitHub: `gh pr merge` is denied. The `git-guard` hook blocks any commit on `main` and any push to `main`. Deploy only when I have asked for a deploy in this conversation; nothing prompts for it. Destructive git commands are denied (Native `deny`).
 
 ## Model Guidance Sources
 
