@@ -1,5 +1,6 @@
 {
-  "model": "fable",
+  "model": "opus",
+  "advisorModel": "fable",
   "permissions": {
     "defaultMode": "plan",
     "deny": [
@@ -66,6 +67,10 @@
           {
             "type": "command",
             "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" record-guard.py'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" completion-guard.py'"
           },
           {
             "type": "command",

@@ -1,7 +1,8 @@
-version: 3.1.6
+version: 3.1.8
 agents/opus-worker-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
+hooks/completion-guard.py
 hooks/config.json
 hooks/git-guard.py
 hooks/plan-gate.py

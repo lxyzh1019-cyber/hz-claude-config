@@ -11,6 +11,8 @@
 |---|---|---|---|---|
 | 1 | 2026-09-25 | rules referenced from one central place, no per-repo PR per update | open | pilot pending |
 | 2 | 2026-09-25 | test before building ("wasted 6 hours") | done | cloud probe passed: repo hooks run, fetch works, Stop hook forces fix |
+| 3 | 2026-09-28 | Sonnet 5.5 subagent; roles per model | built | v3.1.7; live check = ROUTING-TEST step 2b (alias → 5.5, marker) |
+| 4 | 2026-09-28 | suggest planner model (A + B); completion % vs plan; auto-fix when not done | built | v3.1.8; live check = one session that claims done early must be pushed on by the hook |
 
 ## Hotspot counter
 | Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |
@@ -30,6 +32,8 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 | Other app repos | NOT STARTED | |
 
 ## Checks and evidence
+- 2026-09-28 v3.1.8 (same release as 3.1.7, not yet deployed): user problem "session said done, completion % showed items open". Added completion-guard Stop hook (ledger-driven Completion line; auto-fix loop max 3 rounds/turn keyed on the turn uuid — this hook deliberately ignores stop_hook_active; evidence required for COMPLETE; "stop here"/"pause here" lets one report stand), `[completion]` line at session start and prompt, `[planner]` suggestion in plan-gate (Fable on strong signals only; the hook cannot switch models), `advisorModel: fable` in the stub (Opus 5.5 main + Fable advisor is an accepted pairing per the advisor docs; workers inherit; sonnet-worker told never to consult). Replay 89/89.
+- 2026-09-28 v3.1.7: Sonnet 5.5 released (Claude Code v2.1.284: `sonnet` alias → 5.5, default effort medium). Session model `fable` → `opus` (Opus 5.5 planner; Anthropic HAProxy rewrite: Opus 5.5 9.5 h vs Fable 5.1 12 h, 51% cheaper; user switches to Fable manually when needed). Added `sonnet-worker` (stub change → Step B re-run in installed repos): Routine/micro-plan assignments to Sonnet, Diagnostic/Redesign/shared state to Opus, escalation blocker, fallback relaxed for Routine only, plan-gate names the default executor per tier, worker reports its model, ROUTING-TEST gains step 2b. Rules §Routing rewritten (Rev 12), guidance sources extended. Replay 69/69.
 - 2026-09-27 v3.1.6: ask prompts for commit/push/merge removed (user merges on GitHub; auto mode must not stop for branch pushes); deploy asks removed too; gh pr merge denied; git-guard blocks commit on / push to main. Re-run test on an installed repo removes the old asks; found and fixed: the installer guard treated the stub's own worker file as a local v2 change. Plan-gate now honours explicit "skip the plan" wording (Step A and B prompts include it). Replay 67/67.
 - 2026-09-27 Weekly-Planner "Looks Calm and Pop": interim update while workers 1B/1C ran was forced into final format by the Stop hook. v3.1.5 adds progress reports (Progress line, accepted only after a worker was dispatched; record update still required, no regression table). Replay 55/55.
 - 2026-09-27 Local session works on `main` (older branch had loaded v2.1). v3.1.4 adds: My Environment rewritten for local sessions on GitHub Desktop clones, plan-numbering rule (Plan vN per conversation, R-numbers per repo), README local-branch note. Replay 50/50.

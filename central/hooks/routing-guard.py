@@ -30,5 +30,5 @@ if marker_fields:
     is_worker = any(data.get(f) for f in marker_fields)
 if is_worker:
     sys.exit(0)
-deny_tool(f"Routing rule: source edits must run through the opus-worker subagent ({path}). Delegate this change, "
+deny_tool(f"Routing rule: source edits must run through a worker subagent, opus-worker or sonnet-worker ({path}). Delegate this change, "
           "or ask the user to authorize main-session execution (touch .claude/state/main-session-edit-authorized).")

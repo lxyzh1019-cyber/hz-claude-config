@@ -2,5 +2,7 @@
   "routing_guard_mode": "observe",
   "subagent_marker_fields": [],
   "record_file": "WORKING_RECORD.md",
-  "features_file": "FEATURES.md"
+  "features_file": "FEATURES.md",
+  "auto_fix_max_rounds": 3,
+  "fable_planner_min_triggers": 2
 }

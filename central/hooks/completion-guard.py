@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Stop hook: a final report may not claim done while the deliverable ledger has open items.
+- On an implementation turn (source edits or a dispatched worker), a final report must end with the ledger's
+  Completion line; a wrong count is corrected.
+- If items are still open (neither COMPLETE nor BLOCKED), the report is blocked and the session continues with the
+  next open item — up to auto_fix_max_rounds per turn (the loop guard; stop_hook_active alone is NOT a reason to
+  exit here, unlike the other Stop hooks). After the cap, the report must say so and list the open items.
+- A user prompt with a pause phrase (plan-gate writes .claude/state/completion-pause) lets one final report stand.
+- Progress reports (workers still running), plans awaiting approval, and answers on non-implementation turns pass."""
+import json, os, re, sys
+from _common import (PROJECT_DIR, STATE_DIR, read_hook_input, load_config, read_transcript, last_turn,
+                     last_assistant_text, tool_uses, is_governance_path, is_progress_report, completion_summary,
+                     block, log)
+
+data = read_hook_input()
+cfg = load_config()
+records = read_transcript(data.get("transcript_path"))
+turn = last_turn(records)
+text = last_assistant_text(turn)
+comp = completion_summary(cfg)
+if not text or not comp["total"]:
+    sys.exit(0)
+if is_progress_report(text, records, cfg):
+    sys.exit(0)
+m = re.search(cfg["validation_line_pattern"], text)
+final_claim = bool(m) and m.group(2).split()[0] in ("Checked", "Validated")
+if not final_claim:
+    sys.exit(0)  # a plan (Proposed), an Uncertain answer, or no validation line (validation-line.py handles that)
+
+pause = os.path.join(STATE_DIR, "completion-pause")
+if os.path.exists(pause):
+    try:
+        os.remove(pause)
+    except OSError:
+        pass
+    log("completion-guard", {"pause": True, "line": comp["line"]})
+    sys.exit(0)
+
+edits = tool_uses(turn, {"Edit", "Write", "MultiEdit", "NotebookEdit"})
+paths = [(e.get("input") or {}).get("file_path") or (e.get("input") or {}).get("path") or "" for e in edits]
+root = os.path.normcase(os.path.abspath(PROJECT_DIR))
+def inside(p):
+    full = os.path.normcase(os.path.abspath(os.path.join(PROJECT_DIR, p)))
+    return full == root or full.startswith(root + os.sep)
+implementation = any(p and inside(p) and not is_governance_path(p, cfg) for p in paths) or bool(tool_uses(turn, {"Agent", "Task"}))
+stated = re.search(cfg["completion_line_pattern"], text)
+if not implementation and not stated:
+    sys.exit(0)  # a question answered mid-project: no completion claim made, nothing to check
+
+# loop guard: rounds per turn, keyed on the turn's first record
+key = str((turn[0].get("uuid") or turn[0].get("timestamp") or len(records)) if turn else len(records))
+rounds_path = os.path.join(STATE_DIR, "completion-rounds.json")
+try:
+    rounds = json.load(open(rounds_path, encoding="utf-8"))
+except (OSError, ValueError):
+    rounds = {}
+used = int(rounds.get(key, 0))
+def bump():
+    rounds.clear() if len(rounds) > 50 else None
+    rounds[key] = used + 1
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(rounds, open(rounds_path, "w", encoding="utf-8"))
+    except OSError:
+        pass
+
+cap = int(cfg["auto_fix_max_rounds"])
+open_items = comp["open"]
+wrong_count = stated and (int(stated.group(1)) != comp["complete"] or int(stated.group(2)) != comp["total"])
+
+if open_items and used < cap:
+    bump()
+    log("completion-guard", {"auto_fix_round": used + 1, "open": open_items})
+    block(f"Not done: the deliverable ledger still has {len(open_items)} open item(s): " + "; ".join(open_items[:6]) +
+          f". Auto-fix round {used + 1} of {cap}: continue with '{open_items[0]}' now — dispatch it to the right worker "
+          "or execute it as the approved plan allows, update its ledger row with evidence, then report. An item you cannot "
+          "complete gets state BLOCKED — <reason> in the ledger. Report done only when every item is COMPLETE or "
+          f"BLOCKED, and end the final report with '{comp['line']}' before the validation line.")
+if open_items and used == cap and "auto-fix limit" not in text.lower():
+    bump()
+    block(f"Auto-fix limit reached ({cap} rounds) with {len(open_items)} item(s) still open: " + "; ".join(open_items[:6]) +
+          ". Do not claim done. Write 'Auto-fix limit reached' in the report, list the open items with why each is still "
+          f"open, and end with '{comp['line']}' before the validation line.")
+if open_items and used > cap:
+    sys.exit(0)  # never loop further
+
+if not stated:
+    bump() if used < cap + 2 else None
+    block(f"Implementation happened this turn: add the ledger's completion line before the validation line: '{comp['line']}'."
+          + (" Set Evidence for: " + ", ".join(comp["no_evidence"]) if comp["no_evidence"] else ""))
+if wrong_count and used < cap + 2:
+    bump()
+    block(f"The stated Completion line does not match the deliverable ledger. Use: '{comp['line']}' — or fix the ledger first "
+          "if the ledger is what is wrong, then restate.")
+if comp["no_evidence"] and used < cap + 2:
+    bump()
+    block("COMPLETE without evidence in the deliverable ledger: " + ", ".join(comp["no_evidence"]) +
+          ". Fill the Evidence cell (what ran and its result) or set the state back to PARTIAL.")
+sys.exit(0)
