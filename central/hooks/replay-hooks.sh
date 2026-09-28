@@ -94,6 +94,8 @@ o=$(echo '{}' | python3 $H/session-start.py); check "blank seed row is ignored" 
 o=$(echo '{"prompt":"the timer is broken again"}' | python3 $H/plan-gate.py); check "fix words trigger counter reminder" "+1 fix round" "$o"
 check "fix words trigger read-history step" "Checked against:" "$o"
 o=$(echo '{"prompt":"- rename the home tab label"}' | python3 $H/plan-gate.py); check "micro-plan asks for both new lines" "Removes/consolidates:" "$o"
+check "micro-plan names sonnet-worker" "Executor: sonnet-worker" "$o"
+o=$(echo '{"prompt":"the sync layer keeps breaking"}' | python3 $H/plan-gate.py); check "design trigger names opus-worker" "Executor: opus-worker" "$o"
 # --- Central content: manifest, session start, router
 CENTRAL="$(cd "$H/.." && pwd)"
 VER="$(head -1 "$CENTRAL/MANIFEST.txt" | sed 's/^version: *//')"
@@ -188,6 +190,59 @@ o=$(echo '{"prompt":"Skip the plan and run it directly. I explicitly allow runni
 check "skip phrase: no plan requested" "asked to skip the plan" "$o"
 check "skip phrase: no micro-plan tier" "clean" "$(echo "$o" | grep -c 'Micro-plan tier' | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"- a\n- b\n- c without skipping anything"}' | python3 $H/plan-gate.py); check "no skip phrase: full plan still required" "Full 'Plan vN" "$o"
+# --- v3.1.8: completion guard (auto-fix), planner suggestion, pause
+printf '# WORKING RECORD\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|---|---|\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| login | COMPLETE | npm test 12/12 |\n| export | NOT STARTED | |\n| sync | BLOCKED — API key missing | |\n' > WORKING_RECORD.md
+rm -f .claude/state/completion-rounds.json .claude/state/completion-pause
+cat > "$T/done_claim.jsonl" <<J
+{"type":"user","uuid":"u1","message":{"role":"user","content":"finish the plan"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All done.\n\nConfidence: High · Status: Validated — npm test"}]}}
+J
+cg(){ echo "{\"transcript_path\":\"$1\",\"stop_hook_active\":$2}" | python3 $H/completion-guard.py; }
+o=$(cg "$T/done_claim.jsonl" false); check "completion: done claim with open item is blocked" "Auto-fix round 1 of 3" "$o"
+check "completion: block names the open item" "export" "$o"
+o=$(cg "$T/done_claim.jsonl" true); check "completion: round 2 despite stop_hook_active" "Auto-fix round 2 of 3" "$o"
+o=$(cg "$T/done_claim.jsonl" true); check "completion: round 3" "Auto-fix round 3 of 3" "$o"
+o=$(cg "$T/done_claim.jsonl" true); check "completion: cap reached demands the limit statement" "Auto-fix limit reached" "$o"
+o=$(cg "$T/done_claim.jsonl" true); check "completion: never loops past the cap" "^$" "$o"
+rm -f .claude/state/completion-rounds.json
+cat > "$T/qa.jsonl" <<J
+{"type":"user","uuid":"u2","message":{"role":"user","content":"what is the ledger state?"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Two items open.\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(cg "$T/qa.jsonl" false); check "completion: question turn passes untouched" "^$" "$o"
+cat > "$T/plan.jsonl" <<J
+{"type":"user","uuid":"u3","message":{"role":"user","content":"plan it"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Plan v1 — Awaiting approval\n\nConfidence: High · Status: Proposed"}]}}
+J
+o=$(cg "$T/plan.jsonl" false); check "completion: plan awaiting approval passes" "^$" "$o"
+o=$(echo '{"prompt":"stop here for today"}' | python3 $H/plan-gate.py); check "pause phrase acknowledged" "Pause acknowledged" "$o"
+o=$(cg "$T/done_claim.jsonl" false); check "completion: pause lets one final report stand" "^$" "$o"
+o=$(cg "$T/done_claim.jsonl" false); check "completion: pause is single-use" "Auto-fix round 1 of 3" "$o"
+rm -f .claude/state/completion-rounds.json
+printf '# WORKING RECORD\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|---|---|\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| login | COMPLETE | npm test 12/12 |\n| export | COMPLETE | |\n' > WORKING_RECORD.md
+o=$(cg "$T/done_claim.jsonl" false); check "completion: all complete still needs the Completion line" "Completion: 2 of 2 done (100%)" "$o"
+cat > "$T/done_line.jsonl" <<J
+{"type":"user","uuid":"u4","message":{"role":"user","content":"finish the plan"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\nCompletion: 1 of 2 done (50%)\n\nConfidence: High · Status: Validated — npm test"}]}}
+J
+o=$(cg "$T/done_line.jsonl" false); check "completion: wrong count is corrected" "does not match" "$o"
+cat > "$T/done_ok.jsonl" <<J
+{"type":"user","uuid":"u5","message":{"role":"user","content":"finish the plan"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\nCompletion: 2 of 2 done (100%)\n\nConfidence: High · Status: Validated — npm test"}]}}
+J
+o=$(cg "$T/done_ok.jsonl" false); check "completion: COMPLETE without evidence is caught" "without evidence" "$o"
+sed -i 's/| export | COMPLETE | |/| export | COMPLETE | manual check |/' WORKING_RECORD.md
+o=$(cg "$T/done_ok.jsonl" false); check "completion: correct line with evidence passes" "^$" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "session-start: no completion line when nothing open" "clean" "$(echo "$o" | grep -c '\[completion\]' | sed 's/^0$/clean/')"
+printf '| again | NOT STARTED | |\n' >> WORKING_RECORD.md
+o=$(echo '{}' | python3 $H/session-start.py); check "session-start: completion line when items open" "Completion: 2 of 3 done (67%)" "$o"
+o=$(echo '{"prompt":"why does the sync layer keep breaking across all apps? find the root cause and redesign it"}' | python3 $H/plan-gate.py); check "planner: fable suggested on strong signals" "Suggest /model fable" "$o"
+o=$(echo '{"prompt":"- add a button\n- fix colour\n- change the label"}' | python3 $H/plan-gate.py); check "planner: default opus on plain plan" "Opus 5.5 plans (default)" "$o"
+o=$(echo '{"prompt":"- rename the label"}' | python3 $H/plan-gate.py); check "planner: silent on micro tier" "clean" "$(echo "$o" | grep -c '\[planner\]' | sed 's/^0$/clean/')"
+rm -f .claude/state/completion-rounds.json
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard

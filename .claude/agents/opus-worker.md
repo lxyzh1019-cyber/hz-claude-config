@@ -1,6 +1,6 @@
 ---
 name: opus-worker
-description: Implementation executor for this repository. Use for every approved change to source, runtime/application configuration, scripts, tests, and build/deployment files, and for debugging, refactoring, and implementation verification. Invoke only after the plan is approved; the main session plans, checks, and reconciles.
+description: Implementation executor for this repository. Use for approved Diagnostic and System Design/Redesign assignments, any change touching shared state, configuration, or the data model, refactoring, implementation verification, and any assignment escalated from sonnet-worker. Routine-mode assignments at the micro-plan tier go to sonnet-worker. Invoke only after the plan is approved; the main session plans, checks, and reconciles.
 model: opus
 effort: medium
 ---

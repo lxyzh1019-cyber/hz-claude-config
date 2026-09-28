@@ -7,7 +7,7 @@ set -euo pipefail
 BASE="${HZ_BASE_URL:-https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude-config/main}"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 get(){ curl -fsSL "$BASE/$1" -o "$T/$(basename "$1")"; }
-for f in stub/hz-loader.py stub/settings.json stub/opus-worker.md stub/CLAUDE-pointer.md stub/retired.txt \
+for f in stub/hz-loader.py stub/settings.json stub/opus-worker.md stub/sonnet-worker.md stub/CLAUDE-pointer.md stub/retired.txt \
          stub/merge_settings.py stub/unmerge_settings.py stub/v2-managed-settings.json stub/split_claude_md.py stub/v2-known-files.txt stub/retired-permissions.json \
          central/seed/FEATURES.md central/seed/WORKING_RECORD.md; do get "$f"; done
 [ -d .git ] || { echo "Run this from the repository root."; exit 1; }
@@ -15,13 +15,14 @@ say(){ echo "- $*"; }
 
 # 0. stop if this repo's own sessions changed any rules-v2 file (their improvements would be lost)
 if [ "${HZ_ALLOW_LOCAL_HOOK_CHANGES:-0}" != "1" ]; then
-  changed="$(python3 - "$T/v2-known-files.txt" "$T/opus-worker.md" <<'PY'
+  changed="$(python3 - "$T/v2-known-files.txt" "$T/opus-worker.md" "$T/sonnet-worker.md" <<'PY'
 import hashlib, os, sys
 known = {l.strip() for l in open(sys.argv[1]) if l.strip() and not l.startswith("#")}
-known.add(hashlib.sha256(open(sys.argv[2], "rb").read()).hexdigest())  # the current stub's own worker file
+for a in sys.argv[2:]:
+    known.add(hashlib.sha256(open(a, "rb").read()).hexdigest())  # the current stub's own worker files
 out = []
 for base in (".claude/hooks", ".claude/skills/hz-guarantee-audit", ".claude/skills/hz-plan-regression-guard",
-             ".claude/agents/opus-worker.md", "tests/replay-hooks.sh", "tests/test-routing-hook.md", "test/hooks.test.mjs"):
+             ".claude/agents/opus-worker.md", ".claude/agents/sonnet-worker.md", "tests/replay-hooks.sh", "tests/test-routing-hook.md", "test/hooks.test.mjs"):
     files = [base] if os.path.isfile(base) else [os.path.join(d, f) for d, _, fs in os.walk(base) if "__pycache__" not in d for f in fs]
     for p in files:
         if hashlib.sha256(open(p, "rb").read()).hexdigest() not in known:
@@ -69,7 +70,8 @@ fi
 python3 "$T/merge_settings.py" "$T/settings.json" .claude/settings.json "hz-loader.py"
 cp "$T/hz-loader.py" .claude/hz-loader.py
 cp "$T/opus-worker.md" .claude/agents/opus-worker.md
-say "installed .claude/settings.json, .claude/hz-loader.py, .claude/agents/opus-worker.md"
+cp "$T/sonnet-worker.md" .claude/agents/sonnet-worker.md
+say "installed .claude/settings.json, .claude/hz-loader.py, .claude/agents/opus-worker.md, .claude/agents/sonnet-worker.md"
 
 # 4. pointer CLAUDE.md — a repo's own content is kept: sections added under the v2 rules, or a whole own CLAUDE.md
 if [ ! -f CLAUDE.md ]; then cp "$T/CLAUDE-pointer.md" CLAUDE.md; say "CLAUDE.md created as the pointer"

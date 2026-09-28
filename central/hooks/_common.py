@@ -35,6 +35,14 @@ DEFAULT_CONFIG = {
     "progress_line_pattern": r"Progress:\s*\d+\s+of\s+\d+\s+done\s*·\s*Running:\s*\S.*$",
     "validation_line_pattern": r"Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated(\s*—\s*\S.*)?|Uncertain)\s*$",
     "design_triggers": ["redesign", "architecture", "data model", "schema", "migration", "sync layer", "firestore rules", "shared state", "regression", "keeps breaking", "again", "still broken", "refactor"],
+    # planner suggestion (plan-gate): strong signals that a plan needs Fable rather than the Opus default
+    "fable_planner_signals": ["root cause", "why does", "why is", "investigate", "across all", "every repo", "all repos", "all apps",
+                              "migrate everything", "whole codebase", "multi-day", "end to end", "end-to-end"],
+    "fable_planner_min_triggers": 2,
+    # completion guard (Stop): auto-fix rounds per turn before a final report may stand with open ledger items
+    "auto_fix_max_rounds": 3,
+    "pause_phrases": ["stop here", "pause here", "that's enough for now", "that is enough for now", "leave the rest", "stop for now"],
+    "completion_line_pattern": r"Completion:\s*(\d+)\s+of\s+(\d+)",
 }
 
 
@@ -234,3 +242,72 @@ def worker_dispatched(records):
 def is_progress_report(text, records, cfg):
     """An interim report while workers run: ends with the Progress line, and a worker was actually dispatched."""
     return bool(re.search(cfg["progress_line_pattern"], text or "")) and worker_dispatched(records)
+
+
+# ---- Deliverable ledger (WORKING_RECORD.md) ------------------------------------------------------
+def _record_table(cfg, heading_regex):
+    """Rows of the first table under the heading matching heading_regex; [] if absent."""
+    path = os.path.join(PROJECT_DIR, cfg["record_file"])
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError:
+        return []
+    try:
+        start = next(i for i, l in enumerate(lines) if re.match(r"#+\s*" + heading_regex, l, re.I))
+    except StopIteration:
+        return []
+    rows = []
+    for l in lines[start + 1:]:
+        if l.startswith("#"):
+            break
+        if l.strip().startswith("|"):
+            body = l.strip()[1:]
+            body = body[:-1] if body.endswith("|") and not body.endswith("\\|") else body
+            rows.append([c.strip() for c in re.split(r"(?<!\\)\|", body)])
+    return rows
+
+
+COMPLETE_WORDS = ("complete", "done", "✅")
+BLOCKED_WORDS = ("blocked", "cannot", "won't fix", "wont fix", "dropped", "superseded", "deferred")
+
+
+def deliverable_ledger(cfg):
+    """List of {name, state, blocked, complete, evidence} from the deliverable ledger; template rows skipped."""
+    rows = _record_table(cfg, r"deliverable")
+    if len(rows) < 2:
+        return []
+    header = [h.lower() for h in rows[0]]
+    si = next((i for i, h in enumerate(header) if "state" in h or "status" in h), 1)
+    ei = next((i for i, h in enumerate(header) if "evidence" in h), None)
+    out = []
+    for r in rows[1:]:
+        if not r or all(set(c) <= set("-: ") for c in r):
+            continue
+        name = r[0]
+        if not name or "/" in (r[si] if si < len(r) else "") and "COMPLETE / " in (r[si] if si < len(r) else ""):
+            continue  # empty or the seed's placeholder row
+        state = (r[si] if si < len(r) else "").strip()
+        low = state.lower()
+        out.append({"name": name, "state": state,
+                    "complete": any(w in low for w in COMPLETE_WORDS) and not any(w in low for w in ("incomplete", "not complete")),
+                    "blocked": any(w in low for w in BLOCKED_WORDS),
+                    "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip()})
+    return out
+
+
+def completion_summary(cfg):
+    """{total, complete, blocked, open (names), no_evidence (names), pct, line}; total 0 when no ledger."""
+    items = deliverable_ledger(cfg)
+    total = len(items)
+    done = [i for i in items if i["complete"]]
+    blocked = [i for i in items if i["blocked"] and not i["complete"]]
+    open_ = [i["name"] for i in items if not i["complete"] and not i["blocked"]]
+    no_ev = [i["name"] for i in done if not i["evidence"]]
+    pct = round(100 * len(done) / total) if total else 0
+    line = f"Completion: {len(done)} of {total} done ({pct}%)"
+    if blocked:
+        line += " · Blocked: " + ", ".join(i["name"] for i in blocked)
+    if open_:
+        line += " · Open: " + ", ".join(open_)
+    return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
+            "pct": pct, "line": line}
