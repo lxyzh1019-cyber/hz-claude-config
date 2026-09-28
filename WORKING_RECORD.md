@@ -27,9 +27,9 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 |---|---|---|
 | central v3.1.0 + stub built | COMPLETE | replay 41/41; install-stub simulated on 3 repo states |
 | v3.1.1: installer keeps repo sections of a v2 CLAUDE.md; central version bump as update test | COMPLETE | 4 repo states incl. Weekly-Planner copy; re-runs unchanged; replay 41/41 |
-| hz-claude-config updated on main | NOT STARTED | |
-| Pilot app repo | NOT STARTED | |
-| Other app repos | NOT STARTED | |
+| hz-claude-config updated on main | BLOCKED — merge is the user's step (rules: user merges on GitHub; git-guard blocks push to main) | v3.1.10 contents pushed on claude/eager-johnson-fx0sil, draft PR #9, replay 94/94 |
+| Pilot app repo | BLOCKED — needs PR #9 merged first (stub install reads central from main); this session's GitHub scope is hz-claude-config only | |
+| Other app repos | BLOCKED — follows the pilot; other repos are outside this session's GitHub scope | |
 
 ## Checks and evidence
 - 2026-09-28 v3.1.10: pull requests open ready for review, not as drafts (sessions had opened draft PRs, an extra click before merging). git-guard denies `gh pr create --draft/-d`; stub allows `gh pr ready`; rules require a draft made by any other route to be marked ready before the final report. Replay 94/94.
