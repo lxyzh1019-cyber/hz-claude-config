@@ -498,6 +498,9 @@ cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S2/.claude/
 python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['advisorModel']='fable';json.dump(s,open('$S2/.claude/settings.json','w'))"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S2'))")
 check "a repository still on the Fable advisor shows OUTDATED" "OUTDATED.*advisor off" "$o"
+# --- v3.1.17: the record check shows the exact table shape, so the first report is right and nothing is repeated
+o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py)
+check "record check shows the four-row table shape" "Intentionally removed" "$o"
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard

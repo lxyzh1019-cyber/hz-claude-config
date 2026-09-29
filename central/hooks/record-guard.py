@@ -92,8 +92,9 @@ if not record_touched:
     problems.append(f"update {cfg['record_file']} (request ledger, hotspot counter, deliverable ledger)")
 progress = is_progress_report(text, records_all, cfg)
 if not progress and not re.search(cfg["regression_table_pattern"], text):
-    problems.append("end with the regression table (kept / added / intentionally removed / missing) "
-                    f"against {cfg['features_file']}, and update the manifest if features changed")
+    problems.append(f"end with the regression table against {cfg['features_file']} in exactly this shape (four rows, "
+                    "these first-column words):\n| Regression table | Result |\n|---|---|\n| Kept | … |\n| Added | … |\n"
+                    "| Intentionally removed | … |\n| Missing | … |\nUpdate the manifest if features changed")
 if problems:
     block("Implementation happened this turn but the record is incomplete. Before finishing: " + "; ".join(problems) + ".")
 sys.exit(0)
