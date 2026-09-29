@@ -5,7 +5,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.16 changes the stub (advisor off, two idle hooks removed): run Step B once in every app repository, on Sonnet, in default mode. claude.ai preferences changed in v3.1.15: re-copy docs/claude-ai-preferences.txt.",
+  "update_notice": "v3.1.17 changes no stub: no Step B. It restores two files lost in the upload mix-up and tidies Step F.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
