@@ -1,0 +1,30 @@
+{
+  "routing_guard_mode": "observe",
+  "subagent_marker_fields": [],
+  "record_file": "WORKING_RECORD.md",
+  "features_file": "FEATURES.md",
+  "auto_fix_max_rounds": 1,
+  "fable_planner_min_triggers": 2,
+  "update_notice": "v3.1.16 changes the stub (advisor off, two idle hooks removed): run Step B once in every app repository, on Sonnet, in default mode. claude.ai preferences changed in v3.1.15: re-copy docs/claude-ai-preferences.txt.",
+  "dispatch": {
+    "UserPromptSubmit": [
+      "plan-gate.py",
+      "skill-router.py"
+    ],
+    "PreToolUse": [
+      {
+        "script": "routing-guard.py",
+        "tools": "Edit|Write|MultiEdit|NotebookEdit"
+      },
+      {
+        "script": "git-guard.py",
+        "tools": "Bash|mcp__.*pull_request.*"
+      }
+    ],
+    "Stop": [
+      "record-guard.py",
+      "completion-guard.py",
+      "validation-line.py"
+    ]
+  }
+}
