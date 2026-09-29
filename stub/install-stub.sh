@@ -79,7 +79,34 @@ elif head -1 CLAUDE.md | grep -q '^# Global Working Rules'; then
   kept="$(python3 "$T/split_claude_md.py" CLAUDE.md "$T/CLAUDE-pointer.md")"
   if [ -n "$kept" ]; then say "CLAUDE.md is now the pointer; kept this repo's own sections after it: $(echo "$kept" | paste -sd ';' -)"
   else say "CLAUDE.md is now the pointer"; fi
-elif ! grep -q 'hz-loader.py' CLAUDE.md; then printf '\n' >> CLAUDE.md; cat "$T/CLAUDE-pointer.md" >> CLAUDE.md; say "kept this repo's CLAUDE.md content, appended the pointer"; fi
+elif ! grep -q 'hz-loader.py' CLAUDE.md; then printf '\n' >> CLAUDE.md; cat "$T/CLAUDE-pointer.md" >> CLAUDE.md; say "kept this repo's CLAUDE.md content, appended the pointer"
+else
+  res="$(python3 - CLAUDE.md "$T/CLAUDE-pointer.md" <<'PYPTR'
+import sys
+path, ptr = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8").read()
+new = open(ptr, encoding="utf-8").read().rstrip("\n")
+start = text.find("# Repository rules")
+end_marker = "Repository-specific files: `FEATURES.md` and `WORKING_RECORD.md`."
+end = text.find(end_marker, start) if start >= 0 else -1
+if start < 0 or end < 0:
+    print("unrecognised")
+else:
+    end += len(end_marker)
+    updated = text[:start] + new + text[end:]
+    if updated == text:
+        print("same")
+    else:
+        open(path, "w", encoding="utf-8").write(updated)
+        print("updated")
+PYPTR
+)"
+  case "$res" in
+    updated) say "CLAUDE.md pointer refreshed; everything else in CLAUDE.md kept as it was";;
+    same) say "CLAUDE.md pointer already current";;
+    *) say "CLAUDE.md pointer not recognised, left unchanged: compare it with stub/CLAUDE-pointer.md";;
+  esac
+fi
 
 # 5. per-repo files, created only if missing
 for f in FEATURES.md WORKING_RECORD.md; do [ -e "$f" ] || { cp "$T/$f" "$f"; say "created template $f — fill it in this repo"; }; done

@@ -22,7 +22,7 @@ cat > "$T/ok.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/WORKING_RECORD.md"}}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\nRegression table\n| Feature | Status |\n| login | kept |\n\nConfidence: Medium · Status: Validated — npm test 12/12"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n**Result:** login works again.\n**I need from you:** nothing.\n**Next:** I open the pull request.\n\nRegression table\n| Feature | Status |\n| login | kept |\n\nConfidence: Medium · Status: Validated — npm test 12/12"}]}}
 J
 cat > "$T/noline.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hello"}}
@@ -248,6 +248,62 @@ o=$(echo '{"prompt":"why does the sync layer keep breaking across all apps? find
 o=$(echo '{"prompt":"- add a button\n- fix colour\n- change the label"}' | python3 $H/plan-gate.py); check "planner: default opus on plain plan" "Opus 5.5 plans (default)" "$o"
 o=$(echo '{"prompt":"- rename the label"}' | python3 $H/plan-gate.py); check "planner: silent on micro tier" "clean" "$(echo "$o" | grep -c '\[planner\]' | sed 's/^0$/clean/')"
 rm -f .claude/state/completion-rounds.json
+# --- v3.1.11: first-line version, plain top, stub check, pointer refresh
+vl(){ echo "{\"transcript_path\":\"$1\",\"stop_hook_active\":false}" | python3 $H/validation-line.py; }
+cat > "$T/first_noversion.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"install the stub"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll start by reading the current state."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\nResult: installed.\nI need from you: merge the pull request.\nNext: health check.\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(vl "$T/first_noversion.jsonl"); check "first reply must open with the version, not a preamble" "very first line must be 'Rules v" "$o"
+cat > "$T/second_notop.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\nResult: ready.\nI need from you: nothing.\nNext: waiting.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"user","message":{"role":"user","content":"what changed?"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The hook now checks X in file y.py.\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(vl "$T/second_notop.jsonl"); check "final answer without the plain top is sent back" "three plain lines" "$o"
+check "later replies need no version line" "clean" "$(echo "$o" | grep -c 'first reply of the session' | sed 's/^0$/clean/')"
+cat > "$T/second_top.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\nResult: ready.\nI need from you: nothing.\nNext: waiting.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"user","message":{"role":"user","content":"what changed?"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"## Result: the check now runs at every start.\n- I need from you: nothing\n> Next: nothing to do.\n\nDetails: hook y.py.\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(vl "$T/second_top.jsonl"); check "plain top accepted with markdown decoration" "^$" "$o"
+o=$(vl "$T/prog_earlier.jsonl"); check "progress report needs no plain top" "^$" "$o"
+# stub check
+o=$(echo '{}' | python3 $H/session-start.py); check "stub outdated is reported in plain words" "OUTDATED" "$o"
+check "stub report names the missing pieces" "Sonnet worker" "$o"
+S="$T/stubrepo"; rm -rf "$S"; mkdir -p "$S/.claude/agents"
+cp "$H/../../stub/settings.json" "$S/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$S/.claude/agents/"
+cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"
+o2=$(cd "$H" && python3 -c "
+import sys; sys.path.insert(0,'.')
+from _common import load_config; from stubcheck import stub_status
+print(stub_status(load_config(), '$S'))")
+check "current stub is reported current" "^current" "$o2"
+# pointer refresh keeps other sections
+P="$T/ptr"; rm -rf "$P"; mkdir -p "$P"
+printf '# Repository rules\n\nold pointer text hz-loader.py\n\nRepository-specific files: `FEATURES.md` and `WORKING_RECORD.md`.\n\n## Project Architecture\nkeep me\n' > "$P/CLAUDE.md"
+sed -n '/^  res="\$(python3 - CLAUDE.md/,/^PYPTR$/p' "$H/../../stub/install-stub.sh" | sed '1d;$d' > "$T/ptr.py"
+( cd "$P" && python3 "$T/ptr.py" CLAUDE.md "$H/../../stub/CLAUDE-pointer.md" ) > "$T/ptr.out"
+check "installer refreshes an existing pointer" "updated" "$(cat "$T/ptr.out")"
+check "pointer refresh keeps the repo's own section" "keep me" "$(cat "$P/CLAUDE.md")"
+check "refreshed pointer has the multi-repo fallback" "hooks inactive" "$(cat "$P/CLAUDE.md")"
+# --- v3.1.12: central switchboard
+dp(){ python3 $H/dispatch.py; }
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push origin main"}}' | dp); check "switchboard passes on a git-guard deny" '"deny"' "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | dp); check "switchboard quiet on a harmless command" "^$" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"x"}}' | dp); check "switchboard skips checks for other tools" "^$" "$o"
+o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard passes on a Stop block" '"decision": "block"' "$o"
+o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/second_top.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard quiet when every Stop check passes" "^$" "$o"
+o=$(echo '{"hook_event_name":"UserPromptSubmit","prompt":"the sync layer keeps breaking"}' | dp); check "switchboard joins prompt contexts" "Executor: opus-worker" "$o"
+check "switchboard answers once for the prompt event" "1" "$(echo "$o" | grep -c hookSpecificOutput)"
+o=$(echo '{"hook_event_name":"SubagentStop"}' | dp); check "switchboard quiet on an event with no checks" "^$" "$o"
+check "stub hands every forwarded event to the switchboard" "5" "$(python3 -c "import json;h=json.load(open('$H/../../stub/settings.json'))['hooks'];print(sum(1 for e in ('UserPromptSubmit','PreToolUse','PostToolUse','Stop','SubagentStop') if 'dispatch.py' in json.dumps(h.get(e,[]))))")"
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard

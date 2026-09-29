@@ -4,6 +4,7 @@ where the worker instructions and skills are, per-repo file status, and hotspot 
 import os, subprocess
 from _common import (read_hook_input, load_config, add_context, PROJECT_DIR, RULES_PATH, SKILLS_DIR,
                      WORKER_PATH, hotspot_alerts, central_version, completion_summary)
+from stubcheck import stub_status
 
 data = read_hook_input()
 cfg = load_config()
@@ -33,13 +34,19 @@ try:
         facts.append(f"Note: {cfg['features_file']} is the unfilled template — fill it before the first implementation turn")
 except OSError:
     pass
+stub = stub_status(cfg, PROJECT_DIR)
+facts.append("[stub] " + stub)
+if os.path.exists(os.path.join(PROJECT_DIR, "tools", "build_manifest.py")) and cfg.get("update_notice"):
+    facts.append("[update] " + cfg["update_notice"] + " Put this in the 'I need from you' line of your first reply.")
 facts.append(f"Note: routing guard mode: {cfg.get('routing_guard_mode', 'observe')}")
 facts += [f"[hotspot] {a}" for a in hotspot_alerts(cfg)]
 comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:
     facts.append("[completion] " + comp["line"] + " — read the deliverable ledger before claiming anything is done; "
                  "state this line in your first reply.")
-facts.append("State the rules version and branch in your first reply. Rules, hooks, worker instructions and skills "
+facts.append(f"Your first reply's very first line: 'Rules v{version} · {branch}'. Every final answer then starts with "
+             "three plain lines — Result / I need from you / Next — in everyday words; technical detail goes below. "
+             "If the stub is outdated, say so in the 'I need from you' line. Rules, hooks, worker instructions and skills "
              "come from hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
 parts.append("\n".join(facts))
 add_context("SessionStart", "\n\n".join(parts))
