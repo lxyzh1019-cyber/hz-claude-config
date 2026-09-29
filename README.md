@@ -1,4 +1,4 @@
-# hz-claude-config — central working rules (v3.1.16)
+# hz-claude-config — central working rules (v3.1.17)
 
 Everything central lives here: the rules, the hook logic, the executors' shared instructions and the audit skills (`central/`). Each app repository keeps only a small **stable stub** — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md`, `.claude/agents/sonnet-worker.md`, a pointer `CLAUDE.md` — plus its own `FEATURES.md` and `WORKING_RECORD.md`.
 
@@ -24,7 +24,7 @@ On github.com open `hz-claude-config` → **Add file → Upload files** → drag
 
 > Skip the plan and run it directly. Delete every tracked file in this repository except `hz-claude-config-v3.1.16.zip`. Unzip that zip with Python into the repository root, then delete the zip. Run `bash central/hooks/replay-hooks.sh` and show the last line. Commit, push, and open a pull request.
 
-Expect `passed=166 failed=0`. If the session asks you to approve a plan or a commit first, approve it. Merge the pull request on github.com — the loader reads `main`.
+Expect `passed=167 failed=0`. If the session asks you to approve a plan or a commit first, approve it. Merge the pull request on github.com — the loader reads `main`.
 
 ## B. Pilot one app repository
 Only after Step A's pull request is merged: a new stub calls checks that exist only in the new central version. Start a cloud session on the pilot repository **in default permission mode** and paste:
@@ -62,14 +62,14 @@ Every repository loads the new version at its next session start; GitHub's raw-f
 **Also update your claude.ai preferences** (changed in v3.1.15): paste `docs/claude-ai-preferences.txt` into claude.ai Settings > Profile.
 
 ## F. Health check (after Step B, once per repository)
-Start a cloud session on the repository (auto mode is fine) and paste:
+Start a **new** session on the repository (cloud or local; auto mode is fine) on your **account default model**, not the Sonnet session you used for Step B, and paste:
 
 > Health check. Run it directly, commit nothing, and leave the repository as you found it. Report each test as passed or failed, one plain sentence each.
 > 1. Stub: quote the `[stub]` line from session start.
 > 2. Workers: ask `sonnet-worker`, then `opus-worker`, to reply with only the model ID they run on. Pass = a Sonnet 5.5 ID, then the model this session runs on (your account default). A dispatch that fails because `claude-sonnet-5-5` is unknown is a fail: report it, do not loosen the ID.
 > 3. No advisor: check that `.claude/settings.json` has no `advisorModel`. Pass = none (sessions never consult Fable on their own).
-> 4. Completion check: on a new branch add rows HEALTH-A and HEALTH-B (NOT STARTED) to the deliverable ledger in `WORKING_RECORD.md` (rows added on the branch are the ones counted), write `scratch/health.txt`, set HEALTH-A to COMPLETE with evidence "scratch file written", then write a final report that claims the work is done. In that report, include a regression table and every other line the checks ask for, so only the completion check can send you back. Pass = the completion hook sends you back to HEALTH-B, and the count covers only the two HEALTH rows. Then set HEALTH-B to BLOCKED — health check.
-> 5. Draft pull request block: run `gh pr create --draft --title health --body health`, then try the same through the GitHub tool that creates pull requests, with its draft field set to true. Pass = both denied by git-guard; any other outcome is a fail (close any pull request it opened).
+> 4. Completion check: on a new branch add rows HEALTH-A and HEALTH-B (NOT STARTED) to the deliverable ledger in `WORKING_RECORD.md` (rows added on the branch are the ones counted), write `scratch/health.txt`, set HEALTH-A to COMPLETE with evidence "scratch file written", then write a final report that claims the work is done and ends with "Confidence: High · Status: Checked" (the check only reacts to a report marked Checked or Validated). In that report, include a regression table and every other line the checks ask for, so only the completion check can send you back. Pass = the completion hook sends you back to HEALTH-B, and the count covers only the two HEALTH rows. Then set HEALTH-B to BLOCKED — health check.
+> 5. Draft pull request block: run `gh pr create --draft --title health --body health`, then try the same through the GitHub tool that creates pull requests, with its draft field set to true. Pass = both denied by git-guard; any other outcome is a fail (close any pull request it opened). If this session has no GitHub tool for creating pull requests (local sessions usually don't), that half is "not applicable", not a fail.
 > 5b. Model: quote the `model` line from `.claude/settings.json`. Pass = there is none.
 > 6. CLAUDE.md: compare `CLAUDE.md` with its version before the last stub install (`git log`) and name any section that disappeared. Pass = none.
 > Finally remove the two HEALTH rows and `scratch/`, and confirm `git status` is clean.
