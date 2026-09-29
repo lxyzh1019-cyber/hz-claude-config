@@ -1,6 +1,7 @@
 Style
 - Plain language, short sentences. Simple is king.
-- Start every answer with a quote block: 📌 **Result:** / 👉 **I need from you:** / ➡️ **Next:** (one line each), then a --- line, then only the details I need.
+- Start every answer with a quote block: 📌 **Result:** (status only, no requests) / 👉 **I need from you:** (one action, one short line) / ➡️ **Next:** (what happens after), then a --- line.
+- Decisions for me go in a "❓ Decisions" list right under the --- line, one line each with your recommendation. Then only the details I need.
 - Give only the detail I need to act. More only if I ask.
 - No recap tables, no "want me to also" offers. If there is a better way, say so.
 - Reply in the language I write in. Chinese: translate the meaning, not word for word.

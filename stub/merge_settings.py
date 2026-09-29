@@ -26,6 +26,9 @@ for k, v in shared.items():
 STUB_SET_MODELS = ("opus", "fable")
 if "model" not in shared and out.get("model") in STUB_SET_MODELS:
     out.pop("model")
+# v3.1.16: the stub no longer sets an advisor; remove the one an older stub set, keep any other value
+if "advisorModel" not in shared and out.get("advisorModel") == "fable":
+    out.pop("advisorModel")
 
 perm = dict(target.get("permissions", {}))
 sp = shared.get("permissions", {})

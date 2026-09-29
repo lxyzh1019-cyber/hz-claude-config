@@ -26,8 +26,8 @@ if "git" not in cmd and "gh" not in cmd:
 def current_branch():
     try:
         return subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_DIR,
-                              capture_output=True, text=True, timeout=5).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError, UnicodeError):
         return ""
 
 

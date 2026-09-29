@@ -17,6 +17,8 @@
 | 6 | 2026-09-29 | fewer Step B rounds: checks switched on centrally | built | v3.1.12; live check = Step F in a repo after Step B |
 | 7 | 2026-09-29 | reduce rework: build in the repo, test first, one batch | built | v3.1.13 rules text; live check = the next change goes through Step E |
 | 8 | 2026-09-29 | v3.1.14 batch: completion scoped to this branch; 3-round limit per prompt; Completion display with open list; fewer in-progress messages; quote-block top (📌/👉/➡️); draft PR blocked on the GitHub tool; record update; stub stops overriding the account model (opus-worker inherit, sonnet-worker exact ID) | built | v3.1.14; stub change → Step B; live check = Step F (tests 2, 4, 5, 5b) |
+| 9 | 2026-09-29 | v3.1.15: UTF-8 on Chinese Windows (gbk broke the completion scope); Stop checks together; per-prompt cap for the format check; short re-sends; separated top block (Result = status, one short request, ❓ Decisions); plan files via plan mode, copied to plans/; no progress reports, foreground workers; build in chat + web upload (no cloud credits) | built | chat build, replay 168/168; live check = Step F test 4 on the Windows PC |
+| 10 | 2026-09-29 | advisor off (sessions consulted Fable without the user choosing it); drop the two idle hook events; one send-back per request for every check | built | v3.1.16 stub change; replay 166/166; Step B on a 3.1.14-stub repo simulated: advisor and idle hooks removed, [stub] current |
 
 ## Hotspot counter
 | Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |
@@ -24,9 +26,11 @@
 | rules distribution | 5 | 0 | 0 | 1 | v4 relied on cloud behaviour the docs rule out | yes 2026-09-25 (Plan v5, probe-verified) |
 | record guard | 2 | 0 | 1 | 0 | lost shell-write detection (regression vs local v2) | yes 2026-09-25 (repair chosen over rewrite; comparison in chat) |
 | hotspot table reader | 2 | 0 | 0 | 0 | escaped pipe inside a cell shifted the columns (false alert) | no |
-| completion guard | 1 | 0 | 0 | 0 | Weekly-Planner PR #108: loop ran 8 rounds, counter stuck at 1 of 3 (Stop-hook feedback reset the turn key); rows from other rounds blocked | no |
+| completion guard | 2 | 1 | 0 | 0 | Weekly-Planner Step F (3.1.14): on Chinese Windows the base read failed (gbk), the count fell back to the whole record (60 of 72) and never blocked | no |
 | draft-PR block | 1 | 0 | 0 | 0 | Weekly-Planner PR #108: draft PR opened through the GitHub tool, which git-guard never saw | no |
 | stub session model | 1 | 0 | 0 | 0 | stub `model: opus` overrode the account default; the alias can resolve to an older Opus | no |
+| Stop checks together (dispatch) | 1 | 0 | 0 | 0 | a record-guard block made validation-line step aside (stop_hook_active), so the report lost its top block | no |
+| text encoding (Windows gbk) | 1 | 0 | 0 | 0 | subprocess text decoded as gbk: UnicodeDecodeError in install smoke test and in the ledger base read | no |
 Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 workarounds/exceptions → no further patch until the rewrite-vs-repair comparison is presented; then set the last cell to "yes <date>". The hooks read this table: keep the header words.
 
 ## Deliverable ledger
@@ -47,6 +51,9 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 | Other app repos | BLOCKED — same as the pilot: Step B in default mode | Figure-Skate, Swimming: 3.1.6 stub on main; spelling-pronun: Step B denied in auto mode (2026-09-29) |
 
 ## Checks and evidence
+- 2026-09-29 v3.1.16 (chat build; supersedes the un-uploaded 3.1.15 package): user never chose Fable, yet the stub's `advisorModel: fable` let sessions consult it (Step F test 3 and the 3.1.15 planning session did). Advisor removed from the stub; the installer removes a stub-set `fable` advisor and keeps a repository's own choice. PostToolUse and SubagentStop no longer registered (no checks used them; about 0.1 s per tool call). `auto_fix_max_rounds` 3 → 1: the completion check sends back once per request for all its reasons together, then never again; the format check likewise. Step F test 3 now checks that no advisor is set. Measured hook cost before the change: 0.16 s before each command/edit, 0.11 s after, 0.3 s at the end of a long reply. Replay 166/166.
+- 2026-09-29 v3.1.15 (built and tested in the claude.ai chat; uploaded on github.com, no cloud session): Weekly-Planner Step F on 3.1.14 — 5 of 6 passed; test 4 failed: under gbk the origin/main read failed, the ledger was unscoped (60 of 72) and the guard never blocked; the record-guard block made validation-line skip the follow-up, so the report had no top block. Fixes: explicit UTF-8 for every subprocess read and hook input; Stop checks all run and send one joined message; validation-line per-prompt cap (3) instead of stop_hook_active; send-backs ask only for the missing lines; Result = status only, one short request (≤30 words), ❓ Decisions list; plans in plan mode, copied to plans/; one-line status replaces progress reports, workers in the foreground; worker wording "runs on the session's model"; README Step E = web upload; Step F test 4 asks for the regression table. gbk replay case fails on the 3.1.14 code and passes on 3.1.15. Replay 168/168.
+- 2026-09-29: user declined square-only markers; square + Rev N stays.
 - 2026-09-29 v3.1.14 (Step E batch, this repository): live checks first — this session's GitHub tool for pull requests is `mcp__github__create_pull_request`, its draft field is `draft` (boolean; `mcp__github__update_pull_request` has the same field); the checkout's `origin/main` has no `WORKING_RECORD.md` (ref at 5354ba0), so in this repository the scoped count falls back to "show, never block". Evidence from Weekly-Planner PR #108: completion loop ran 8 rounds, counter stuck at 1 of 3, draft PR opened through the GitHub tool. Root cause of the loop: Stop-hook feedback is written to the transcript as a user record, so the turn-uuid key changed every round (probe: with the old key the second round passed silently). Item 8 added mid-batch by the user: stub sets no `model`, opus-worker `inherit`, sonnet-worker `claude-sonnet-5-5`. Replay 152/152.
 - 2026-09-29 v3.1.13 into the repository (Step A): `hz-claude-config-v3.1.13.zip` unpacked into the root with Python, replacing every tracked file, zip removed. New `central/hooks/dispatch.py` and `stubcheck.py`; RULES.review-rev12 → rev13; claude-ai-preferences-carve-out.txt → claude-ai-preferences.txt. Replay 114/114. PR #10 opened ready for review; main is 3.1.10 until the user merges.
 - 2026-09-29 v3.1.13 (same undeployed release as 3.1.11/3.1.12; 3.1.10 still on main): rule "Changing hz-claude-config" — test the riskiest live assumption first, one agreed batch, build in the repository (Step E paste), deploy and health-check before the next design. Root cause of today's rework: six versions built on untested live assumptions and stacked undeployed. README Step E gets a paste template; this record gets a "Next batch" list. Replay 114/114.
@@ -68,8 +75,8 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 
 ## Next batch
 Ideas raised mid-work, not in the current build. Agree the list, then build once.
-- 2026-09-29: user declined square-only markers; square + Rev N stays.
-- (proposed 2026-09-29) completion-guard: the 'add the line' / 'wrong count' / 'no evidence' blocks have no round cap (only the counter bump is capped); cap them too.
+- (proposed 2026-09-29) record-guard still steps aside on stop_hook_active; move it to the per-prompt cap like validation-line.
+- (proposed 2026-09-29, stub change) `"plansDirectory": "./plans"` in the stub, so plan files are written in the repository directly.
 - (proposed 2026-09-29) git-guard also blocks `mcp__github__update_pull_request` with `draft: true` (built in v3.1.14 because the same check covers it) — confirm it should stay.
 
 ## Open questions / blockers

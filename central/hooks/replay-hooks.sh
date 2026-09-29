@@ -42,9 +42,9 @@ cat > "$T/gov.jsonl" <<J
 J
 
 # --- Stop: validation line
-o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "validation-line passes good line" "^$" "$o"
-o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "validation-line blocks missing line" '"decision": "block"' "$o"
-o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":true}" | python3 $H/validation-line.py); check "validation-line no loop" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "validation-line passes good line" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "validation-line blocks missing line" '"decision": "block"' "$o"
+o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":true}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "validation-line no loop" "^$" "$o"
 # --- Stop: record guard
 o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard passes complete turn" "^$" "$o"
 o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard blocks missing record+table" "regression table" "$o"
@@ -152,7 +152,7 @@ o=$(echo '{}' | python3 $H/session-start.py); check "malformed row is reported, 
 # --- v3.1.5: progress reports while workers run
 cat > "$T/prog_nodispatch.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"status?"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"In progress — not done.\nProgress: 1 of 3 done · Running: 1B, 1C"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"⏳ Working on: 1B, 1C · 1 of 3 done"}]}}
 J
 cat > "$T/prog_earlier.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"go"}}
@@ -160,11 +160,11 @@ cat > "$T/prog_earlier.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Dispatched."}]}}
 {"type":"user","message":{"role":"user","content":"show me the status"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/css/app.css"}}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"In progress — not done. 1A committed.\nProgress: 1 of 3 done · Running: 1B, 1C"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"⏳ Working on: 1B, 1C · 1 of 3 done"}]}}
 J
-o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "progress line accepted after a worker was dispatched" "^$" "$o"
-o=$(echo "{\"transcript_path\":\"$T/prog_nodispatch.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "progress line refused when no worker was dispatched" "only for reports while dispatched workers" "$o"
-o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | python3 $H/validation-line.py); check "missing line explains both report types" "progress report" "$o"
+o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "one-line status accepted while a dispatched worker runs" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/prog_nodispatch.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "status line refused when no worker was dispatched" "Working on" "$o"
+o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "missing line explains the status line and the final answer" "Working on" "$o"
 touch WORKING_RECORD.md
 o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "progress turn needs no regression table" "^$" "$o"
 touch -d '1999-01-01' WORKING_RECORD.md
@@ -223,15 +223,13 @@ cat > "$T/done_claim.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All done.\n\nConfidence: High · Status: Validated — npm test"}]}}
 J
 cg(){ echo "{\"transcript_path\":\"$1\",\"stop_hook_active\":$2}" | python3 $H/completion-guard.py; }
-o=$(cg "$T/done_claim.jsonl" false); check "completion: done claim with open item is blocked" "Auto-fix round 1 of 3" "$o"
+o=$(cg "$T/done_claim.jsonl" false); check "completion: done claim with open item is blocked" "only send-back for this request" "$o"
 check "completion: block names the open item" "export" "$o"
-o=$(cg "$T/done_claim.jsonl" true); check "completion: round 2 despite stop_hook_active" "Auto-fix round 2 of 3" "$o"
-o=$(cg "$T/done_claim.jsonl" true); check "completion: round 3" "Auto-fix round 3 of 3" "$o"
-o=$(cg "$T/done_claim.jsonl" true); check "completion: cap reached demands the limit statement" "Auto-fix limit reached" "$o"
+o=$(cg "$T/done_claim.jsonl" true); check "completion: no second send-back on the same request" "^$" "$o"
 o=$(cg "$T/done_claim.jsonl" true); check "completion: never loops past the cap" "^$" "$o"
 rm -f .claude/state/completion-rounds.json
 # --- v3.1.14: rounds are counted per user prompt, so the hook's own feedback cannot reset them.
-# Five blocks in a row on one prompt: the 4th says the limit is reached, the 5th passes.
+# v3.1.16: one send-back per request; the session's answers after it are never blocked again.
 echo '{"prompt":"finish the plan"}' | python3 $H/plan-gate.py >/dev/null
 cp "$T/done_claim.jsonl" "$T/loop.jsonl"
 feedback(){ # a Stop-hook block reaches the transcript as another user record, then the session answers again
@@ -240,11 +238,9 @@ feedback(){ # a Stop-hook block reaches the transcript as another user record, t
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All done.\n\nConfidence: High · Status: Validated — npm test"}]}}
 J
 }
-o=$(cg "$T/loop.jsonl" false); check "loop: block 1" "Auto-fix round 1 of 3" "$o"
-feedback 1; o=$(cg "$T/loop.jsonl" true); check "loop: feedback does not reset the counter" "Auto-fix round 2 of 3" "$o"
-feedback 2; o=$(cg "$T/loop.jsonl" true); check "loop: block 3" "Auto-fix round 3 of 3" "$o"
-feedback 3; o=$(cg "$T/loop.jsonl" true); check "loop: block 4 says the limit is reached" "Auto-fix limit reached" "$o"
-feedback 4; o=$(cg "$T/loop.jsonl" true); check "loop: block 5 passes" "^$" "$o"
+o=$(cg "$T/loop.jsonl" false); check "loop: one send-back" "only send-back" "$o"
+feedback 1; o=$(cg "$T/loop.jsonl" true); check "loop: feedback does not reset the counter" "^$" "$o"
+feedback 2; o=$(cg "$T/loop.jsonl" true); check "loop: still quiet" "^$" "$o"
 rm -f .claude/state/completion-rounds.json
 # scope: rows that are identical on origin/main belong to earlier rounds
 o=$(cg "$T/done_claim.jsonl" false); check "completion: only this branch's rows are counted" "Completion: 1 of 3 done (33%)" "$o"
@@ -253,7 +249,7 @@ check "completion: open items are listed one per line, names only" '\\n- export'
 rm -f .claude/state/completion-rounds.json
 git update-ref -d refs/remotes/origin/main
 o=$(cg "$T/done_claim.jsonl" false); check "completion: unreadable base shows the line but never blocks" "Completion: 1 of 4 done (25%)" "$o"
-check "completion: unreadable base does not block on open items" "clean" "$(echo "$o" | grep -c 'Auto-fix round' | sed 's/^0$/clean/')"
+check "completion: unreadable base does not block on open items" "clean" "$(echo "$o" | grep -c 'Not done' | sed 's/^0$/clean/')"
 git update-ref refs/remotes/origin/main "$(git rev-parse HEAD)"
 rm -f .claude/state/completion-rounds.json
 cat > "$T/qa.jsonl" <<J
@@ -268,7 +264,7 @@ J
 o=$(cg "$T/plan.jsonl" false); check "completion: plan awaiting approval passes" "^$" "$o"
 o=$(echo '{"prompt":"stop here for today"}' | python3 $H/plan-gate.py); check "pause phrase acknowledged" "Pause acknowledged" "$o"
 o=$(cg "$T/done_claim.jsonl" false); check "completion: pause lets one final report stand" "^$" "$o"
-o=$(cg "$T/done_claim.jsonl" false); check "completion: pause is single-use" "Auto-fix round 1 of 3" "$o"
+o=$(cg "$T/done_claim.jsonl" false); check "completion: pause is single-use" "only send-back" "$o"
 rm -f .claude/state/completion-rounds.json
 printf '# WORKING RECORD\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|---|---|\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| login | COMPLETE | npm test 12/12 |\n| export | COMPLETE | |\n' > WORKING_RECORD.md
 o=$(cg "$T/done_claim.jsonl" false); check "completion: all complete still needs the Completion line" "Completion: 2 of 2 done (100%)" "$o"
@@ -277,12 +273,14 @@ cat > "$T/done_line.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\nCompletion: 1 of 2 done (50%)\n\nConfidence: High · Status: Validated — npm test"}]}}
 J
+rm -f .claude/state/completion-rounds.json
 o=$(cg "$T/done_line.jsonl" false); check "completion: wrong count is corrected" "does not match" "$o"
 cat > "$T/done_ok.jsonl" <<J
 {"type":"user","uuid":"u5","message":{"role":"user","content":"finish the plan"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\nCompletion: 2 of 2 done (100%)\n\nConfidence: High · Status: Validated — npm test"}]}}
 J
+rm -f .claude/state/completion-rounds.json
 o=$(cg "$T/done_ok.jsonl" false); check "completion: COMPLETE without evidence is caught" "without evidence" "$o"
 sed -i 's/| export | COMPLETE | |/| export | COMPLETE | manual check |/' WORKING_RECORD.md
 o=$(cg "$T/done_ok.jsonl" false); check "completion: correct line with evidence passes" "^$" "$o"
@@ -303,7 +301,7 @@ o=$(echo '{"prompt":"- add a button\n- fix colour\n- change the label"}' | pytho
 o=$(echo '{"prompt":"- rename the label"}' | python3 $H/plan-gate.py); check "planner: silent on micro tier" "clean" "$(echo "$o" | grep -c '\[planner\]' | sed 's/^0$/clean/')"
 rm -f .claude/state/completion-rounds.json
 # --- v3.1.11: first-line version, plain top, stub check, pointer refresh
-vl(){ echo "{\"transcript_path\":\"$1\",\"stop_hook_active\":false}" | python3 $H/validation-line.py; }
+vl(){ echo "{\"transcript_path\":\"$1\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }; }
 cat > "$T/first_noversion.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"install the stub"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll start by reading the current state."}]}}
@@ -415,7 +413,7 @@ check "installer refreshes an existing pointer" "updated" "$(cat "$T/ptr.out")"
 check "pointer refresh keeps the repo's own section" "keep me" "$(cat "$P/CLAUDE.md")"
 check "refreshed pointer has the multi-repo fallback" "hooks inactive" "$(cat "$P/CLAUDE.md")"
 # --- v3.1.12: central switchboard
-dp(){ python3 $H/dispatch.py; }
+dp(){ rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/dispatch.py; }
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push origin main"}}' | dp); check "switchboard passes on a git-guard deny" '"deny"' "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | dp); check "switchboard quiet on a harmless command" "^$" "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"x"}}' | dp); check "switchboard skips checks for other tools" "^$" "$o"
@@ -424,7 +422,82 @@ o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/second_top.json
 o=$(echo '{"hook_event_name":"UserPromptSubmit","prompt":"the sync layer keeps breaking"}' | dp); check "switchboard joins prompt contexts" "Executor: opus-worker" "$o"
 check "switchboard answers once for the prompt event" "1" "$(echo "$o" | grep -c hookSpecificOutput)"
 o=$(echo '{"hook_event_name":"SubagentStop"}' | dp); check "switchboard quiet on an event with no checks" "^$" "$o"
-check "stub hands every forwarded event to the switchboard" "5" "$(python3 -c "import json;h=json.load(open('$H/../../stub/settings.json'))['hooks'];print(sum(1 for e in ('UserPromptSubmit','PreToolUse','PostToolUse','Stop','SubagentStop') if 'dispatch.py' in json.dumps(h.get(e,[]))))")"
+check "stub hands every forwarded event to the switchboard" "3" "$(python3 -c "import json;h=json.load(open('$H/../../stub/settings.json'))['hooks'];print(sum(1 for e in ('UserPromptSubmit','PreToolUse','Stop') if 'dispatch.py' in json.dumps(h.get(e,[]))))")"
+# --- v3.1.15: UTF-8 whatever the PC language; Stop checks together; per-prompt cap; separated top block
+G="$T/gbkrepo"; rm -rf "$G"; mkdir -p "$G"; SHIM="$T/gbkshim"; mkdir -p "$SHIM"
+cat > "$SHIM/sitecustomize.py" <<'PYS'
+import subprocess
+_run = subprocess.run
+def run(*a, **k):
+    if (k.get("text") or k.get("universal_newlines")) and not k.get("encoding"):
+        k["encoding"] = "gbk"            # what a Chinese-Windows default does to calls without an explicit encoding
+    return _run(*a, **k)
+subprocess.run = run
+PYS
+( cd "$G" && git init -q . && git config user.email t@t && git config user.name t \
+  && printf '# WR\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| old round — done · ok | COMPLETE | npm test — 12/12 · fine |\n| old open item — later | NOT STARTED | |\n' > WORKING_RECORD.md \
+  && git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD \
+  && printf '| new item — this branch | NOT STARTED | |\n' >> WORKING_RECORD.md )
+gb(){ ( cd "$H" && CLAUDE_PROJECT_DIR="$G" PYTHONPATH="$SHIM" python3 -c "$1" 2>&1 ); }
+o=$(gb "
+import subprocess
+try:
+    r = subprocess.run(['git','show','origin/main:WORKING_RECORD.md'],cwd='$G',capture_output=True,text=True)
+    print('decoded' if r.stdout else 'broken')
+except UnicodeError:
+    print('broken')")
+check "gbk shim reproduces the Weekly-Planner failure for calls without an encoding" "broken" "$o"
+o=$(gb "import sys;sys.path.insert(0,'.');from _common import load_config,completion_summary;c=completion_summary(load_config());print(c['scoped'],c['total'],c['open'])")
+check "under gbk the completion count is still scoped to this branch" "True 1 \['new item — this branch'\]" "$o"
+o=$(cd "$H" && printf '{"prompt":"über — straße · 你好"}' | CLAUDE_PROJECT_DIR="$G" PYTHONIOENCODING=gbk python3 -c "import sys;sys.path.insert(0,'.');from _common import read_hook_input;p=read_hook_input().get('prompt','');print('intact' if p.endswith('你好') and 'straße' in p else 'lost')" 2>&1)
+check "hook input with Chinese text survives a gbk console" "intact" "$o"
+check "installer smoke test reads UTF-8" "PYTHONIOENCODING=utf-8" "$(cat "$H/../../stub/install-stub.sh")"
+# Stop checks together
+o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | dp)
+check "switchboard sends all Stop reasons in one message" "Fix all of these in one reply" "$o"
+check "joined message carries the record reason" "record is incomplete" "$o"
+check "joined message carries the format reason" "quote block" "$o"
+# per-prompt cap for the format check, not stop_hook_active
+rm -f "$PROJ/.claude/state/format-rounds.json"
+echo '{"prompt":"- one small thing","session_id":"cap1"}' | python3 $H/plan-gate.py >/dev/null
+vc(){ echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":true,\"session_id\":\"cap1\"}" | python3 $H/validation-line.py; }
+o=$(vc); check "format check sends back even after another check blocked (round 1)" '"decision": "block"' "$o"
+o=$(vc); check "format check goes quiet after its one send-back on this prompt" "^$" "$o"
+echo '{"prompt":"- another thing","session_id":"cap1"}' | python3 $H/plan-gate.py >/dev/null
+o=$(vc); check "a new prompt gets its own rounds" '"decision": "block"' "$o"
+check "send-back asks for only the missing lines" "do not repeat the rest" "$o"
+rm -f "$PROJ/.claude/state/format-rounds.json" "$PROJ/.claude/state/prompt.json"
+# separated top block
+cat > "$T/longneed.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.15 · main\n> 📌 **Result:** Plan ready.\n> 👉 **I need from you:** Say approved or tell me what to change, and note that two points need your OK: item 4 wording is already gone so I will put it where it sits now, and I add one encoding fix.\n> ➡️ **Next:** I build it.\n---\n\nConfidence: High · Status: Proposed"}]}}
+J
+o=$(vl "$T/longneed.jsonl"); check "request line longer than 30 words is sent back" "at most 30 words" "$o"
+cat > "$T/shortneed.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.15 · main\n> 📌 **Result:** Plan ready.\n> 👉 **I need from you:** Approve Plan v1, or name what to change.\n> ➡️ **Next:** I build it.\n---\n❓ Decisions\n1. Extra stdin fix — recommend yes.\n\nConfidence: High · Status: Proposed"}]}}
+J
+o=$(vl "$T/shortneed.jsonl"); check "one short request with a Decisions list passes" "^$" "$o"
+cat > "$T/statusplus.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Agent","input":{"subagent_type":"opus-worker"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Finished: record updated.\n⏳ Working on: opus-worker · 0 of 7 done"}]}}
+J
+o=$(vl "$T/statusplus.jsonl"); check "a multi-line progress report is no longer accepted" '"decision": "block"' "$o"
+# --- v3.1.16: advisor off, idle hooks gone, installer cleans both out of an existing repository
+M="$T/mergetest"; rm -rf "$M"; mkdir -p "$M"
+printf '{"advisorModel":"fable","model":"opus","hooks":{"PostToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"x hz-loader.py dispatch.py"}]}],"SubagentStop":[{"hooks":[{"type":"command","command":"x hz-loader.py dispatch.py"}]}]}}' > "$M/old.json"
+python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$M/old.json" "hz-loader.py"
+o=$(python3 -c "import json;s=json.load(open('$M/old.json'));print('advisor' if 'advisorModel' in s else 'no-advisor', 'model' if 'model' in s else 'no-model', sorted(s['hooks']))")
+check "installer removes the old Fable advisor" "no-advisor" "$o"
+check "installer removes the idle hook events" "\['PreToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit'\]" "$o"
+printf '{"advisorModel":"opus"}' > "$M/own.json"; python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$M/own.json" "hz-loader.py"
+check "installer keeps an advisor the repository chose itself" "opus" "$(cat "$M/own.json")"
+S2="$T/stubadv"; rm -rf "$S2"; mkdir -p "$S2/.claude/agents"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S2/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S2/CLAUDE.md"
+python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['advisorModel']='fable';json.dump(s,open('$S2/.claude/settings.json','w'))"
+o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S2'))")
+check "a repository still on the Fable advisor shows OUTDATED" "OUTDATED.*advisor off" "$o"
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard

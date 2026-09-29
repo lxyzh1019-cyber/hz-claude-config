@@ -26,8 +26,8 @@ def inside_project(p):
 def repo_has_source_changes():
     """True/False from git status (governance paths and hook state ignored); None if git is unavailable."""
     try:
-        r = subprocess.run(["git", "status", "--porcelain"], cwd=PROJECT_DIR, capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
+        r = subprocess.run(["git", "status", "--porcelain"], cwd=PROJECT_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
         return None
     if r.returncode != 0:
         return None
@@ -65,9 +65,9 @@ def record_changed_outside_edits():
             return False
     try:  # no timestamp in the transcript: fall back to git status
         r = subprocess.run(["git", "status", "--porcelain", "--", cfg["record_file"]], cwd=PROJECT_DIR,
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
         return r.returncode == 0 and bool(r.stdout.strip())
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, UnicodeError):
         return False
 
 
