@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Merge the shared settings.json into an app repo's settings.json.
-- model, permissions.defaultMode: shared wins
+- model: the stub no longer sets one (the account default applies). A model an older stub set — "opus" or
+  "fable" — is removed; any other value, which only the user can have chosen, is kept
+- permissions.defaultMode: shared wins
 - permissions.allow/ask/deny: union (existing order kept, shared entries appended)
 - hooks: entries whose command contains the managed marker (default .claude/hooks/) are managed and replaced by the shared set;
   any other hook entries the repo has are kept
@@ -20,6 +22,10 @@ out = dict(target)
 for k, v in shared.items():
     if k not in ("permissions", "hooks"):
         out[k] = v if k == "model" or k not in target else target[k]
+
+STUB_SET_MODELS = ("opus", "fable")
+if "model" not in shared and out.get("model") in STUB_SET_MODELS:
+    out.pop("model")
 
 perm = dict(target.get("permissions", {}))
 sp = shared.get("permissions", {})

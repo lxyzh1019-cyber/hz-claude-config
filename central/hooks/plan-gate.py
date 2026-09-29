@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook: plan tier, fix-counter reminder, and hotspot redesign alerts."""
+"""UserPromptSubmit hook: plan tier, fix-counter reminder, hotspot redesign alerts, and the prompt counter
+(the number the completion guard keys its auto-fix rounds on, so its own feedback cannot reset them)."""
 import json, sys
 import os
 from _common import (read_hook_input, load_config, count_bullets, log, hotspot_alerts, FIX_WORDS,
-                     completion_summary, STATE_DIR)
+                     completion_summary, bump_prompt_number, STATE_DIR)
 
 data = read_hook_input()
 prompt = data.get("prompt") or ""
 cfg = load_config()
+bump_prompt_number(data.get("session_id"))
 bullets = count_bullets(prompt)
 low = prompt.lower()
 triggers = [t for t in cfg["design_triggers"] if t in low]
@@ -61,11 +63,12 @@ if msgs and not skip and (bullets >= 3 or triggers):
         why.append("investigation wording: " + ", ".join(signals[:3]))
     if why:
         log("plan-gate", {"planner": "fable suggested", "why": why})
-        msgs.append("[planner] Suggest /model fable before writing this plan (session-only; the stub restores Opus next "
-                    "session): " + "; ".join(why) + ". Otherwise plan on Opus 5.5 and let the advisor consult Fable at "
-                    "decision points. State which one applied at the top of the plan.")
+        msgs.append("[planner] Suggest /model fable before writing this plan (session-only; the next session is back on "
+                    "the account default): " + "; ".join(why) + ". Otherwise plan on the session's own model and let "
+                    "the advisor consult Fable at decision points. State which one applied at the top of the plan.")
     else:
-        msgs.append("[planner] Opus 5.5 plans (default); the advisor consults Fable at decision points.")
+        msgs.append("[planner] The session's model plans (account default: Opus 5.5); the advisor consults Fable at "
+                    "decision points.")
 
 # pause: the next final report may stand with open ledger items (completion-guard honours this once)
 if any(ph in low for ph in cfg["pause_phrases"]):
@@ -78,8 +81,9 @@ if any(ph in low for ph in cfg["pause_phrases"]):
 
 comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:
-    msgs.append("[completion] " + comp["line"] + " — from the deliverable ledger; the final report must end with this "
-                "line (before the validation line) and may claim done only when nothing is open.")
+    msgs.append("[completion] " + comp["display"] + "\n— this branch's ledger rows; the final report must end with "
+                "these lines (before the validation line) and may claim done only when nothing is open." +
+                ("" if comp["scoped"] else " The base branch could not be read, so nothing is blocked on this count."))
 
 if msgs:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",

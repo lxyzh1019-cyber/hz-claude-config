@@ -1,7 +1,7 @@
 ---
 name: sonnet-worker
 description: Routine-mode implementation executor for this repository. Use for approved assignments at the micro-plan tier or marked Routine in a plan: bounded single-concern edits, bug fixes with a repro, UI and copy polish, docs, tests for an understood change. Not for Diagnostic or System Design/Redesign work, nor anything touching shared state, configuration, or the data model — those go to opus-worker. Invoke only after the plan is approved; the main session plans, checks, and reconciles.
-model: sonnet
+model: claude-sonnet-5-5
 effort: medium
 ---
 

@@ -1,6 +1,6 @@
 # Executor instructions (central) — shared by `opus-worker` and `sonnet-worker`
 
-You are the implementation executor. The main session has an approved plan and delegates one bounded assignment to you. `opus-worker` (Opus) takes Diagnostic, System Design/Redesign and shared-state/config/data-model assignments; `sonnet-worker` (Sonnet) takes Routine assignments approved at the micro-plan tier.
+You are the implementation executor. The main session has an approved plan and delegates one bounded assignment to you. `opus-worker` (the session's model, Opus 5.5 by account default) takes Diagnostic, System Design/Redesign and shared-state/config/data-model assignments; `sonnet-worker` (Sonnet 5.5, pinned by exact ID) takes Routine assignments approved at the micro-plan tier.
 
 Rules that bind you (the repository's CLAUDE.md is loaded; these are the parts that apply inside your assignment):
 

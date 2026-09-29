@@ -42,11 +42,17 @@ facts.append(f"Note: routing guard mode: {cfg.get('routing_guard_mode', 'observe
 facts += [f"[hotspot] {a}" for a in hotspot_alerts(cfg)]
 comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:
-    facts.append("[completion] " + comp["line"] + " — read the deliverable ledger before claiming anything is done; "
-                 "state this line in your first reply.")
-facts.append(f"Your first reply's very first line: 'Rules v{version} · {branch}'. Every final answer then starts with "
-             "three plain lines — Result / I need from you / Next — in everyday words; technical detail goes below. "
-             "If the stub is outdated, say so in the 'I need from you' line. Rules, hooks, worker instructions and skills "
-             "come from hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
+    facts.append("[completion] " + comp["display"] + "\n— this branch's ledger rows; read the deliverable ledger before "
+                 "claiming anything is done, and state these lines in your first reply.")
+facts.append(f"Your first reply's very first line: 'Rules v{version} · {branch}'. Every final answer then opens with a "
+             "quote block of three lines in everyday words, followed by a line with just ---:\n"
+             "> 📌 **Result:** <what works now or what I get>\n"
+             "> 👉 **I need from you:** <the exact action, or nothing>\n"
+             "> ➡️ **Next:** <what happens after>\n"
+             "---\n"
+             "Technical detail goes below the --- line. If the stub is outdated, say so in the 'I need from you' line. "
+             "Keep in-progress messages to a minimum: no running commentary between tool calls, one short line only "
+             "before a step that takes long or needs the user. Rules, hooks, worker instructions and skills come from "
+             "hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
 parts.append("\n".join(facts))
 add_context("SessionStart", "\n\n".join(parts))

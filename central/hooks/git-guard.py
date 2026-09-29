@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
-"""PreToolUse hook (Bash): block a commit on main/master and any push to main/master, without prompting, and
-block opening a pull request as a draft (PRs open ready for review; the user merges on GitHub).
-Feature-branch commits and pushes pass through untouched. A hook "deny" is honoured in auto mode."""
+"""PreToolUse hook (Bash and the GitHub pull-request tools): block a commit on main/master and any push to
+main/master, without prompting, and block opening a pull request as a draft — on the command line (gh pr create
+--draft) and through the GitHub tool (create/update_pull_request with draft set to true). PRs open ready for
+review; the user merges on GitHub. Feature-branch commits and pushes pass through untouched. A hook "deny" is
+honoured in auto mode."""
 import re, shlex, subprocess, sys
 from _common import read_hook_input, deny_tool, PROJECT_DIR
 
 PROTECTED = {"main", "master"}
+PR_TOOL = re.compile(r"^mcp__.*(create|update)_pull_request$")
 data = read_hook_input()
-cmd = ((data.get("tool_input") or data.get("input") or {}).get("command") or "")
+tool = data.get("tool_name") or ""
+tool_input = data.get("tool_input") or data.get("input") or {}
+if tool.startswith("mcp__"):
+    if PR_TOOL.match(tool) and tool_input.get("draft") is True:
+        deny_tool(f"git-guard: pull requests open ready for review, not as drafts. Call {tool} again with draft set "
+                  "to false, or leave the draft field out — create it ready for review. If a draft pull request "
+                  "already exists, mark it ready for review instead.")
+    sys.exit(0)
+cmd = (tool_input.get("command") or "")
 if "git" not in cmd and "gh" not in cmd:
     sys.exit(0)
 

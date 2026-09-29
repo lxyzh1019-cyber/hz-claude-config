@@ -13,6 +13,8 @@ git init -q . && git config user.email t@t && git config user.name t
 pass=0; fail=0
 check(){ # name expected_substring actual
   if grep -q -- "$2" <<<"$3"; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 -> ${3:0:200}"; fail=$((fail+1)); fi; }
+pn(){ # set the prompt counter the UserPromptSubmit hook would have written
+  mkdir -p "$PROJ/.claude/state"; printf '{"session":"","n":%s}' "$1" > "$PROJ/.claude/state/prompt-number.json"; }
 printf '# FEATURES — test app — manifest v1\n- login\n' > FEATURES.md
 printf '# WORKING RECORD\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|---|---|\n' > WORKING_RECORD.md
 
@@ -22,7 +24,7 @@ cat > "$T/ok.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/WORKING_RECORD.md"}}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n**Result:** login works again.\n**I need from you:** nothing.\n**Next:** I open the pull request.\n\nRegression table\n| Feature | Status |\n| login | kept |\n\nConfidence: Medium · Status: Validated — npm test 12/12"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** login works again.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** I open the pull request.\n---\n\nRegression table\n| Feature | Status |\n| login | kept |\n\nConfidence: Medium · Status: Validated — npm test 12/12"}]}}
 J
 cat > "$T/noline.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hello"}}
@@ -189,6 +191,17 @@ check "draft pull request -d is blocked" '"deny"' "$(gg 'git push -u origin clau
 check "ready pull request passes" "^$" "$(gg 'gh pr create --title x --body y')"
 check "gh pr ready passes" "^$" "$(gg 'gh pr ready 12')"
 check "stub allows branch commit/push and pr create" "6" "$(python3 -c "import json;a=json.load(open('$H/../../stub/settings.json'))['permissions']['allow'];print(sum(1 for r in ['Bash(git status:*)','Bash(git add:*)','Bash(git commit:*)','Bash(git push:*)','Bash(gh pr create:*)','Bash(gh pr ready:*)'] if r in a))")"
+# --- v3.1.14: draft pull requests through the GitHub tool
+ggt(){ printf '%s' "{\"tool_name\":\"$1\",\"tool_input\":$2}" | python3 $H/git-guard.py; }
+check "GitHub tool draft pull request is blocked" '"deny"' "$(ggt mcp__github__create_pull_request '{"title":"x","draft":true}')"
+check "the block says to create it ready for review" "ready for review" "$(ggt mcp__github__create_pull_request '{"title":"x","draft":true}')"
+check "GitHub tool ready pull request passes" "^$" "$(ggt mcp__github__create_pull_request '{"title":"x","draft":false}')"
+check "GitHub tool without a draft field passes" "^$" "$(ggt mcp__github__create_pull_request '{"title":"x"}')"
+check "marking an open pull request draft is blocked" '"deny"' "$(ggt mcp__github__update_pull_request '{"pullNumber":1,"draft":true}')"
+check "other GitHub tools pass" "^$" "$(ggt mcp__github__list_pull_requests '{"state":"open"}')"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"mcp__github__create_pull_request","tool_input":{"draft":true}}' | python3 $H/dispatch.py); check "switchboard routes the GitHub pull-request tool to git-guard" '"deny"' "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"mcp__github__search_code","tool_input":{}}' | python3 $H/dispatch.py); check "switchboard skips other GitHub tools" "^$" "$o"
+check "stub matcher covers the GitHub tools" "yes" "$(python3 -c "import json;h=json.load(open('$H/../../stub/settings.json'))['hooks']['PreToolUse'];print('yes' if any('mcp__' in g.get('matcher','') for g in h) else 'no')")"
 git checkout -q -B claude/topic 2>/dev/null
 # --- v3.1.6: explicit "skip the plan"
 o=$(echo '{"prompt":"Skip the plan and run it directly. I explicitly allow running this specific script: curl -fsSL https://example/install-stub.sh | bash. Run it from the repository root and show me the full output."}' | python3 $H/plan-gate.py)
@@ -196,7 +209,13 @@ check "skip phrase: no plan requested" "asked to skip the plan" "$o"
 check "skip phrase: no micro-plan tier" "clean" "$(echo "$o" | grep -c 'Micro-plan tier' | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"- a\n- b\n- c without skipping anything"}' | python3 $H/plan-gate.py); check "no skip phrase: full plan still required" "Full 'Plan vN" "$o"
 # --- v3.1.8: completion guard (auto-fix), planner suggestion, pause
-printf '# WORKING RECORD\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|---|---|\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| login | COMPLETE | npm test 12/12 |\n| export | NOT STARTED | |\n| sync | BLOCKED — API key missing | |\n' > WORKING_RECORD.md
+# v3.1.14: only rows added or changed on this branch count. The base record (one earlier round's row) goes on
+# origin/main; everything added afterwards is this branch's work.
+ledger(){ printf '# WORKING RECORD\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|---|---|\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| earlier round | NOT STARTED | |\n%b' "$1" > WORKING_RECORD.md; }
+ledger ''
+git add -A >/dev/null 2>&1; git commit -qm ledger-base >/dev/null 2>&1
+git update-ref refs/remotes/origin/main HEAD
+ledger '| login | COMPLETE | npm test 12/12 |\n| export | NOT STARTED | |\n| sync | BLOCKED — API key missing | |\n'
 rm -f .claude/state/completion-rounds.json .claude/state/completion-pause
 cat > "$T/done_claim.jsonl" <<J
 {"type":"user","uuid":"u1","message":{"role":"user","content":"finish the plan"}}
@@ -210,6 +229,32 @@ o=$(cg "$T/done_claim.jsonl" true); check "completion: round 2 despite stop_hook
 o=$(cg "$T/done_claim.jsonl" true); check "completion: round 3" "Auto-fix round 3 of 3" "$o"
 o=$(cg "$T/done_claim.jsonl" true); check "completion: cap reached demands the limit statement" "Auto-fix limit reached" "$o"
 o=$(cg "$T/done_claim.jsonl" true); check "completion: never loops past the cap" "^$" "$o"
+rm -f .claude/state/completion-rounds.json
+# --- v3.1.14: rounds are counted per user prompt, so the hook's own feedback cannot reset them.
+# Five blocks in a row on one prompt: the 4th says the limit is reached, the 5th passes.
+echo '{"prompt":"finish the plan"}' | python3 $H/plan-gate.py >/dev/null
+cp "$T/done_claim.jsonl" "$T/loop.jsonl"
+feedback(){ # a Stop-hook block reaches the transcript as another user record, then the session answers again
+  cat >> "$T/loop.jsonl" <<J
+{"type":"user","uuid":"fb$1","message":{"role":"user","content":"Not done: continue with 'export' now."}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All done.\n\nConfidence: High · Status: Validated — npm test"}]}}
+J
+}
+o=$(cg "$T/loop.jsonl" false); check "loop: block 1" "Auto-fix round 1 of 3" "$o"
+feedback 1; o=$(cg "$T/loop.jsonl" true); check "loop: feedback does not reset the counter" "Auto-fix round 2 of 3" "$o"
+feedback 2; o=$(cg "$T/loop.jsonl" true); check "loop: block 3" "Auto-fix round 3 of 3" "$o"
+feedback 3; o=$(cg "$T/loop.jsonl" true); check "loop: block 4 says the limit is reached" "Auto-fix limit reached" "$o"
+feedback 4; o=$(cg "$T/loop.jsonl" true); check "loop: block 5 passes" "^$" "$o"
+rm -f .claude/state/completion-rounds.json
+# scope: rows that are identical on origin/main belong to earlier rounds
+o=$(cg "$T/done_claim.jsonl" false); check "completion: only this branch's rows are counted" "Completion: 1 of 3 done (33%)" "$o"
+check "completion: an earlier round's row is not listed" "clean" "$(echo "$o" | grep -c 'earlier round' | sed 's/^0$/clean/')"
+check "completion: open items are listed one per line, names only" '\\n- export' "$o"
+rm -f .claude/state/completion-rounds.json
+git update-ref -d refs/remotes/origin/main
+o=$(cg "$T/done_claim.jsonl" false); check "completion: unreadable base shows the line but never blocks" "Completion: 1 of 4 done (25%)" "$o"
+check "completion: unreadable base does not block on open items" "clean" "$(echo "$o" | grep -c 'Auto-fix round' | sed 's/^0$/clean/')"
+git update-ref refs/remotes/origin/main "$(git rev-parse HEAD)"
 rm -f .claude/state/completion-rounds.json
 cat > "$T/qa.jsonl" <<J
 {"type":"user","uuid":"u2","message":{"role":"user","content":"what is the ledger state?"}}
@@ -244,8 +289,17 @@ o=$(cg "$T/done_ok.jsonl" false); check "completion: correct line with evidence 
 o=$(echo '{}' | python3 $H/session-start.py); check "session-start: no completion line when nothing open" "clean" "$(echo "$o" | grep -c '\[completion\]' | sed 's/^0$/clean/')"
 printf '| again | NOT STARTED | |\n' >> WORKING_RECORD.md
 o=$(echo '{}' | python3 $H/session-start.py); check "session-start: completion line when items open" "Completion: 2 of 3 done (67%)" "$o"
+# v3.1.14: at most five open items are listed, the rest are counted
+for i in 1 2 3 4 5 6; do printf '| open-%s | NOT STARTED | |\n' "$i" >> WORKING_RECORD.md; done
+o=$(echo '{}' | python3 $H/session-start.py); check "long open list is cut after five names" "+2 more in the record" "$o"
+check "the sixth open name is not listed" "clean" "$(echo "$o" | grep -c 'open-6' | sed 's/^0$/clean/')"
+python3 - <<'PY'
+import re
+p = "WORKING_RECORD.md"
+open(p, "w").write(re.sub(r"(?m)^\| open-\d.*\n", "", open(p).read()))
+PY
 o=$(echo '{"prompt":"why does the sync layer keep breaking across all apps? find the root cause and redesign it"}' | python3 $H/plan-gate.py); check "planner: fable suggested on strong signals" "Suggest /model fable" "$o"
-o=$(echo '{"prompt":"- add a button\n- fix colour\n- change the label"}' | python3 $H/plan-gate.py); check "planner: default opus on plain plan" "Opus 5.5 plans (default)" "$o"
+o=$(echo '{"prompt":"- add a button\n- fix colour\n- change the label"}' | python3 $H/plan-gate.py); check "planner: session model plans by default" "The session's model plans (account default: Opus 5.5)" "$o"
 o=$(echo '{"prompt":"- rename the label"}' | python3 $H/plan-gate.py); check "planner: silent on micro tier" "clean" "$(echo "$o" | grep -c '\[planner\]' | sed 's/^0$/clean/')"
 rm -f .claude/state/completion-rounds.json
 # --- v3.1.11: first-line version, plain top, stub check, pointer refresh
@@ -255,36 +309,103 @@ cat > "$T/first_noversion.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll start by reading the current state."}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\nResult: installed.\nI need from you: merge the pull request.\nNext: health check.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** installed.\n> 👉 **I need from you:** merge the pull request.\n> ➡️ **Next:** health check.\n---\n\nConfidence: High · Status: Checked"}]}}
 J
+pn 1
 o=$(vl "$T/first_noversion.jsonl"); check "first reply must open with the version, not a preamble" "very first line must be 'Rules v" "$o"
+# v3.1.14: the first-reply check follows the prompt number, so Stop-hook feedback (another user record in the
+# transcript) does not turn the same prompt into a later reply
+cat > "$T/first_feedback.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"install the stub"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** installed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** health check."}]}}
+{"type":"user","message":{"role":"user","content":"This reply is missing its closing line."}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** installed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** health check.\n---\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(vl "$T/first_feedback.jsonl"); check "feedback does not end the first reply" "very first line must be 'Rules v" "$o"
+pn 2
 cat > "$T/second_notop.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hi"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\nResult: ready.\nI need from you: nothing.\nNext: waiting.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** ready.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting.\n---\n\nConfidence: High · Status: Checked"}]}}
 {"type":"user","message":{"role":"user","content":"what changed?"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The hook now checks X in file y.py.\n\nConfidence: High · Status: Checked"}]}}
 J
-o=$(vl "$T/second_notop.jsonl"); check "final answer without the plain top is sent back" "three plain lines" "$o"
+o=$(vl "$T/second_notop.jsonl"); check "final answer without the quote top is sent back" "quote block of three lines" "$o"
 check "later replies need no version line" "clean" "$(echo "$o" | grep -c 'first reply of the session' | sed 's/^0$/clean/')"
 cat > "$T/second_top.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hi"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\nResult: ready.\nI need from you: nothing.\nNext: waiting.\n\nConfidence: High · Status: Checked"}]}}
 {"type":"user","message":{"role":"user","content":"what changed?"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"## Result: the check now runs at every start.\n- I need from you: nothing\n> Next: nothing to do.\n\nDetails: hook y.py.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"📌 Result: the check now runs at every start.\n👉 I need from you: nothing\n> ➡️ **Next:** nothing to do.\n---\n\nDetails: hook y.py.\n\nConfidence: High · Status: Checked"}]}}
 J
-o=$(vl "$T/second_top.jsonl"); check "plain top accepted with markdown decoration" "^$" "$o"
+o=$(vl "$T/second_top.jsonl"); check "quote top accepted with or without the quote marker and bold" "^$" "$o"
+# v3.1.14: the icons are part of the labels
+cat > "$T/second_noicons.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"what changed?"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> **Result:** the check now runs.\n> **I need from you:** nothing\n> **Next:** nothing to do.\n---\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(vl "$T/second_noicons.jsonl"); check "labels without icons are sent back" "quote block of three lines" "$o"
+cat > "$T/second_plainarrow.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"what changed?"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** the check now runs.\n> 👉 **I need from you:** nothing\n> ➡ **Next:** nothing to do.\n---\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(vl "$T/second_plainarrow.jsonl"); check "arrow without the invisible character is accepted" "^$" "$o"
 o=$(vl "$T/prog_earlier.jsonl"); check "progress report needs no plain top" "^$" "$o"
 # stub check
 o=$(echo '{}' | python3 $H/session-start.py); check "stub outdated is reported in plain words" "OUTDATED" "$o"
 check "stub report names the missing pieces" "Sonnet worker" "$o"
 S="$T/stubrepo"; rm -rf "$S"; mkdir -p "$S/.claude/agents"
-cp "$H/../../stub/settings.json" "$S/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$S/.claude/agents/"
+cp "$H/../../stub/settings.json" "$S/.claude/settings.json"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S/.claude/agents/"
 cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"
 o2=$(cd "$H" && python3 -c "
 import sys; sys.path.insert(0,'.')
 from _common import load_config; from stubcheck import stub_status
 print(stub_status(load_config(), '$S'))")
 check "current stub is reported current" "^current" "$o2"
+# v3.1.14: a stub whose PreToolUse matcher does not cover the GitHub tools is outdated
+python3 - "$S/.claude/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]; s = json.load(open(p))
+for g in s["hooks"]["PreToolUse"]:
+    g["matcher"] = g.get("matcher", "").replace("|mcp__.*", "")
+json.dump(s, open(p, "w"))
+PY
+o2=$(cd "$H" && python3 -c "
+import sys; sys.path.insert(0,'.')
+from _common import load_config; from stubcheck import stub_status
+print(stub_status(load_config(), '$S'))")
+check "old matcher makes the stub OUTDATED" "OUTDATED" "$o2"
+check "the stub report names the GitHub tool check" "GitHub tool check before a pull request" "$o2"
+# --- v3.1.14: the stub sets no session model; the workers are pinned
+stub_says(){ (cd "$H" && python3 -c "
+import sys; sys.path.insert(0,'.')
+from _common import load_config; from stubcheck import stub_status
+print(stub_status(load_config(), '$1'))"); }
+check "the stub sets no model key" "yes" "$(python3 -c "import json;print('no' if 'model' in json.load(open('$H/../../stub/settings.json')) else 'yes')")"
+check "opus-worker runs on the session model" "yes" "$(grep -qx 'model: inherit' "$H/../../stub/opus-worker.md" && echo yes)"
+check "sonnet-worker is pinned to the exact Sonnet 5.5 ID" "yes" "$(grep -qx 'model: claude-sonnet-5-5' "$H/../../stub/sonnet-worker.md" && echo yes)"
+M="$T/modelrepo"; rm -rf "$M"; mkdir -p "$M/.claude/agents"
+cp "$H/../../stub/settings.json" "$M/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$M/.claude/agents/"
+cp "$H/../../stub/CLAUDE-pointer.md" "$M/CLAUDE.md"
+check "a stub with the new model setup is current" "^current" "$(stub_says "$M")"
+python3 -c "
+import json; p='$M/.claude/settings.json'; s=json.load(open(p)); s['model']='opus'; json.dump(s, open(p,'w'))"
+o2=$(stub_says "$M"); check "a stub that still sets a model is OUTDATED" "account default model" "$o2"
+python3 -c "
+import json; p='$M/.claude/settings.json'; s=json.load(open(p)); s.pop('model'); json.dump(s, open(p,'w'))"
+sed -i 's/^model: claude-sonnet-5-5$/model: sonnet/' "$M/.claude/agents/sonnet-worker.md"
+o2=$(stub_says "$M"); check "a sonnet-worker on the alias is OUTDATED" "pinned to Sonnet 5.5" "$o2"
+# installer: a model the old stub set is removed, another value is kept
+for v in opus fable claude-opus-5-5; do
+  printf '{"model":"%s","permissions":{"allow":["Bash(ls:*)"]}}' "$v" > "$T/target.json"
+  python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$T/target.json" "hz-loader.py"
+  got=$(python3 -c "import json;print(json.load(open('$T/target.json')).get('model','none'))")
+  case "$v" in
+    claude-opus-5-5) check "installer keeps a model I chose myself" "claude-opus-5-5" "$got";;
+    *) check "installer removes the stub-set model '$v'" "none" "$got";;
+  esac
+  check "installer keeps the repo's own permissions ($v)" "Bash(ls:\*)" "$(cat "$T/target.json")"
+done
 # pointer refresh keeps other sections
 P="$T/ptr"; rm -rf "$P"; mkdir -p "$P"
 printf '# Repository rules\n\nold pointer text hz-loader.py\n\nRepository-specific files: `FEATURES.md` and `WORKING_RECORD.md`.\n\n## Project Architecture\nkeep me\n' > "$P/CLAUDE.md"

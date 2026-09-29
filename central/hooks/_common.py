@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import subprocess
 import sys
 
 # Hook scripts run from the loader's cache (~/.cache/hz-rules/<version>/hooks); per-repo files
@@ -43,18 +44,31 @@ DEFAULT_CONFIG = {
     "auto_fix_max_rounds": 3,
     "pause_phrases": ["stop here", "pause here", "that's enough for now", "that is enough for now", "leave the rest", "stop for now"],
     "completion_line_pattern": r"Completion:\s*(\d+)\s+of\s+(\d+)",
+    # completion guard: compare the ledger with this ref (read only, never fetched); rows unchanged against it
+    # belong to earlier rounds and are neither counted nor listed
+    "ledger_base_ref": "origin/main",
+    "completion_open_shown": 5,
     # switchboard (dispatch.py): which check scripts run for which hook event; "tools" = regex on tool_name
     "dispatch": {},
-    # plain top of every final answer (validation-line.py) and first-reply version line
-    "report_top_labels": ["Result:", "I need from you:", "Next:"],
+    # quote-block top of every final answer (validation-line.py) and first-reply version line.
+    # Each entry is "<icon> <label>"; the check ignores the quote marker, bold and the invisible
+    # variation selector in the arrow, but an answer whose labels have no icon is sent back.
+    "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.13",
+        "version": "3.1.14",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
-        "settings": {"model": ["opus", "Opus session model"], "advisorModel": ["fable", "Fable advisor"]},
+        "settings": {"advisorModel": ["fable", "Fable advisor"]},
+        # keys the stub must NOT set, so the account's own default applies
+        "settings_absent": {"model": "account default model (the stub must not set a session model)"},
+        # text each stub file must contain
+        "file_text": {".claude/agents/opus-worker.md": ["model: inherit", "worker on the session model"],
+                      ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
                    "PostToolUse": "checks after commands and edits", "Stop": "report checks (completion, top lines)",
                    "SubagentStop": "worker report checks"},
+        # which tools an event's matcher must cover ("<needle in the matcher>", "<plain name>")
+        "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission"},
         "pointer_text": {"hooks inactive": "multi-repo fallback in CLAUDE.md"},
     },
@@ -87,6 +101,42 @@ def log(name, payload):
             f.write(json.dumps(payload, ensure_ascii=False) + "\n")
     except OSError:
         pass
+
+
+# ---- Prompt number -------------------------------------------------------------------------------
+# Rounds are counted per user prompt, not per transcript turn: Stop-hook feedback is written into the
+# transcript as another user record, so a turn-derived key would reset the count on every block.
+# Only the UserPromptSubmit hook bumps this number; every other hook reads it.
+PROMPT_STATE_PATH = os.path.join(STATE_DIR, "prompt-number.json")
+
+
+def _prompt_state():
+    try:
+        with open(PROMPT_STATE_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def bump_prompt_number(session_id):
+    """Count this user prompt; restarts at 1 in a new session. Returns the new number."""
+    st = _prompt_state()
+    n = int(st.get("n", 0)) + 1 if st.get("session") == (session_id or "") else 1
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(PROMPT_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"session": session_id or "", "n": n}, f)
+    except OSError:
+        pass
+    return n
+
+
+def prompt_number(session_id):
+    """The current prompt's number, or 0 when it is unknown (no UserPromptSubmit hook has run here)."""
+    st = _prompt_state()
+    if st.get("session") == (session_id or "") and int(st.get("n", 0)) > 0:
+        return int(st["n"])
+    return 0
 
 
 def read_transcript(path):
@@ -291,13 +341,33 @@ def is_progress_report(text, records, cfg):
 
 
 # ---- Deliverable ledger (WORKING_RECORD.md) ------------------------------------------------------
-def _record_table(cfg, heading_regex):
-    """Rows of the first table under the heading matching heading_regex; [] if absent."""
-    path = os.path.join(PROJECT_DIR, cfg["record_file"])
+def record_text(cfg):
+    """The working record as it is in the checkout; None when it cannot be read."""
     try:
-        lines = open(path, encoding="utf-8").read().splitlines()
+        return open(os.path.join(PROJECT_DIR, cfg["record_file"]), encoding="utf-8").read()
     except OSError:
+        return None
+
+
+def base_record_text(cfg):
+    """The working record as it is on the base ref (default origin/main), read only — never fetched.
+    None when the ref or the file is not there; callers then fall back to showing everything."""
+    ref = cfg.get("ledger_base_ref") or "origin/main"
+    try:
+        r = subprocess.run(["git", "show", f"{ref}:{cfg['record_file']}"], cwd=PROJECT_DIR,
+                           capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def _record_table(cfg, heading_regex, text=None):
+    """Rows of the first table under the heading matching heading_regex; [] if absent."""
+    if text is None:
+        text = record_text(cfg)
+    if text is None:
         return []
+    lines = text.splitlines()
     try:
         start = next(i for i, l in enumerate(lines) if re.match(r"#+\s*" + heading_regex, l, re.I))
     except StopIteration:
@@ -317,9 +387,9 @@ COMPLETE_WORDS = ("complete", "done", "✅")
 BLOCKED_WORDS = ("blocked", "cannot", "won't fix", "wont fix", "dropped", "superseded", "deferred")
 
 
-def deliverable_ledger(cfg):
-    """List of {name, state, blocked, complete, evidence} from the deliverable ledger; template rows skipped."""
-    rows = _record_table(cfg, r"deliverable")
+def deliverable_ledger(cfg, text=None):
+    """List of {name, state, blocked, complete, evidence, row} from the deliverable ledger; template rows skipped."""
+    rows = _record_table(cfg, r"deliverable", text)
     if len(rows) < 2:
         return []
     header = [h.lower() for h in rows[0]]
@@ -337,13 +407,26 @@ def deliverable_ledger(cfg):
         out.append({"name": name, "state": state,
                     "complete": any(w in low for w in COMPLETE_WORDS) and not any(w in low for w in ("incomplete", "not complete")),
                     "blocked": any(w in low for w in BLOCKED_WORDS),
-                    "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip()})
+                    "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip(),
+                    "row": " | ".join(c.strip() for c in r)})
     return out
 
 
 def completion_summary(cfg):
-    """{total, complete, blocked, open (names), no_evidence (names), pct, line}; total 0 when no ledger."""
+    """{total, complete, blocked, open (names), no_evidence (names), pct, line, display, scoped}.
+
+    Only rows added or changed on this branch against the base ref count: rows identical to the base
+    belong to earlier rounds, so they never block and are never listed as this turn's work. When the
+    base ref cannot be read (no fetch is ever made), scoped is False: the Completion line is still
+    shown, but the guard does not block on open items."""
     items = deliverable_ledger(cfg)
+    base = base_record_text(cfg)
+    scoped = base is not None
+    if scoped:
+        base_rows = {}
+        for i in deliverable_ledger(cfg, base):
+            base_rows.setdefault(i["name"], set()).add(i["row"])
+        items = [i for i in items if i["row"] not in base_rows.get(i["name"], set())]
     total = len(items)
     done = [i for i in items if i["complete"]]
     blocked = [i for i in items if i["blocked"] and not i["complete"]]
@@ -351,9 +434,14 @@ def completion_summary(cfg):
     no_ev = [i["name"] for i in done if not i["evidence"]]
     pct = round(100 * len(done) / total) if total else 0
     line = f"Completion: {len(done)} of {total} done ({pct}%)"
-    if blocked:
-        line += " · Blocked: " + ", ".join(i["name"] for i in blocked)
-    if open_:
-        line += " · Open: " + ", ".join(open_)
     return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
-            "pct": pct, "line": line}
+            "pct": pct, "line": line, "display": completion_display(cfg, line, open_), "scoped": scoped}
+
+
+def completion_display(cfg, line, open_names):
+    """The Completion line, then the open items one per line, names only, at most a few."""
+    shown = int(cfg.get("completion_open_shown", 5))
+    out = [line] + [f"- {n}" for n in open_names[:shown]]
+    if len(open_names) > shown:
+        out.append(f"+{len(open_names) - shown} more in the record")
+    return "\n".join(out)

@@ -1,5 +1,4 @@
 {
-  "model": "opus",
   "advisorModel": "fable",
   "permissions": {
     "defaultMode": "plan",
@@ -47,7 +46,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|WebFetch",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|WebFetch|mcp__.*",
         "hooks": [
           {
             "type": "command",

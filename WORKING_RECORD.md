@@ -1,4 +1,4 @@
-# WORKING RECORD — hz-claude-config — central v3.1.0
+# WORKING RECORD — hz-claude-config — central v3.1.14
 
 ## Approved baseline
 - Plan v5 approved 2026-09-25: central content in hz-claude-config fetched at session start by a stable per-repo loader stub; no setup script, no plugin; one-time stub install per repo.
@@ -16,6 +16,7 @@
 | 5 | 2026-09-29 | version at the top of the first reply; plain Result / I need from you / Next top; stub check; health check; multi-repo fallback (user: yes) | built | v3.1.11; live check = Step B in default mode, then Step F |
 | 6 | 2026-09-29 | fewer Step B rounds: checks switched on centrally | built | v3.1.12; live check = Step F in a repo after Step B |
 | 7 | 2026-09-29 | reduce rework: build in the repo, test first, one batch | built | v3.1.13 rules text; live check = the next change goes through Step E |
+| 8 | 2026-09-29 | v3.1.14 batch: completion scoped to this branch; 3-round limit per prompt; Completion display with open list; fewer in-progress messages; quote-block top (📌/👉/➡️); draft PR blocked on the GitHub tool; record update; stub stops overriding the account model (opus-worker inherit, sonnet-worker exact ID) | built | v3.1.14; stub change → Step B; live check = Step F (tests 2, 4, 5, 5b) |
 
 ## Hotspot counter
 | Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |
@@ -23,6 +24,9 @@
 | rules distribution | 5 | 0 | 0 | 1 | v4 relied on cloud behaviour the docs rule out | yes 2026-09-25 (Plan v5, probe-verified) |
 | record guard | 2 | 0 | 1 | 0 | lost shell-write detection (regression vs local v2) | yes 2026-09-25 (repair chosen over rewrite; comparison in chat) |
 | hotspot table reader | 2 | 0 | 0 | 0 | escaped pipe inside a cell shifted the columns (false alert) | no |
+| completion guard | 1 | 0 | 0 | 0 | Weekly-Planner PR #108: loop ran 8 rounds, counter stuck at 1 of 3 (Stop-hook feedback reset the turn key); rows from other rounds blocked | no |
+| draft-PR block | 1 | 0 | 0 | 0 | Weekly-Planner PR #108: draft PR opened through the GitHub tool, which git-guard never saw | no |
+| stub session model | 1 | 0 | 0 | 0 | stub `model: opus` overrode the account default; the alias can resolve to an older Opus | no |
 Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 workarounds/exceptions → no further patch until the rewrite-vs-repair comparison is presented; then set the last cell to "yes <date>". The hooks read this table: keep the header words.
 
 ## Deliverable ledger
@@ -30,11 +34,20 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 |---|---|---|
 | central v3.1.0 + stub built | COMPLETE | replay 41/41; install-stub simulated on 3 repo states |
 | v3.1.1: installer keeps repo sections of a v2 CLAUDE.md; central version bump as update test | COMPLETE | 4 repo states incl. Weekly-Planner copy; re-runs unchanged; replay 41/41 |
-| hz-claude-config updated on main | BLOCKED — merge is the user's step (rules: user merges on GitHub; git-guard blocks push to main) | v3.1.13 contents pushed on claude/ecstatic-sagan-dajv62, PR #10 open ready for review, replay 114/114; `central/MANIFEST.txt` on main still reads 3.1.10 until that merge |
+| hz-claude-config updated on main | COMPLETE | PR #10 merged (merge commit 296716f); this session's loader fetched v3.1.13 from main (cache ~/.cache/hz-rules/3.1.13, 2026-09-29) |
+| v3.1.14-1 completion scope: only rows added/changed vs origin/main; unreadable base never blocks | COMPLETE | replay: 'only this branch's rows are counted', 'earlier round's row is not listed', 'unreadable base … never blocks' PASS |
+| v3.1.14-2 completion counter per user prompt (prompt number from UserPromptSubmit), also for the first-reply check | COMPLETE | replay: five blocks on one prompt with feedback records in between — rounds 1, 2, 3, limit, pass; 'feedback does not end the first reply' PASS |
+| v3.1.14-3 Completion display: line, open names one per line, max 5, +N more | COMPLETE | replay: 'open items are listed one per line', '+2 more in the record', 'sixth open name is not listed' PASS |
+| v3.1.14-4 fewer in-progress messages (rules text) | COMPLETE | rules §Verification 'Fewer in-progress messages'; session-start instruction line |
+| v3.1.14-5 quote-block top 📌/👉/➡️ + --- (rules, session-start, validation-line, preferences) | COMPLETE | replay: 'labels without icons are sent back', 'quote top accepted with or without the quote marker and bold', 'arrow without the invisible character is accepted' PASS; docs/claude-ai-preferences.txt line replaced |
+| v3.1.14-6 draft PR blocked on the GitHub tool (stub matcher mcp__.*, dispatch → git-guard, stub_expect) | COMPLETE | tool checked live: mcp__github__create_pull_request, field `draft` (boolean); replay: GitHub tool draft blocked, ready passes, switchboard routes it, old matcher → OUTDATED PASS |
+| v3.1.14-7 working record: decision, ledger row 8, PR #108 evidence | COMPLETE | this file: Next batch decision, request row 8, hotspot rows, Checks entry |
+| v3.1.14-8 stub stops overriding the account model; opus-worker inherit; sonnet-worker claude-sonnet-5-5; installer drops stub-set opus/fable | COMPLETE | docs checked (sub-agents: model accepts alias, full ID or inherit; model-config: setting overrides account default); replay: stub has no model key, worker lines, stub check OUTDATED on model/alias, installer removes opus/fable and keeps claude-opus-5-5 PASS |
 | Pilot app repo | BLOCKED — Step B denied by the auto-mode classifier ("code from external"); rerun in default permission mode | main of Weekly-Planner still has the 3.1.6 stub (checked 2026-09-29) |
 | Other app repos | BLOCKED — same as the pilot: Step B in default mode | Figure-Skate, Swimming: 3.1.6 stub on main; spelling-pronun: Step B denied in auto mode (2026-09-29) |
 
 ## Checks and evidence
+- 2026-09-29 v3.1.14 (Step E batch, this repository): live checks first — this session's GitHub tool for pull requests is `mcp__github__create_pull_request`, its draft field is `draft` (boolean; `mcp__github__update_pull_request` has the same field); the checkout's `origin/main` has no `WORKING_RECORD.md` (ref at 5354ba0), so in this repository the scoped count falls back to "show, never block". Evidence from Weekly-Planner PR #108: completion loop ran 8 rounds, counter stuck at 1 of 3, draft PR opened through the GitHub tool. Root cause of the loop: Stop-hook feedback is written to the transcript as a user record, so the turn-uuid key changed every round (probe: with the old key the second round passed silently). Item 8 added mid-batch by the user: stub sets no `model`, opus-worker `inherit`, sonnet-worker `claude-sonnet-5-5`. Replay 152/152.
 - 2026-09-29 v3.1.13 into the repository (Step A): `hz-claude-config-v3.1.13.zip` unpacked into the root with Python, replacing every tracked file, zip removed. New `central/hooks/dispatch.py` and `stubcheck.py`; RULES.review-rev12 → rev13; claude-ai-preferences-carve-out.txt → claude-ai-preferences.txt. Replay 114/114. PR #10 opened ready for review; main is 3.1.10 until the user merges.
 - 2026-09-29 v3.1.13 (same undeployed release as 3.1.11/3.1.12; 3.1.10 still on main): rule "Changing hz-claude-config" — test the riskiest live assumption first, one agreed batch, build in the repository (Step E paste), deploy and health-check before the next design. Root cause of today's rework: six versions built on untested live assumptions and stacked undeployed. README Step E gets a paste template; this record gets a "Next batch" list. Replay 114/114.
 - 2026-09-29 v3.1.12 (same undeployed release as 3.1.11): user asked why Step B keeps coming back. Stub now registers one central switchboard (`dispatch.py`) per hook event instead of one entry per check; `config.json` → `dispatch` lists the checks. Adding or changing a check no longer needs Step B; model, advisor, permissions, workers, pointer, new event types and the loader still do. Stub check now looks for the switchboard on each event. Replay 114/114.
@@ -55,7 +68,9 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 
 ## Next batch
 Ideas raised mid-work, not in the current build. Agree the list, then build once.
-- (proposed 2026-09-29) Revision markers: colour square only at the start of each changed line, with a one-line legend at the top, instead of "🟦 **Rev 1**" on every line — awaiting user decision.
+- 2026-09-29: user declined square-only markers; square + Rev N stays.
+- (proposed 2026-09-29) completion-guard: the 'add the line' / 'wrong count' / 'no evidence' blocks have no round cap (only the counter bump is capped); cap them too.
+- (proposed 2026-09-29) git-guard also blocks `mcp__github__update_pull_request` with `draft: true` (built in v3.1.14 because the same check covers it) — confirm it should stay.
 
 ## Open questions / blockers
 - Cross-repo raw fetch from an app repo's session (pilot's install smoke test answers it).
