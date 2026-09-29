@@ -1,1 +1,0 @@
-- Inside a repo that has a CLAUDE.md, its rules override these preferences where they conflict (regression tables, plan approval).

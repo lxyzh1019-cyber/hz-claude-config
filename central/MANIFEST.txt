@@ -1,9 +1,10 @@
-version: 3.1.10
+version: 3.1.13
 agents/opus-worker-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
 hooks/completion-guard.py
 hooks/config.json
+hooks/dispatch.py
 hooks/git-guard.py
 hooks/plan-gate.py
 hooks/record-guard.py
@@ -12,6 +13,7 @@ hooks/routing-guard.py
 hooks/session-start.py
 hooks/skill-router.json
 hooks/skill-router.py
+hooks/stubcheck.py
 hooks/validation-line.py
 rules/CLAUDE-rules.md
 seed/FEATURES.md

@@ -43,6 +43,22 @@ DEFAULT_CONFIG = {
     "auto_fix_max_rounds": 3,
     "pause_phrases": ["stop here", "pause here", "that's enough for now", "that is enough for now", "leave the rest", "stop for now"],
     "completion_line_pattern": r"Completion:\s*(\d+)\s+of\s+(\d+)",
+    # switchboard (dispatch.py): which check scripts run for which hook event; "tools" = regex on tool_name
+    "dispatch": {},
+    # plain top of every final answer (validation-line.py) and first-reply version line
+    "report_top_labels": ["Result:", "I need from you:", "Next:"],
+    # what a current stub looks like (session-start.py); names are shown to the user in plain words
+    "stub_expect": {
+        "version": "3.1.13",
+        "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
+        "settings": {"model": ["opus", "Opus session model"], "advisorModel": ["fable", "Fable advisor"]},
+        "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
+                   "PostToolUse": "checks after commands and edits", "Stop": "report checks (completion, top lines)",
+                   "SubagentStop": "worker report checks"},
+        "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission"},
+        "pointer_text": {"hooks inactive": "multi-repo fallback in CLAUDE.md"},
+    },
+    "update_notice": "",
 }
 
 
@@ -98,6 +114,36 @@ def _content_blocks(rec):
     if isinstance(content, str):
         return [{"type": "text", "text": content}]
     return content if isinstance(content, list) else []
+
+
+def real_prompts(records):
+    """Indices of real user prompts (not tool results)."""
+    out = []
+    for i, rec in enumerate(records):
+        if rec.get("type") == "user" and not any(b.get("type") == "tool_result" for b in _content_blocks(rec)):
+            out.append(i)
+    return out
+
+
+def first_text_of_turn(turn):
+    """First assistant text block in a turn (what the user sees first)."""
+    for rec in turn:
+        if rec.get("type") != "assistant":
+            continue
+        for b in _content_blocks(rec):
+            if b.get("type") == "text" and b.get("text", "").strip():
+                return b["text"]
+    return ""
+
+
+def plain_lines(text):
+    """Non-empty lines with markdown decoration removed (bold, headings, quotes, bullets)."""
+    out = []
+    for l in (text or "").splitlines():
+        s = l.replace("*", "").replace("__", "").strip().lstrip("#>-• ").strip()
+        if s:
+            out.append(s)
+    return out
 
 
 def last_turn(records):
