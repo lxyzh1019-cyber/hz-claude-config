@@ -2,15 +2,18 @@
 """Stop hook: a final report may not claim done while the deliverable ledger has open items.
 - On an implementation turn (source edits or a dispatched worker), a final report must end with the ledger's
   Completion line; a wrong count is corrected.
+- Only ledger rows added or changed on this branch against origin/main count: rows from earlier rounds never block.
+  When origin/main cannot be read, the Completion line is still shown but open items never block.
 - If items are still open (neither COMPLETE nor BLOCKED), the report is blocked and the session continues with the
-  next open item — up to auto_fix_max_rounds per turn (the loop guard; stop_hook_active alone is NOT a reason to
+  next open item — up to auto_fix_max_rounds per user prompt (the loop guard, keyed on the prompt number written by
+  the UserPromptSubmit hook, so this hook's own feedback cannot reset it; stop_hook_active alone is NOT a reason to
   exit here, unlike the other Stop hooks). After the cap, the report must say so and list the open items.
 - A user prompt with a pause phrase (plan-gate writes .claude/state/completion-pause) lets one final report stand.
 - Progress reports (workers still running), plans awaiting approval, and answers on non-implementation turns pass."""
 import json, os, re, sys
 from _common import (PROJECT_DIR, STATE_DIR, read_hook_input, load_config, read_transcript, last_turn,
                      last_assistant_text, tool_uses, is_governance_path, is_progress_report, completion_summary,
-                     block, log)
+                     prompt_number, block, log)
 
 data = read_hook_input()
 cfg = load_config()
@@ -36,25 +39,19 @@ if os.path.exists(pause):
     log("completion-guard", {"pause": True, "line": comp["line"]})
     sys.exit(0)
 
-edits = tool_uses(turn, {"Edit", "Write", "MultiEdit", "NotebookEdit"})
-paths = [(e.get("input") or {}).get("file_path") or (e.get("input") or {}).get("path") or "" for e in edits]
-root = os.path.normcase(os.path.abspath(PROJECT_DIR))
-def inside(p):
-    full = os.path.normcase(os.path.abspath(os.path.join(PROJECT_DIR, p)))
-    return full == root or full.startswith(root + os.sep)
-implementation = any(p and inside(p) and not is_governance_path(p, cfg) for p in paths) or bool(tool_uses(turn, {"Agent", "Task"}))
-stated = re.search(cfg["completion_line_pattern"], text)
-if not implementation and not stated:
-    sys.exit(0)  # a question answered mid-project: no completion claim made, nothing to check
-
-# loop guard: rounds per turn, keyed on the turn's first record
-key = str((turn[0].get("uuid") or turn[0].get("timestamp") or len(records)) if turn else len(records))
+# loop guard: rounds per user prompt. The prompt number is written by the UserPromptSubmit hook, so the
+# feedback this hook sends back — another user record in the transcript — cannot reset the count.
 rounds_path = os.path.join(STATE_DIR, "completion-rounds.json")
+n = prompt_number(data.get("session_id"))
+key = f"{data.get('session_id') or ''}:{n}" if n else str(
+    (turn[0].get("uuid") or turn[0].get("timestamp") or len(records)) if turn else len(records))
 try:
     rounds = json.load(open(rounds_path, encoding="utf-8"))
 except (OSError, ValueError):
     rounds = {}
 used = int(rounds.get(key, 0))
+
+
 def bump():
     rounds.clear() if len(rounds) > 50 else None
     rounds[key] = used + 1
@@ -64,34 +61,47 @@ def bump():
     except OSError:
         pass
 
+
+edits = tool_uses(turn, {"Edit", "Write", "MultiEdit", "NotebookEdit"})
+paths = [(e.get("input") or {}).get("file_path") or (e.get("input") or {}).get("path") or "" for e in edits]
+root = os.path.normcase(os.path.abspath(PROJECT_DIR))
+def inside(p):
+    full = os.path.normcase(os.path.abspath(os.path.join(PROJECT_DIR, p)))
+    return full == root or full.startswith(root + os.sep)
+implementation = (any(p and inside(p) and not is_governance_path(p, cfg) for p in paths)
+                  or bool(tool_uses(turn, {"Agent", "Task"})) or used > 0)
+stated = re.search(cfg["completion_line_pattern"], text)
+if not implementation and not stated:
+    sys.exit(0)  # a question answered mid-project: no completion claim made, nothing to check
+
 cap = int(cfg["auto_fix_max_rounds"])
-open_items = comp["open"]
+open_items = comp["open"] if comp["scoped"] else []
 wrong_count = stated and (int(stated.group(1)) != comp["complete"] or int(stated.group(2)) != comp["total"])
 
 if open_items and used < cap:
     bump()
     log("completion-guard", {"auto_fix_round": used + 1, "open": open_items})
-    block(f"Not done: the deliverable ledger still has {len(open_items)} open item(s): " + "; ".join(open_items[:6]) +
+    block(f"Not done: this branch's work still has {len(open_items)} open item(s): " + "; ".join(open_items[:6]) +
           f". Auto-fix round {used + 1} of {cap}: continue with '{open_items[0]}' now — dispatch it to the right worker "
           "or execute it as the approved plan allows, update its ledger row with evidence, then report. An item you cannot "
           "complete gets state BLOCKED — <reason> in the ledger. Report done only when every item is COMPLETE or "
-          f"BLOCKED, and end the final report with '{comp['line']}' before the validation line.")
+          f"BLOCKED, and end the final report with these lines before the validation line:\n{comp['display']}")
 if open_items and used == cap and "auto-fix limit" not in text.lower():
     bump()
     block(f"Auto-fix limit reached ({cap} rounds) with {len(open_items)} item(s) still open: " + "; ".join(open_items[:6]) +
           ". Do not claim done. Write 'Auto-fix limit reached' in the report, list the open items with why each is still "
-          f"open, and end with '{comp['line']}' before the validation line.")
+          f"open, and end with these lines before the validation line:\n{comp['display']}")
 if open_items and used > cap:
     sys.exit(0)  # never loop further
 
 if not stated:
     bump() if used < cap + 2 else None
-    block(f"Implementation happened this turn: add the ledger's completion line before the validation line: '{comp['line']}'."
-          + (" Set Evidence for: " + ", ".join(comp["no_evidence"]) if comp["no_evidence"] else ""))
+    block("Implementation happened this turn: add these lines before the validation line:\n" + comp["display"]
+          + ("\nSet Evidence for: " + ", ".join(comp["no_evidence"]) if comp["no_evidence"] else ""))
 if wrong_count and used < cap + 2:
     bump()
-    block(f"The stated Completion line does not match the deliverable ledger. Use: '{comp['line']}' — or fix the ledger first "
-          "if the ledger is what is wrong, then restate.")
+    block("The stated Completion line does not match this branch's ledger rows. Use:\n" + comp["display"] +
+          "\n— or fix the ledger first if the ledger is what is wrong, then restate.")
 if comp["no_evidence"] and used < cap + 2:
     bump()
     block("COMPLETE without evidence in the deliverable ledger: " + ", ".join(comp["no_evidence"]) +

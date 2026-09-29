@@ -10,6 +10,14 @@ def stub_status(cfg, project_dir):
     for path, name in (exp.get("files") or {}).items():
         if not os.path.exists(os.path.join(project_dir, path)):
             missing.append(name)
+    for path, pair in (exp.get("file_text") or {}).items():
+        needle, name = pair
+        try:
+            text = open(os.path.join(project_dir, path), encoding="utf-8").read()
+        except OSError:
+            text = ""
+        if needle not in text:
+            missing.append(name)
     try:
         s = json.load(open(os.path.join(project_dir, ".claude", "settings.json"), encoding="utf-8"))
     except (OSError, ValueError):
@@ -20,10 +28,18 @@ def stub_status(cfg, project_dir):
         for key, (want, name) in (exp.get("settings") or {}).items():
             if s.get(key) != want:
                 missing.append(name)
+        for key, name in (exp.get("settings_absent") or {}).items():
+            if key in s:
+                missing.append(name)
         hooks = s.get("hooks") or {}
         for event, name in (exp.get("events") or {}).items():
             cmds = " ".join(h.get("command", "") for g in hooks.get(event, []) for h in g.get("hooks", []))
             if "dispatch.py" not in cmds:
+                missing.append(name)
+        for event, pair in (exp.get("event_matchers") or {}).items():
+            needle, name = pair
+            matchers = " ".join(g.get("matcher", "") for g in hooks.get(event, []))
+            if needle not in matchers:
                 missing.append(name)
         allow = (s.get("permissions") or {}).get("allow") or []
         for rule, name in (exp.get("allow") or {}).items():
