@@ -48,7 +48,7 @@ For each cloned repository: set **Current Branch** to `main`, then **Fetch origi
 ## E. Every future update
 Agree the change list in chat first (one batch). Then start a cloud session on this repository and paste:
 
-> Here is the agreed change list for hz-claude-config: <paste the list>. Make exactly these changes, bump the version with `python3 tools/build_manifest.py <new version>`, run `bash central/hooks/replay-hooks.sh`, and open a pull request ready for review. Start your report with Result / I need from you / Next, and say whether the stub changed (then Step B is due).
+> Here is the agreed change list for hz-claude-config: <paste the list>. Make exactly these changes, bump the version with `python3 tools/build_manifest.py <new version>`, run `bash central/hooks/replay-hooks.sh`, and open a pull request ready for review. Start your report with the quote block (📌 Result / 👉 I need from you / ➡️ Next, then a --- line), and say whether the stub changed (then Step B is due).
 
 Merge it; if the stub changed, run Step B in each app repository; then Step F in one of them. What the session does, in detail: make the change under `central/`, run `python3 tools/build_manifest.py <new version>` and `bash central/hooks/replay-hooks.sh`, commit, open a pull request (ready for review, not draft), merge. Every repository loads the new version at its next session start; GitHub's raw-file cache can delay that by a few minutes.
 

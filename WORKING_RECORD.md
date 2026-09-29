@@ -69,6 +69,7 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 ## Next batch
 Ideas raised mid-work, not in the current build. Agree the list, then build once.
 - 2026-09-29: user declined square-only markers; square + Rev N stays.
+- (proposed 2026-09-29) completion-guard: the 'add the line' / 'wrong count' / 'no evidence' blocks have no round cap (only the counter bump is capped); cap them too.
 - (proposed 2026-09-29) git-guard also blocks `mcp__github__update_pull_request` with `draft: true` (built in v3.1.14 because the same check covers it) — confirm it should stay.
 
 ## Open questions / blockers
