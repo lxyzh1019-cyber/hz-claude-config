@@ -1,0 +1,27 @@
+# FEATURES — hz-claude-config — manifest v4 — 2026-09-29
+
+## Central content (central/) — fetched by every repo's loader at session start
+- `MANIFEST.txt`: first line `version: X.Y.Z` (the only place the version lives), then every file the loader fetches; rebuilt with `tools/build_manifest.py`
+- Rules text `rules/CLAUDE-rules.md`, injected at session start
+- All text read from subprocesses and hook input is UTF-8 whatever the PC language (3.1.15: gbk fix)
+- Switchboard `hooks/dispatch.py`: the stub registers it for UserPromptSubmit, PreToolUse and Stop (PostToolUse and SubagentStop removed in v3.1.16: no checks used them) (PreToolUse matcher Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|WebFetch|mcp__.*); `config.json` → `dispatch` lists the checks per event/tool; Stop/SubagentStop run every check and send all block reasons back in one message; other events: first block/deny wins; contexts are joined
+- Hooks: session-start (rules, version, worker/skills paths, per-repo checks, `[stub]` current/OUTDATED check via `stubcheck.py` against `stub_expect` (files, file text such as the worker model lines, required and forbidden settings keys, hook events, the PreToolUse matcher covering `mcp__`, permissions, pointer text), `[update]` notice in hz-claude-config only, hotspot alerts; table reader honours escaped pipes and reports malformed rows), plan-gate (tier + default executor per tier; `[planner]` Fable suggestion on strong signals; pause phrase; `[completion]` lines when items are open; prompt counter in `.claude/state/prompt-number.json`, restarting per session), skill-router (points to central skill files), routing-guard (observe mode), git-guard (no commit on / push to main; no draft pull requests — `gh pr create --draft/-d`, and GitHub tool create/update_pull_request with `draft: true`), record-guard (counts only changes inside the repo; worker turns only if git shows source changes; record updates by shell count; ARCHITECTURE.md exempt), validation-line (first reply — prompt number 1 — starts `Rules v… · branch`; final answers open with the quote block 📌 Result / 👉 I need from you / ➡️ Next then `---` — icons required, quote marker, bold and the arrow's invisible character optional — and end with the Confidence/Status line; Result is status only, 'I need from you' is one action of at most 30 words, decisions in a ❓ list; send-backs ask only for the missing lines; per-prompt cap of 3, no stepping aside after another check blocks; the only interim reply is one line '⏳ Working on: …' while a worker runs), completion-guard (counts only ledger rows added or changed on the branch against `origin/main`, read without fetching — unreadable base: line shown, never blocks; display `Completion: n of m done (p%)` then open names one per line, at most 5, `+N more in the record`; auto-fix: blocks a done claim with open items, up to 3 rounds per user prompt, keyed on the prompt number so its own feedback cannot reset it; evidence required for COMPLETE; pause phrases; plans/questions/progress untouched)
+- Worker instructions `agents/opus-worker-instructions.md` (shared by `opus-worker` and `sonnet-worker`; Sonnet escalation blocker; worker reports its model)
+- Skills `hz-guarantee-audit`, `hz-plan-regression-guard`; seed templates `FEATURES.md`, `WORKING_RECORD.md`
+- Test suite `hooks/replay-hooks.sh` (isolated temp project; manifest consistency; loader fetch, cache, offline and refusal paths)
+
+## Stub (stub/) — installed once per repository, stable
+- `hz-loader.py`: fetch MANIFEST + files from public raw GitHub, cache per version (keep 3), run hook scripts, offline fallback, stop message when nothing cached
+- `settings.json` (no `model` key — the account default, Opus 5.5, applies; no `advisorModel` (advisor off since v3.1.16); permissions: no prompts at all, allow rules for branch git add/commit/push, gh pr create and gh pr ready (classifier-free in auto mode; deny + git-guard still apply), destructive git and `gh pr merge` denied; hooks → loader incl. `git-guard`, `completion-guard`), thin `opus-worker.md` (`model: inherit` — the session's model, medium: Diagnostic/Redesign/shared state) and `sonnet-worker.md` (`model: claude-sonnet-5-5`, exact ID, medium: Routine micro-plan tier), `CLAUDE-pointer.md` Hooks: SessionStart → session-start.py; every other event → dispatch.py.
+- `install-stub.sh`: one-command install per repo — retire v2 copies and probe files, restore an overwritten README, unmerge v2 settings, merge stub settings (removes a stub-set `model` of `opus`/`fable`, keeps any other value), refuses when v2 rules files were locally changed (`v2-known-files.txt`), pointer CLAUDE.md keeping any repo-specific sections of a v2 CLAUDE.md (`split_claude_md.py`), seed per-repo files, smoke test Refreshes an existing pointer block in place, keeping every other CLAUDE.md section.
+
+## This repository
+- Pointer `CLAUDE.md` with the multi-repo fallback (rules read as text, "hooks inactive" opener)
+- `docs/claude-ai-preferences.txt`: the claude.ai preferences block (quote-block top line)
+- README Step F: live health check per repository; Step E paste template (agreed change list → repo session builds, tests, opens PR)
+- Rules "Changing hz-claude-config": test first, one batch, build in the repository, deploy before the next design; `WORKING_RECORD.md` → "Next batch"
+- Carries the same stub at its root, so rules apply when editing it
+
+## Regression table format
+| Feature | vOld → vNew | Note |
+|---|---|---|

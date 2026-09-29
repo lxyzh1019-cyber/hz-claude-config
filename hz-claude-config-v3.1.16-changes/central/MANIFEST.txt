@@ -1,0 +1,25 @@
+version: 3.1.16
+agents/opus-worker-instructions.md
+hooks/ROUTING-TEST.md
+hooks/_common.py
+hooks/completion-guard.py
+hooks/config.json
+hooks/dispatch.py
+hooks/git-guard.py
+hooks/plan-gate.py
+hooks/record-guard.py
+hooks/replay-hooks.sh
+hooks/routing-guard.py
+hooks/session-start.py
+hooks/skill-router.json
+hooks/skill-router.py
+hooks/stubcheck.py
+hooks/validation-line.py
+rules/CLAUDE-rules.md
+seed/FEATURES.md
+seed/WORKING_RECORD.md
+skills/hz-guarantee-audit/SKILL.md
+skills/hz-guarantee-audit/references/grading-scale.md
+skills/hz-guarantee-audit/references/handoffs.md
+skills/hz-plan-regression-guard/SKILL.md
+skills/hz-plan-regression-guard/references/manifest-formats.md
