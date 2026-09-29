@@ -1,5 +1,4 @@
 {
-  "advisorModel": "fable",
   "permissions": {
     "defaultMode": "plan",
     "allow": [
@@ -55,28 +54,7 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|WebFetch",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" dispatch.py'"
-          }
-        ]
-      }
-    ],
     "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'p=$(command -v python3 || command -v python); exec \"$p\" -B \"$CLAUDE_PROJECT_DIR/.claude/hz-loader.py\" dispatch.py'"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
       {
         "hooks": [
           {
