@@ -116,7 +116,7 @@ fi
 for ig in '.claude/state/' '__pycache__/'; do grep -qxF "$ig" .gitignore 2>/dev/null || echo "$ig" >> .gitignore; done
 
 # 6. smoke test: the loader must fetch and inject the rules
-out="$(echo '{}' | CLAUDE_PROJECT_DIR="$PWD" python3 .claude/hz-loader.py session-start.py)"
-line="$(printf '%s' "$out" | python3 -c 'import json,sys;c=json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"];print([l for l in c.splitlines() if l.startswith("[session-start]")][0])')"
+out="$(echo '{}' | CLAUDE_PROJECT_DIR="$PWD" PYTHONIOENCODING=utf-8 python3 .claude/hz-loader.py session-start.py)"
+line="$(printf '%s' "$out" | PYTHONIOENCODING=utf-8 python3 -c 'import json,sys;c=json.loads(sys.stdin.buffer.read().decode("utf-8","replace"))["hookSpecificOutput"]["additionalContext"];print([l for l in c.splitlines() if l.startswith("[session-start]")][0])')"
 echo "SMOKE TEST: $line"
 case "$line" in *"Rules v"*" loaded"*) echo "INSTALL OK";; *) echo "INSTALL FAILED — do not merge"; exit 1;; esac

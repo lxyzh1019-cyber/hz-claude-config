@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Central switchboard. The repository stub registers only this script for each hook event it forwards
-(UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop). Which check scripts run for which event and
+(UserPromptSubmit, PreToolUse, Stop). Which check scripts run for which event and
 tool is decided here, from "dispatch" in config.json, so adding or removing a check never needs Step B.
 
 Scripts run one after another with the same input. Combining their answers:
-- a block or deny (Stop/SubagentStop "decision": "block"; PreToolUse "permissionDecision": "deny" or "ask";
-  UserPromptSubmit "decision": "block"; exit code 2) wins at once; later scripts do not run;
+- Stop and SubagentStop: every check runs, and all block reasons go back in one message;
+- other events: a block or deny (PreToolUse "permissionDecision": "deny" or "ask"; UserPromptSubmit "decision":
+  "block"; exit code 2) wins at once and later scripts do not run;
 - added context (UserPromptSubmit and others) from every script is joined into one answer."""
 import json, os, re, subprocess, sys
 
@@ -23,7 +24,8 @@ tool = data.get("tool_name", "") or ""
 cfg = load_config()
 entries = (cfg.get("dispatch") or {}).get(event, [])
 
-contexts, passthrough = [], None
+JOIN_BLOCKS = event in ("Stop", "SubagentStop")   # every check runs; all reasons go back in one message
+contexts, passthrough, reasons = [], None, []
 for e in entries:
     if isinstance(e, str):
         e = {"script": e}
@@ -47,6 +49,9 @@ for e in entries:
         contexts.append(out)          # plain stdout counts as added context
         continue
     hso = obj.get("hookSpecificOutput") or {}
+    if JOIN_BLOCKS and obj.get("decision") == "block":
+        reasons.append(obj.get("reason", "").strip())
+        continue
     if obj.get("decision") == "block" or hso.get("permissionDecision") in ("deny", "ask"):
         print(json.dumps(obj))
         sys.exit(0)
@@ -55,6 +60,11 @@ for e in entries:
     elif passthrough is None:
         passthrough = obj
 
+if reasons:
+    body = reasons[0] if len(reasons) == 1 else "Fix all of these in one reply:\n" + "\n".join(
+        f"{i}. {r}" for i, r in enumerate(reasons, 1))
+    print(json.dumps({"decision": "block", "reason": body}))
+    sys.exit(0)
 if contexts:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": "\n\n".join(contexts)}}))
 elif passthrough is not None:

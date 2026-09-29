@@ -5,7 +5,7 @@
 - Only ledger rows added or changed on this branch against origin/main count: rows from earlier rounds never block.
   When origin/main cannot be read, the Completion line is still shown but open items never block.
 - If items are still open (neither COMPLETE nor BLOCKED), the report is blocked and the session continues with the
-  next open item — up to auto_fix_max_rounds per user prompt (the loop guard, keyed on the prompt number written by
+  next open item — at most auto_fix_max_rounds send-backs per user prompt, for every reason together (the loop guard, keyed on the prompt number written by
   the UserPromptSubmit hook, so this hook's own feedback cannot reset it; stop_hook_active alone is NOT a reason to
   exit here, unlike the other Stop hooks). After the cap, the report must say so and list the open items.
 - A user prompt with a pause phrase (plan-gate writes .claude/state/completion-pause) lets one final report stand.
@@ -75,35 +75,27 @@ if not implementation and not stated:
     sys.exit(0)  # a question answered mid-project: no completion claim made, nothing to check
 
 cap = int(cfg["auto_fix_max_rounds"])
+if used >= cap:
+    sys.exit(0)  # this prompt's send-back is spent: never loop, whatever the reason
 open_items = comp["open"] if comp["scoped"] else []
 wrong_count = stated and (int(stated.group(1)) != comp["complete"] or int(stated.group(2)) != comp["total"])
 
-if open_items and used < cap:
+reasons = []
+if open_items:
+    reasons.append(f"Not done: this branch's work still has {len(open_items)} open item(s): " + "; ".join(open_items[:6]) +
+                   f". Continue with '{open_items[0]}' now — dispatch it to the right worker or execute it as the approved "
+                   "plan allows, and update its ledger row with evidence. An item you cannot finish in this round gets "
+                   "state BLOCKED — <reason> in the ledger, or you write 'Auto-fix limit reached' and list it with why. "
+                   "This is the only send-back for this request.")
+elif not stated:
+    reasons.append("Implementation happened this turn: add the completion lines before the validation line.")
+elif wrong_count:
+    reasons.append("The stated Completion line does not match this branch's ledger rows; fix the ledger or the line.")
+if comp["no_evidence"]:
+    reasons.append("COMPLETE without evidence in the deliverable ledger: " + ", ".join(comp["no_evidence"]) +
+                   ". Fill the Evidence cell (what ran and its result) or set the state back to PARTIAL.")
+if reasons:
     bump()
-    log("completion-guard", {"auto_fix_round": used + 1, "open": open_items})
-    block(f"Not done: this branch's work still has {len(open_items)} open item(s): " + "; ".join(open_items[:6]) +
-          f". Auto-fix round {used + 1} of {cap}: continue with '{open_items[0]}' now — dispatch it to the right worker "
-          "or execute it as the approved plan allows, update its ledger row with evidence, then report. An item you cannot "
-          "complete gets state BLOCKED — <reason> in the ledger. Report done only when every item is COMPLETE or "
-          f"BLOCKED, and end the final report with these lines before the validation line:\n{comp['display']}")
-if open_items and used == cap and "auto-fix limit" not in text.lower():
-    bump()
-    block(f"Auto-fix limit reached ({cap} rounds) with {len(open_items)} item(s) still open: " + "; ".join(open_items[:6]) +
-          ". Do not claim done. Write 'Auto-fix limit reached' in the report, list the open items with why each is still "
-          f"open, and end with these lines before the validation line:\n{comp['display']}")
-if open_items and used > cap:
-    sys.exit(0)  # never loop further
-
-if not stated:
-    bump() if used < cap + 2 else None
-    block("Implementation happened this turn: add these lines before the validation line:\n" + comp["display"]
-          + ("\nSet Evidence for: " + ", ".join(comp["no_evidence"]) if comp["no_evidence"] else ""))
-if wrong_count and used < cap + 2:
-    bump()
-    block("The stated Completion line does not match this branch's ledger rows. Use:\n" + comp["display"] +
-          "\n— or fix the ledger first if the ledger is what is wrong, then restate.")
-if comp["no_evidence"] and used < cap + 2:
-    bump()
-    block("COMPLETE without evidence in the deliverable ledger: " + ", ".join(comp["no_evidence"]) +
-          ". Fill the Evidence cell (what ran and its result) or set the state back to PARTIAL.")
+    log("completion-guard", {"send_back": used + 1, "open": open_items})
+    block(" ".join(reasons) + "\nEnd the final report with these lines before the validation line:\n" + comp["display"])
 sys.exit(0)

@@ -11,8 +11,8 @@ cfg = load_config()
 version = central_version()
 try:
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_DIR,
-                            capture_output=True, text=True, timeout=5).stdout.strip() or "unknown"
-except (OSError, subprocess.SubprocessError):
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip() or "unknown"
+except (OSError, subprocess.SubprocessError, UnicodeError):
     branch = "unknown"
 
 parts = []
@@ -46,13 +46,14 @@ if comp["total"] and comp["open"]:
                  "claiming anything is done, and state these lines in your first reply.")
 facts.append(f"Your first reply's very first line: 'Rules v{version} · {branch}'. Every final answer then opens with a "
              "quote block of three lines in everyday words, followed by a line with just ---:\n"
-             "> 📌 **Result:** <what works now or what I get>\n"
-             "> 👉 **I need from you:** <the exact action, or nothing>\n"
+             "> 📌 **Result:** <status only: what works now or what I get, no requests>\n"
+             "> 👉 **I need from you:** <one action, one short line, or nothing>\n"
              "> ➡️ **Next:** <what happens after>\n"
              "---\n"
-             "Technical detail goes below the --- line. If the stub is outdated, say so in the 'I need from you' line. "
-             "Keep in-progress messages to a minimum: no running commentary between tool calls, one short line only "
-             "before a step that takes long or needs the user. Rules, hooks, worker instructions and skills come from "
+             "Decisions go in a '❓ Decisions' list right under the --- line; technical detail below that. If the stub is "
+             "outdated, say so in the 'I need from you' line. No running commentary between tool calls and no progress "
+             "reports: dispatch workers in the foreground and wait; if asked for status, one line '⏳ Working on: …'. "
+             "Present every Plan vN in plan mode (plan file + Approve); after approval copy it into plans/. Rules, hooks, worker instructions and skills come from "
              "hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
 parts.append("\n".join(facts))
 add_context("SessionStart", "\n\n".join(parts))

@@ -64,11 +64,9 @@ if msgs and not skip and (bullets >= 3 or triggers):
     if why:
         log("plan-gate", {"planner": "fable suggested", "why": why})
         msgs.append("[planner] Suggest /model fable before writing this plan (session-only; the next session is back on "
-                    "the account default): " + "; ".join(why) + ". Otherwise plan on the session's own model and let "
-                    "the advisor consult Fable at decision points. State which one applied at the top of the plan.")
+                    "the account default): " + "; ".join(why) + ". Otherwise plan on the session's own model. State which one applied at the top of the plan.")
     else:
-        msgs.append("[planner] The session's model plans (account default: Opus 5.5); the advisor consults Fable at "
-                    "decision points.")
+        msgs.append("[planner] The session's model plans (account default: Opus 5.5).")
 
 # pause: the next final report may stand with open ledger items (completion-guard honours this once)
 if any(ph in low for ph in cfg["pause_phrases"]):

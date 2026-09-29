@@ -33,7 +33,9 @@ DEFAULT_CONFIG = {
     "features_file": "FEATURES.md",
     "governance_files": ["CLAUDE.md", "WORKING_RECORD.md", "FEATURES.md", "ARCHITECTURE.md", ".claude/", "docs/", "plans/"],
     "regression_table_pattern": r"(?is)regression\s*table|\|\s*(kept|added|removed|missing)\s*\|",
-    "progress_line_pattern": r"Progress:\s*\d+\s+of\s+\d+\s+done\s*·\s*Running:\s*\S.*$",
+    # the only interim reply: one status line, and only when asked while a worker still runs
+    "progress_line_pattern": r"^\s*⏳\s*Working on:\s*\S.*$",
+    "need_line_max_words": 30,
     "validation_line_pattern": r"Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated(\s*—\s*\S.*)?|Uncertain)\s*$",
     "design_triggers": ["redesign", "architecture", "data model", "schema", "migration", "sync layer", "firestore rules", "shared state", "regression", "keeps breaking", "again", "still broken", "refactor"],
     # planner suggestion (plan-gate): strong signals that a plan needs Fable rather than the Opus default
@@ -41,7 +43,7 @@ DEFAULT_CONFIG = {
                               "migrate everything", "whole codebase", "multi-day", "end to end", "end-to-end"],
     "fable_planner_min_triggers": 2,
     # completion guard (Stop): auto-fix rounds per turn before a final report may stand with open ledger items
-    "auto_fix_max_rounds": 3,
+    "auto_fix_max_rounds": 1,
     "pause_phrases": ["stop here", "pause here", "that's enough for now", "that is enough for now", "leave the rest", "stop for now"],
     "completion_line_pattern": r"Completion:\s*(\d+)\s+of\s+(\d+)",
     # completion guard: compare the ledger with this ref (read only, never fetched); rows unchanged against it
@@ -56,17 +58,18 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.14",
+        "version": "3.1.16",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
-        "settings": {"advisorModel": ["fable", "Fable advisor"]},
+        "settings": {},
         # keys the stub must NOT set, so the account's own default applies
-        "settings_absent": {"model": "account default model (the stub must not set a session model)"},
+        "settings_absent": {"model": "account default model (the stub must not set a session model)",
+                            "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},
         # text each stub file must contain
         "file_text": {".claude/agents/opus-worker.md": ["model: inherit", "worker on the session model"],
                       ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
-                   "PostToolUse": "checks after commands and edits", "Stop": "report checks (completion, top lines)",
-                   "SubagentStop": "worker report checks"},
+                   "Stop": "report checks (completion, top lines)",
+},
         # which tools an event's matcher must cover ("<needle in the matcher>", "<plain name>")
         "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission"},
@@ -87,10 +90,18 @@ def load_config():
 
 
 def read_hook_input():
+    """Hook input is UTF-8 JSON; read bytes so a non-UTF-8 system default (e.g. gbk on Chinese Windows)
+    cannot garble or drop it."""
     try:
-        return json.load(sys.stdin)
+        return json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
     except ValueError:
         return {}
+
+
+def run_text(args, timeout=10):
+    """subprocess.run for text output, always decoded as UTF-8 (never the system default)."""
+    return subprocess.run(args, cwd=PROJECT_DIR, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=timeout)
 
 
 def log(name, payload):
@@ -336,8 +347,39 @@ def worker_dispatched(records):
 
 
 def is_progress_report(text, records, cfg):
-    """An interim report while workers run: ends with the Progress line, and a worker was actually dispatched."""
-    return bool(re.search(cfg["progress_line_pattern"], text or "")) and worker_dispatched(records)
+    """The one allowed interim reply: a single status line ("⏳ Working on: …") while a dispatched worker runs.
+    Multi-part progress reports are retired."""
+    lines = [l for l in (text or "").splitlines() if l.strip()]
+    return (len(lines) == 1 and bool(re.search(cfg["progress_line_pattern"], lines[0], re.M))
+            and worker_dispatched(records))
+
+
+def use_round(name, session_id, cap):
+    """Per-prompt round counter for a Stop check (its own file). Returns (used_before, allowed) and records a use
+    when allowed. Keyed on the prompt number from the UserPromptSubmit hook, so Stop feedback cannot reset it.
+    None when the prompt number is unknown (caller falls back to stop_hook_active)."""
+    n = prompt_number(session_id)
+    if not n:
+        return None
+    key = f"{session_id or ''}:{n}"
+    path = os.path.join(STATE_DIR, f"{name}-rounds.json")
+    try:
+        rounds = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        rounds = {}
+    used = int(rounds.get(key, 0))
+    if used >= cap:
+        return used, False
+    if len(rounds) > 50:
+        rounds = {}
+    rounds[key] = used + 1
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(rounds, f)
+    except OSError:
+        pass
+    return used, True
 
 
 # ---- Deliverable ledger (WORKING_RECORD.md) ------------------------------------------------------
@@ -354,9 +396,8 @@ def base_record_text(cfg):
     None when the ref or the file is not there; callers then fall back to showing everything."""
     ref = cfg.get("ledger_base_ref") or "origin/main"
     try:
-        r = subprocess.run(["git", "show", f"{ref}:{cfg['record_file']}"], cwd=PROJECT_DIR,
-                           capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
+        r = run_text(["git", "show", f"{ref}:{cfg['record_file']}"], timeout=5)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
         return None
     return r.stdout if r.returncode == 0 else None
 
