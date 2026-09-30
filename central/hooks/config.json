@@ -1,11 +1,13 @@
 {
-  "routing_guard_mode": "observe",
-  "subagent_marker_fields": [],
+  "routing_guard_mode": "enforce",
+  "subagent_marker_fields": [
+    "agent_id"
+  ],
   "record_file": "WORKING_RECORD.md",
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.17 changes no stub: no Step B. It restores two files lost in the upload mix-up and tidies Step F.",
+  "update_notice": "v3.1.20: app repositories update their own setup files \u2014 the first session in each app opens a pull request; merge it. claude.ai preferences changed: re-copy docs/claude-ai-preferences.txt.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -19,6 +21,14 @@
       {
         "script": "git-guard.py",
         "tools": "Bash|mcp__.*pull_request.*"
+      },
+      {
+        "script": "plan-guard.py",
+        "tools": "ExitPlanMode"
+      },
+      {
+        "script": "worker-guard.py",
+        "tools": "Agent|Task"
       }
     ],
     "Stop": [
@@ -26,5 +36,38 @@
       "completion-guard.py",
       "validation-line.py"
     ]
-  }
+  },
+  "read_only_helpers": [
+    "Explore"
+  ],
+  "sonnet_max_tries": 2,
+  "complex_words": [
+    "root cause",
+    "diagnos",
+    "investigate",
+    "redesign",
+    "architecture",
+    "data model",
+    "schema",
+    "migration",
+    "firestore",
+    "security rules",
+    "sync",
+    "shared state",
+    "shared data",
+    "refactor"
+  ],
+  "sonnet_protected_paths": [
+    "firestore.rules",
+    "firebase.json",
+    ".firebaserc",
+    "storage.rules",
+    "package.json",
+    "package-lock.json",
+    ".github/",
+    "sw.js",
+    "service-worker",
+    "schema",
+    "migration"
+  ]
 }

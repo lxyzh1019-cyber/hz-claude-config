@@ -22,7 +22,7 @@ Thresholds: 3 fix rounds, 2 recurrences, 1 regression caused by a fix, or 3 work
 ## Deliverable ledger
 | Deliverable | State | Evidence |
 |---|---|---|
-| | COMPLETE / PARTIAL / NOT STARTED / BLOCKED — <reason> / SUPERSEDED | <what ran and its result; required for COMPLETE> |
+| | COMPLETE / PARTIAL / NOT STARTED / WAITING ON YOU — <action> / BLOCKED — <reason> / SUPERSEDED | <what ran and its result; required for COMPLETE> |
 
 ## Checks and evidence
 - <date> <what ran> → passed / failed / untested; live stamp <value>
