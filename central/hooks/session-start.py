@@ -2,7 +2,7 @@
 """SessionStart hook (run by the repo's .claude/hz-loader.py): inject the central rules, the version, branch,
 where the worker instructions and skills are, per-repo file status, and hotspot alerts."""
 import os, subprocess
-from _common import (read_hook_input, load_config, add_context, PROJECT_DIR, RULES_PATH, SKILLS_DIR,
+from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, RULES_PATH, SKILLS_DIR,
                      WORKER_PATH, hotspot_alerts, central_version, completion_summary)
 from stubcheck import stub_status
 
@@ -35,7 +35,18 @@ try:
 except OSError:
     pass
 stub = stub_status(cfg, PROJECT_DIR)
+setup_note = None
+if stub.startswith("OUTDATED"):
+    try:
+        from stubupdate import update as _setup_update
+        new_line, setup_note = _setup_update(cfg, PROJECT_DIR)
+        if new_line:
+            stub = new_line
+    except Exception as e:  # never let the self-update break session start
+        log("session-start", {"setup_update_error": repr(e)})
 facts.append("[stub] " + stub)
+if setup_note:
+    facts.append(setup_note)
 if os.path.exists(os.path.join(PROJECT_DIR, "tools", "build_manifest.py")) and cfg.get("update_notice"):
     facts.append("[update] " + cfg["update_notice"] + " Put this in the 'I need from you' line of your first reply.")
 facts.append(f"Note: routing guard mode: {cfg.get('routing_guard_mode', 'observe')}")

@@ -38,7 +38,7 @@ def stub_status(cfg, project_dir):
                 missing.append(name)
         for event, pair in (exp.get("event_matchers") or {}).items():
             needle, name = pair
-            matchers = " ".join(g.get("matcher", "") for g in hooks.get(event, []))
+            matchers = " ".join(g.get("matcher", "") for g in hooks.get(event.strip(), []))
             if needle not in matchers:
                 missing.append(name)
         allow = (s.get("permissions") or {}).get("allow") or []

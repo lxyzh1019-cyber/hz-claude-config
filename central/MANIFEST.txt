@@ -1,4 +1,4 @@
-version: 3.1.17
+version: 3.1.20
 agents/opus-worker-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
@@ -7,6 +7,7 @@ hooks/config.json
 hooks/dispatch.py
 hooks/git-guard.py
 hooks/plan-gate.py
+hooks/plan-guard.py
 hooks/record-guard.py
 hooks/replay-hooks.sh
 hooks/routing-guard.py
@@ -14,7 +15,9 @@ hooks/session-start.py
 hooks/skill-router.json
 hooks/skill-router.py
 hooks/stubcheck.py
+hooks/stubupdate.py
 hooks/validation-line.py
+hooks/worker-guard.py
 rules/CLAUDE-rules.md
 seed/FEATURES.md
 seed/WORKING_RECORD.md
@@ -23,3 +26,10 @@ skills/hz-guarantee-audit/references/grading-scale.md
 skills/hz-guarantee-audit/references/handoffs.md
 skills/hz-plan-regression-guard/SKILL.md
 skills/hz-plan-regression-guard/references/manifest-formats.md
+stub-files/CLAUDE-pointer.md
+stub-files/hz-loader.py
+stub-files/merge_settings.py
+stub-files/opus-worker.md
+stub-files/settings.json
+stub-files/sonnet-worker.md
+stub-files/v2-known-files.txt

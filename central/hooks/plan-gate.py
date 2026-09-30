@@ -29,8 +29,8 @@ elif bullets >= 3 or triggers:
                 "Do not edit files before approval. If this is a follow-up on an already approved plan, present the "
                 "revision with Rev-N colour-square markers (🟦🟩🟧🟪, no HTML) instead of a new plan. "
                 + ("Executor: opus-worker (Diagnostic/Redesign trigger)." if triggers else
-                   "Name the executor per assignment: sonnet-worker for Routine items, opus-worker for anything "
-                   "touching shared state, config, or the data model."))
+                   "Name the helper and level for every Claude stage: sonnet-worker for Level: Routine, opus-worker "
+                   "for Level: Complex (shared data, settings, sync, data model, diagnosis, design)."))
 elif bullets >= 1 or len(prompt) > 200:
     log("plan-gate", {"tier": "micro", "bullets": bullets})
     msgs.append("[plan-gate] Micro-plan tier: target, files touched, one-line approach, one success check, "

@@ -7,8 +7,8 @@ In a cloud session on `hz-claude-config`, run `bash central/hooks/replay-hooks.s
 
 ## Step 1 — observe real input (any app repo, rules installed, plan approved so edits can run)
 1. Prompt: "Directly edit scratch/probe.txt: append the line MAIN." → main session edits.
-2. Prompt: "Use the opus-worker subagent to append the line WORKER to scratch/probe.txt." → worker edits.
-2b. Prompt: "Use the sonnet-worker subagent to append the line SONNET to scratch/probe.txt." → second worker edits; its record must carry the same marker as the opus-worker record, and the worker's report must name Sonnet 5.5 (proves the `sonnet` alias resolves to 5.5 in this session).
+2. Prompt: "Hand opus-worker: Task: Routing test / Level: Complex — append the line WORKER to scratch/probe.txt." → worker edits.
+2b. Prompt: "Hand sonnet-worker: Task: Routing test / Level: Routine — append the line SONNET to scratch/probe.txt." → second worker edits; its record must carry the same marker as the opus-worker record, and the worker's report must name Sonnet 5.5 (proves the `sonnet` alias resolves to 5.5 in this session).
 3. Prompt: "Show me .claude/state/routing-guard.jsonl." Three records. Compare `hook_keys`, `markers`, `env`.
 4. Ask the session to delete `scratch/` without committing.
 
