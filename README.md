@@ -1,4 +1,4 @@
-# hz-claude-config — central working rules (v3.1.17)
+# hz-claude-config — central working rules (v3.1.21)
 
 Everything central lives here: the rules, the hook logic, the executors' shared instructions and the audit skills (`central/`). Each app repository keeps only a small **stable stub** — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md`, `.claude/agents/sonnet-worker.md`, a pointer `CLAUDE.md` — plus its own `FEATURES.md` and `WORKING_RECORD.md`.
 
@@ -17,60 +17,40 @@ These instructions live only here; chat replies point here. This repository must
 | `.claude/`, `CLAUDE.md` | this repository's own stub, so the rules apply when editing it too |
 | `docs/` | rules review copy (revision markers), skill-trigger tuning procedure, your claude.ai preferences (`claude-ai-preferences.txt`: paste into claude.ai Settings > Profile when an update says so) |
 
-## A. Full reset of this repository (rare — normal updates use Step E)
-**Permission mode for Steps A, B and E: default (asks before commands), not auto.** Set it before you paste. In auto mode a safety classifier blocks these steps: Step A because it replaces `.claude/settings.json` and the hooks ("instruction poisoning"), Step B because it runs a downloaded script ("code from external") — a sentence in the prompt cannot lift that. Approve the prompts yourself. Normal work afterwards can use auto mode again.
+## B. App repositories update their own setup files (automatic)
+A few setup files live inside each app repository (which helper runs on which model, which checks switch on). They cannot be downloaded at session start like the rules, so the session start **updates them itself**: the first session after a change rewrites them, puts them on a branch named `hz-setup-update-<version>`, opens a pull request, and asks you to merge it. Merge it; the next session there shows `[stub] current`. While that pull request waits, later sessions only remind you — they never open a second one.
 
-On github.com open `hz-claude-config` → **Add file → Upload files** → drag in `hz-claude-config-v3.1.16.zip` → commit. Start a cloud session on this repository and paste:
+Fallback, only if a session reports that it could not update automatically (for example a helper file someone edited by hand): ask the chat for a package for that repository and add it with GitHub Desktop as in Step E.
 
-> Skip the plan and run it directly. Delete every tracked file in this repository except `hz-claude-config-v3.1.16.zip`. Unzip that zip with Python into the repository root, then delete the zip. Run `bash central/hooks/replay-hooks.sh` and show the last line. Commit, push, and open a pull request.
-
-Expect `passed=167 failed=0`. If the session asks you to approve a plan or a commit first, approve it. Merge the pull request on github.com — the loader reads `main`.
-
-## B. Pilot one app repository
-Only after Step A's pull request is merged: a new stub calls checks that exist only in the new central version. Start a cloud session on the pilot repository **in default permission mode** and paste:
-
-> Skip the plan and run it directly. I explicitly allow running this specific script: `curl -fsSL https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude-config/main/stub/install-stub.sh | bash`. I also authorize running it in this main session rather than through opus-worker, because a subagent cannot receive this permission. Run it from the repository root and show me the full output. If the last line is `INSTALL OK`, commit on a new branch, push, and open a pull request. If it is not, change nothing and stop.
-
-- The `SMOKE TEST: [session-start] Rules v3.1.16 loaded` line proves this repository's sessions can fetch from `hz-claude-config` — the one thing the probe did not cover.
-- When the session asks to run the installer, click Allow. If it reports a denial by the "auto-mode classifier", the session is in auto mode: start a new one in default mode. If the session asks to approve a plan or a commit first (rules v2 may still be active in this repo), approve it.
-- Read the output: it lists what was removed and whether `README.md` was restored — check a restored README before merging.
-- If the output ends with `NOT INSTALLED` after "LOCAL CHANGES FOUND", that repo's own sessions improved the v2 rules files after installing them. Nothing was changed. Bring the listed files' history to Claude so the improvements go into `hz-claude-config` first, then rerun.
-- A repo's own sections under the old rules (for example "This Repository — read ARCHITECTURE.md too") are kept after the pointer; the output names them. If the session finds that README, FEATURES or WORKING_RECORD still describe removed files, let it correct those references in the same commit — and check in the diff that nothing else in them changed.
-
-Merge the pull request. Then start a **new** cloud session on the pilot and type `hi`. Pass = the first line of the reply is **Rules v3.1.16 · main** (or later), the reply says the stub is current, and it ends with the `Confidence: … · Status: …` line. Then run Step F once.
-
-## C. The other app repositories
-Repeat B's paste-and-merge in each. Close any old `rules-v2` / `rules-sync/*` pull requests and delete those branches.
+## C. New app repositories
+A repository without the setup yet needs the installer once: ask the chat for a package for it (give its name) and add it with GitHub Desktop as in Step E.
 
 ## D. GitHub Desktop clones
 For each cloned repository: set **Current Branch** to `main`, then **Fetch origin** → **Pull origin**. Start local sessions only on `main` or a branch made from the current `main`. Optional local check: open a local session in the desktop app on that folder and type `hi` — the same pass criteria prove Python and bash work on your PC. An error mentioning bash or python means one is missing (install Python from python.org).
 
-## E. Every future update (no Claude session, no credits)
-Agree the change list in the claude.ai chat. The chat builds and tests it there and gives you a zip of only the changed files, plus a list of any files to delete (rare). Then, on github.com:
-1. Unzip the file on your PC.
-2. Open `hz-claude-config` → **Add file → Upload files** → drag the unzipped folders in (GitHub keeps the folder paths).
-3. Below the upload, choose **Create a new branch** → **Propose changes** → **Create pull request**.
-4. If the chat listed files to delete: open each on the new branch → the ⋯ menu → **Delete file** → commit to the same branch.
-5. Merge the pull request.
+## E. Every update of this repository (no Claude session, no credits)
+The claude.ai chat builds and tests every update and gives you one **full** package (every file of the new version). Before handing it over, it follows these same steps itself on a copy of what is on GitHub now (QA/QC rules). With GitHub Desktop:
+1. Open **hz-claude-config**, stay on **main**, press **Pull origin**.
+2. **Branch → New branch** (any name).
+3. Right-click the zip → **Extract All** → set the destination to the repository folder itself → **Replace** when asked.
+4. Commit, **Publish branch**, **Create Pull Request**, merge on github.com.
 
-Every repository loads the new version at its next session start; GitHub's raw-file cache can delay that by a few minutes. The chat says whether the stub changed (then Step B is due) and whether your claude.ai preferences changed.
+What you should see: in step 4, GitHub Desktop lists the number of added / changed files the chat told you, and **0 deleted**. After the merge, `central/MANIFEST.txt` on github.com shows the new version. If you see anything else, stop and tell the chat.
 
-**Rare:** a change to a stub file (`stub/`) needs B's paste again in each repository: the session model, the advisor, permissions, the worker files, the `CLAUDE.md` pointer, a new kind of hook event, or the loader itself. New or changed checks, rules text, worker instructions and skills never do — the stub hands every hook event to the central switchboard (`central/hooks/dispatch.py`), and `central/hooks/config.json` lists which checks run. Each session's `[stub]` line says when a repository needs Step B.
-
-**v3.1.16 is a stub change:** the Fable advisor is off (sessions no longer consult Fable on their own; `/model fable` still works when you choose it), the two check hooks that did nothing (after each command, after each worker) are removed, and the installer cleans both out of existing repositories. Run B's paste once in every app repository, **on Sonnet, in default mode**: Weekly-Planner, Figure-Skate-Dryland-Timer, Swimming-Dryland-Timer, spelling-pronun. Each session's `[stub]` line then says `current`.
-
-**Also update your claude.ai preferences** (changed in v3.1.15): paste `docs/claude-ai-preferences.txt` into claude.ai Settings > Profile.
+Never use github.com's **Upload files** for these packages (it flattens folders and skips `.claude`).
 
 ## F. Health check (after Step B, once per repository)
 Start a **new** session on the repository (cloud or local; auto mode is fine) on your **account default model**, not the Sonnet session you used for Step B, and paste:
 
 > Health check. Run it directly, commit nothing, and leave the repository as you found it. Report each test as passed or failed, one plain sentence each.
 > 1. Stub: quote the `[stub]` line from session start.
-> 2. Workers: ask `sonnet-worker`, then `opus-worker`, to reply with only the model ID they run on. Pass = a Sonnet 5.5 ID, then the model this session runs on (your account default). A dispatch that fails because `claude-sonnet-5-5` is unknown is a fail: report it, do not loosen the ID.
+> 2. Workers: hand `sonnet-worker` the task "Task: Health check / Level: Routine — reply with only the model ID you run on", then `opus-worker` the same with "Level: Complex". Pass = a Sonnet 5.5 ID, then an Opus 5.5 ID (even if this session plans on Fable). Also try handing `opus-worker` a "Level: Routine" task: Pass = refused.
 > 3. No advisor: check that `.claude/settings.json` has no `advisorModel`. Pass = none (sessions never consult Fable on their own).
 > 4. Completion check: on a new branch add rows HEALTH-A and HEALTH-B (NOT STARTED) to the deliverable ledger in `WORKING_RECORD.md` (rows added on the branch are the ones counted), write `scratch/health.txt`, set HEALTH-A to COMPLETE with evidence "scratch file written", then write a final report that claims the work is done and ends with "Confidence: High · Status: Checked" (the check only reacts to a report marked Checked or Validated). In that report, include a regression table and every other line the checks ask for, so only the completion check can send you back. Pass = the completion hook sends you back to HEALTH-B, and the count covers only the two HEALTH rows. Then set HEALTH-B to BLOCKED — health check.
 > 5. Draft pull request block: run `gh pr create --draft --title health --body health`, then try the same through the GitHub tool that creates pull requests, with its draft field set to true. Pass = both denied by git-guard; any other outcome is a fail (close any pull request it opened). If this session has no GitHub tool for creating pull requests (local sessions usually don't), that half is "not applicable", not a fail.
 > 5b. Model: quote the `model` line from `.claude/settings.json`. Pass = there is none.
+> 5c. Hand-over: without a worker, add the comment line `<!-- health -->` to the top of the app's main HTML file yourself. Pass = refused by the routing guard; then hand it to `sonnet-worker` ("Task: Health check / Level: Routine"), which passes; then remove it.
+> 5d. Plan check: present, in plan mode, a two-line test plan with no Summary and a `<span>` in it. Pass = sent back before the Approve button, naming both.
 > 6. CLAUDE.md: compare `CLAUDE.md` with its version before the last stub install (`git log`) and name any section that disappeared. Pass = none.
 > Finally remove the two HEALTH rows and `scratch/`, and confirm `git status` is clean.
 
@@ -80,13 +60,13 @@ Pass = seven passes. Your reply's first line and its three plain top lines are p
 | You see | Cause | Fix |
 |---|---|---|
 | `Central rules NOT loaded … nothing is cached` | fetch failed and no earlier copy | check this repo is public and `central/MANIFEST.txt` exists on `main` |
-| `offline: using cached vX` | fetch failed, earlier copy used | usually temporary; persistent → same check as above |
+| `offline: using cached vX` | GitHub could not be reached, earlier copy used | usually temporary; start a new session later |
+| `hz-claude-config is incomplete on GitHub … using cached vX` | files are missing in this repository on GitHub | tell the chat; it sends a full package (Step E) |
 | Old version still loaded after an update | raw-file cache | wait a few minutes; start a new session |
-| `[stub] OUTDATED — … missing: …` | the repository has an older stub | Step B in that repository, default mode, merge |
-| Command denied by the "auto-mode classifier" during Step A or B | session in auto mode | new session in default mode, same paste |
+| `[stub] OUTDATED — … missing: …` | the app's setup files are older | the session updates them itself and asks you to merge (Step B) |
 | Reply opens with "hooks inactive" | cloud session with several repositories: no repository hooks run | expected; for work that needs the checks, open a session on one repository |
-| `INSTALL FAILED — do not merge` | smoke test could not load the rules | run A first (central must be on `main`), then retry |
-| `NOT INSTALLED` after "LOCAL CHANGES FOUND" | the repo improved its v2 rules files locally | fold the improvements into `hz-claude-config` first (see B) |
+| `INSTALL FAILED — do not merge` | smoke test could not load the rules | tell the chat |
+| `NOT INSTALLED` after "LOCAL CHANGES FOUND" | the repo improved its v2 rules files locally | tell the chat |
 | Hook errors in a local session | Python or bash missing on the PC | install Python from python.org |
-| Hooks fire twice | rules v2 copies still in a repo or clone | run B in that repo; Pull origin in its clone |
+| Hooks fire twice | rules v2 copies still in a repo or clone | Pull origin in its clone; if it persists, tell the chat |
 | A local session loads old rules (v2.x) or no loader | the clone is on an old branch made before the install | in GitHub Desktop set **Current Branch** to `main` (or a branch made from today's `main`), **Fetch origin**, **Pull origin**, then start a new session |

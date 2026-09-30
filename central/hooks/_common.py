@@ -58,20 +58,22 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.16",
+        "version": "3.1.21",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
         "settings": {},
         # keys the stub must NOT set, so the account's own default applies
         "settings_absent": {"model": "account default model (the stub must not set a session model)",
                             "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},
         # text each stub file must contain
-        "file_text": {".claude/agents/opus-worker.md": ["model: inherit", "worker on the session model"],
+        "file_text": {".claude/agents/opus-worker.md": ["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"],
+                      ".claude/hz-loader.py": ["incomplete on GitHub", "loader that reports an incomplete rules repository"],
                       ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
                    "Stop": "report checks (completion, top lines)",
 },
         # which tools an event's matcher must cover ("<needle in the matcher>", "<plain name>")
-        "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"]},
+        "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"],
+                           "PreToolUse ": ["ExitPlanMode", "plan check before approval"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission"},
         "pointer_text": {"hooks inactive": "multi-repo fallback in CLAUDE.md"},
     },
@@ -425,6 +427,7 @@ def _record_table(cfg, heading_regex, text=None):
 
 
 COMPLETE_WORDS = ("complete", "done", "✅")
+WAITING_WORDS = ("waiting on you", "waiting for you", "your step")
 BLOCKED_WORDS = ("blocked", "cannot", "won't fix", "wont fix", "dropped", "superseded", "deferred")
 
 
@@ -447,7 +450,8 @@ def deliverable_ledger(cfg, text=None):
         low = state.lower()
         out.append({"name": name, "state": state,
                     "complete": any(w in low for w in COMPLETE_WORDS) and not any(w in low for w in ("incomplete", "not complete")),
-                    "blocked": any(w in low for w in BLOCKED_WORDS),
+                    "waiting": any(w in low for w in WAITING_WORDS),
+                    "blocked": any(w in low for w in BLOCKED_WORDS) and not any(w in low for w in WAITING_WORDS),
                     "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip(),
                     "row": " | ".join(c.strip() for c in r)})
     return out
@@ -471,18 +475,24 @@ def completion_summary(cfg):
     total = len(items)
     done = [i for i in items if i["complete"]]
     blocked = [i for i in items if i["blocked"] and not i["complete"]]
-    open_ = [i["name"] for i in items if not i["complete"] and not i["blocked"]]
+    waiting = [i["name"] for i in items if i.get("waiting") and not i["complete"]]
+    open_ = [i["name"] for i in items if not i["complete"] and not i["blocked"] and not i.get("waiting")]
     no_ev = [i["name"] for i in done if not i["evidence"]]
     pct = round(100 * len(done) / total) if total else 0
     line = f"Completion: {len(done)} of {total} done ({pct}%)"
+    if waiting:
+        line += f" · Waiting on you: {len(waiting)}"
     return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
-            "pct": pct, "line": line, "display": completion_display(cfg, line, open_), "scoped": scoped}
+            "waiting": waiting, "pct": pct, "line": line,
+            "display": completion_display(cfg, line, open_, waiting), "scoped": scoped}
 
 
-def completion_display(cfg, line, open_names):
-    """The Completion line, then the open items one per line, names only, at most a few."""
+def completion_display(cfg, line, open_names, waiting=()):
+    """The Completion line, then the open items one per line, names only, at most a few, then the stages
+    waiting on the user."""
     shown = int(cfg.get("completion_open_shown", 5))
     out = [line] + [f"- {n}" for n in open_names[:shown]]
     if len(open_names) > shown:
         out.append(f"+{len(open_names) - shown} more in the record")
+    out += [f"- Waiting on you: {n}" for n in list(waiting)[:shown]]
     return "\n".join(out)

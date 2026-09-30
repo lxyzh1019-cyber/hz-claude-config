@@ -354,7 +354,7 @@ check "stub report names the missing pieces" "Sonnet worker" "$o"
 S="$T/stubrepo"; rm -rf "$S"; mkdir -p "$S/.claude/agents"
 cp "$H/../../stub/settings.json" "$S/.claude/settings.json"
 cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S/.claude/agents/"
-cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"
+cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S/.claude/"
 o2=$(cd "$H" && python3 -c "
 import sys; sys.path.insert(0,'.')
 from _common import load_config; from stubcheck import stub_status
@@ -380,11 +380,11 @@ import sys; sys.path.insert(0,'.')
 from _common import load_config; from stubcheck import stub_status
 print(stub_status(load_config(), '$1'))"); }
 check "the stub sets no model key" "yes" "$(python3 -c "import json;print('no' if 'model' in json.load(open('$H/../../stub/settings.json')) else 'yes')")"
-check "opus-worker runs on the session model" "yes" "$(grep -qx 'model: inherit' "$H/../../stub/opus-worker.md" && echo yes)"
+check "opus-worker is pinned to Opus 5.5" "yes" "$(grep -qx 'model: claude-opus-5-5' "$H/../../stub/opus-worker.md" && echo yes)"
 check "sonnet-worker is pinned to the exact Sonnet 5.5 ID" "yes" "$(grep -qx 'model: claude-sonnet-5-5' "$H/../../stub/sonnet-worker.md" && echo yes)"
 M="$T/modelrepo"; rm -rf "$M"; mkdir -p "$M/.claude/agents"
 cp "$H/../../stub/settings.json" "$M/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$M/.claude/agents/"
-cp "$H/../../stub/CLAUDE-pointer.md" "$M/CLAUDE.md"
+cp "$H/../../stub/CLAUDE-pointer.md" "$M/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$M/.claude/"
 check "a stub with the new model setup is current" "^current" "$(stub_says "$M")"
 python3 -c "
 import json; p='$M/.claude/settings.json'; s=json.load(open(p)); s['model']='opus'; json.dump(s, open(p,'w'))"
@@ -501,13 +501,144 @@ check "a repository still on the Fable advisor shows OUTDATED" "OUTDATED.*adviso
 # --- v3.1.17: the record check shows the exact table shape, so the first report is right and nothing is repeated
 o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py)
 check "record check shows the four-row table shape" "Intentionally removed" "$o"
+# --- v3.1.18: plan check at Approve, foreground workers, "waiting on you" stages, Opus helper pinned
+pg(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','tool_input':{'plan':open(sys.argv[1],encoding='utf-8').read()}}))" "$1" | python3 $H/dispatch.py; }
+cat > "$T/plan_good.md" <<'P'
+# Plan v2 — Four new lessons — Awaiting approval
+Summary: This plan opens the four new lessons for the girls after the same check as before. Changed from v1: the new lessons are included too, because you asked for it. You need to approve this plan and later merge the changes.
+🟩 **Rev 2** The four new lessons also open for the pilot, after the same check.
+Stages to finish
+1. Build the lessons · Claude
+2. Run the checks · Claude
+3. Merge the changes · You
+4. Check on the iPad · You
+Technical details: branch below-grade-lessons, commit d00f47f.
+P
+o=$(pg "$T/plan_good.md"); check "a plan with summary, squares and stages passes the Approve check" "^$" "$o"
+sed 's/🟩 \*\*Rev 2\*\*/<span style="color:green">Rev 2:<\/span>/' "$T/plan_good.md" > "$T/plan_html.md"
+o=$(pg "$T/plan_html.md"); check "colour code in a plan is sent back" "colour code" "$o"
+check "a Rev label without its square is sent back too" "Missing on: Rev 2" "$o"
+grep -v '^Summary' "$T/plan_good.md" > "$T/plan_nosum.md"
+o=$(pg "$T/plan_nosum.md"); check "a plan without the everyday Summary is sent back" "Summary" "$o"
+grep -v 'Stages to finish' "$T/plan_good.md" > "$T/plan_nostages.md"
+o=$(pg "$T/plan_nostages.md"); check "a plan without Stages to finish is sent back" "Stages to finish" "$o"
+sed 's/🟩 \*\*Rev 2\*\*/🟦 **Rev 2**/' "$T/plan_good.md" > "$T/plan_wrongsq.md"
+o=$(pg "$T/plan_wrongsq.md"); check "the wrong square for the round is sent back" "Missing on: Rev 2" "$o"
+o=$(python3 -c "import json;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','tool_input':{'planFilePath':'$T/plan_html.md'}}))" | python3 $H/dispatch.py)
+check "the plan check also reads a plan named by its file" "colour code" "$o"
+# foreground workers
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"subagent_type":"opus-worker","prompt":"Task: a\nLevel: Complex","run_in_background":true}}' | python3 $H/dispatch.py)
+check "a worker started in the background is refused" "foreground" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"subagent_type":"opus-worker","prompt":"Task: Fix sync\nLevel: Complex\nfind why"}}' | python3 $H/dispatch.py)
+check "a foreground worker with task and level passes" "^$" "$o"
+# --- v3.1.19: hard hand-over rules
+wg(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'wg1','tool_input':{'subagent_type':sys.argv[1],'prompt':sys.argv[2]}}))" "$1" "$2" | python3 $H/dispatch.py; }
+rm -f "$PROJ/.claude/state/sonnet-tries.json"
+o=$(wg general-purpose $'Task: Button\nLevel: Routine\nchange label'); check "a general helper may not do work" "Only opus-worker or sonnet-worker" "$o"
+o=$(wg Explore 'look around the code'); check "a read-only look-around helper may run" "^$" "$o"
+o=$(wg sonnet-worker 'change the button label'); check "a hand-over without Task and Level is refused" "Task: <the stage name" "$o"
+o=$(wg opus-worker $'Task: Button label\nLevel: Routine\nchange the label'); check "Routine work may not go to Opus" "goes to sonnet-worker" "$o"
+o=$(wg opus-worker $'Escalated from sonnet-worker: label logic is shared\nTask: Button label\nLevel: Routine'); check "an escalated Routine task may go to Opus" "^$" "$o"
+o=$(wg sonnet-worker $'Task: Sync fix\nLevel: Complex\nfix it'); check "Complex work may not go to Sonnet" "goes to opus-worker, never" "$o"
+o=$(wg sonnet-worker $'Task: Badge\nLevel: Routine\nalso update the firestore data model'); check "Sonnet may not get a hand-over that mentions complex work" "mentions complex work" "$o"
+o=$(wg sonnet-worker $'Task: Badge text\nLevel: Routine\nchange the wording'); check "Sonnet try 1" "^$" "$o"
+o=$(wg sonnet-worker $'Task: Badge text\nLevel: Routine\nchange the wording'); check "Sonnet try 2" "^$" "$o"
+o=$(wg sonnet-worker $'Task: Badge text\nLevel: Routine\nchange the wording'); check "a third Sonnet try goes to Opus" "two tries did not finish it" "$o"
+rm -f "$PROJ/.claude/state/sonnet-tries.json"
+o=$(echo '{"tool_name":"Edit","session_id":"s1","agent_id":"a9","agent_type":"sonnet-worker","tool_input":{"file_path":"firestore.rules"}}' | python3 $H/routing-guard.py)
+check "Sonnet may not change shared data rules" "Escalate to opus-worker" "$o"
+o=$(echo '{"tool_name":"Edit","session_id":"s1","agent_id":"a9","agent_type":"sonnet-worker","tool_input":{"file_path":"js/badges.js"}}' | python3 $H/routing-guard.py)
+check "Sonnet may change ordinary app files" "^$" "$o"
+o=$(echo '{"tool_name":"Edit","session_id":"s1","agent_id":"a8","agent_type":"opus-worker","tool_input":{"file_path":"firestore.rules"}}' | python3 $H/routing-guard.py)
+check "Opus may change shared data rules" "^$" "$o"
+# waiting-on-you stages: counted, shown, never auto-fixed
+W="$T/waitrepo"; rm -rf "$W"; mkdir -p "$W"
+( cd "$W" && git init -q . && git config user.email t@t && git config user.name t \
+  && printf '# WR\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n' > WORKING_RECORD.md && git add -A && git commit -qm base \
+  && git update-ref refs/remotes/origin/main HEAD \
+  && printf '| Build the lessons | COMPLETE | tests 12/12 |\n| Merge the changes | WAITING ON YOU — merge PR 32 |  |\n' >> WORKING_RECORD.md )
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$W" python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config,completion_summary;c=completion_summary(load_config());print(c['display']);print('open=',c['open'])")
+check "a stage of mine is counted in the total" "Completion: 1 of 2 done (50%) · Waiting on you: 1" "$o"
+check "a stage of mine is listed by name" "Waiting on you: Merge the changes" "$o"
+check "a stage of mine is not treated as the session's open work" "open= \[\]" "$o"
+# the stub expects the pinned Opus helper and the plan check
+S3="$T/stub18"; rm -rf "$S3"; mkdir -p "$S3/.claude/agents"
+cp "$H/../../stub/settings.json" "$S3/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S3/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"
+o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
+check "the new stub reads current" "^current" "$o"
+sed -i 's/^model: claude-opus-5-5$/model: inherit/' "$S3/.claude/agents/opus-worker.md"
+o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
+check "an unpinned Opus helper shows OUTDATED" "OUTDATED.*Opus helper pinned" "$o"
+# --- v3.1.20: app repositories update their own setup files
+for n in settings.json opus-worker.md sonnet-worker.md hz-loader.py CLAUDE-pointer.md merge_settings.py v2-known-files.txt; do
+  cmp -s "$H/../../stub/$n" "$H/../stub-files/$n" || echo "stub-files out of step: $n"
+done > "$T/stubsync.txt"
+check "the central copies of the setup files match stub/" "^$" "$(cat "$T/stubsync.txt")"
+SV=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;print(load_config()['stub_expect']['version'])")
+U="$T/selfupd"; rm -rf "$U" "$T/selfupd.git"; mkdir -p "$U/.claude/agents"; git init -q --bare "$T/selfupd.git"
+( cd "$U" && git init -q -b main . && git config user.email t@t && git config user.name t \
+  && printf '# Repository rules\n\nold pointer hz-loader.py\n\nRepository-specific files: `FEATURES.md` and `WORKING_RECORD.md`.\n\n## Project Architecture\nkeep me\n' > CLAUDE.md \
+  && python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['permissions']['allow'].append('Bash(npm test)');[g.__setitem__('matcher',g['matcher'].replace('ExitPlanMode|','')) for g in s['hooks']['PreToolUse']];json.dump(s,open('.claude/settings.json','w'),indent=2)" \
+  && sed 's/^model: claude-opus-5-5$/model: inherit/; s/Always runs on Opus 5.5, whichever model the main session plans on. //' "$H/../../stub/opus-worker.md" > .claude/agents/opus-worker.md \
+  && cp "$H/../../stub/sonnet-worker.md" .claude/agents/ && cp "$H/../../stub/hz-loader.py" .claude/ \
+  && printf '# WR\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|\n| Quiz | 1 | 0 | swaps | no |\n' > WORKING_RECORD.md \
+  && git add -A && git commit -qm base && git remote add origin "$T/selfupd.git" && git push -q origin main )
+su(){ ( cd "$H" && CLAUDE_PROJECT_DIR="$U" python3 -c "
+import sys;sys.path.insert(0,'.')
+from _common import load_config;from stubcheck import stub_status;from stubupdate import update
+cfg=load_config();s=stub_status(cfg,'$U');print('STATUS',s[:9])
+if s.startswith('OUTDATED'):
+    l,n=update(cfg,'$U');print('LINE',l);print('NOTE',n)" ); }
+o=$(su); check "an outdated app updates its own setup files" "updated on disk just now" "$o"
+check "the session is told to open a pull request from origin/main" "git switch -c hz-setup-update-" "$o"
+check "the missing hotspot columns are added on the way" "hotspot table: two missing columns added" "$o"
+check "the app's own settings entries are kept" "Bash(npm test)" "$(cat "$U/.claude/settings.json")"
+check "the app's own CLAUDE.md section is kept" "keep me" "$(cat "$U/CLAUDE.md")"
+check "the Opus helper is pinned after the update" "model: claude-opus-5-5" "$(cat "$U/.claude/agents/opus-worker.md")"
+( cd "$U" && git stash -q && git switch -q -c hz-setup-update-$SV && git stash pop -q && git add -A && git commit -qm upd && git push -q origin hz-setup-update-$SV && git switch -q main )
+o=$(su); check "while the pull request waits, no second one" "already waiting in a pull request" "$o"
+check "while the pull request waits, nothing is rewritten" "^$" "$(cd "$U" && git status --short)"
+( cd "$U" && git merge -q --ff-only hz-setup-update-$SV )
+o=$(su); check "after the merge the stub is current" "STATUS current" "$o"
+L="$T/localedit"; rm -rf "$L"; cp -r "$U" "$L"; ( cd "$L" && git switch -q -c other && git branch -q -D hz-setup-update-$SV && git update-ref -d refs/remotes/origin/hz-setup-update-$SV && git remote remove origin && printf '\n<!-- my own note -->\n' >> .claude/agents/opus-worker.md && sed -i 's/^model: claude-opus-5-5$/model: inherit/' .claude/agents/opus-worker.md )
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$L" python3 -c "
+import sys;sys.path.insert(0,'.')
+from _common import load_config;from stubupdate import update
+print(update(load_config(),'$L'))")
+check "a helper file with local edits is left alone and reported" "has local edits" "$o"
+o=$(cd "$H" && python3 -c "
+import sys,os;sys.path.insert(0,'.')
+from _common import load_config;from stubupdate import update
+print(update(load_config(), os.path.abspath('$H/../..')))")
+check "hz-claude-config itself never updates itself" "(None, None)" "$o"
+# --- v3.1.21: QA/QC — destructive instructions, loader message for an incomplete rules repository
+cat > "$T/destr.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"how do I update"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** Ready.\n> 👉 **I need from you:** Follow the steps.\n> ➡️ **Next:** Merge.\n---\n1. Delete everything in the folder except .git.\n2. Extract the zip.\n\nConfidence: High · Status: Checked"}]}}
+J
+rm -f "$PROJ/.claude/state/qc-rounds.json"
+o=$(echo "{\"transcript_path\":\"$T/destr.jsonl\",\"stop_hook_active\":false}" | python3 $H/qc-guard.py)
+check "a destructive instruction is sent back (QC2)" "QC2" "$o"
+sed 's/2. Extract the zip./2. Extract the zip. This needs your separate yes./' "$T/destr.jsonl" > "$T/destr_ok.jsonl"
+rm -f "$PROJ/.claude/state/qc-rounds.json"
+o=$(echo "{\"transcript_path\":\"$T/destr_ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/qc-guard.py)
+check "the separate-confirmation form passes" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/shortneed.jsonl\",\"stop_hook_active\":false}" | python3 $H/qc-guard.py)
+check "an ordinary reply passes the QC2 check" "^$" "$o"
+check "the README has no step that empties the repository" "clean" "$(grep -ci 'delete everything\|empty the folder' "$H/../../README.md" | sed 's/^0$/clean/')"
+check "the README keeps no old version numbers" "clean" "$(grep -c 'v3\.1\.1[0-9]' "$H/../../README.md" | sed 's/^0$/clean/')"
+IN="$T/incomplete"; rm -rf "$IN"; mkdir -p "$IN/central/hooks" "$IN/proj/.claude" "$T/inc-cache"
+cp "$H/../../stub/hz-loader.py" "$IN/proj/.claude/"; printf 'version: 9.9.9\nhooks/session-start.py\nhooks/missing.py\n' > "$IN/central/MANIFEST.txt"; cp "$H/session-start.py" "$IN/central/hooks/"
+( cd "$IN" && python3 -m http.server 8765 >/dev/null 2>&1 & echo $! > "$T/httpd.pid" ); sleep 1
+o=$(echo '{}' | CLAUDE_PROJECT_DIR="$IN/proj" HZ_CENTRAL_URL=http://127.0.0.1:8765/central/ HZ_CACHE_DIR="$T/inc-cache" python3 "$IN/proj/.claude/hz-loader.py" session-start.py)
+kill $(cat "$T/httpd.pid") 2>/dev/null
+check "the loader names a missing file instead of blaming the network" "incomplete on GitHub: hooks/missing.py" "$o"
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard
-o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard observe mode allows" "^$" "$o"
-sed -i 's/"observe"/"enforce"/' $H/config.json
+o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard (enforce by default) refuses the planner's own source edit" '"deny"' "$o"
+o=$(echo '{"tool_name":"Edit","session_id":"s1","agent_id":"a77","agent_type":"opus-worker","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard lets a worker's source edit through" "^$" "$o"
 o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard enforce denies main-session source edit" '"deny"' "$o"
 o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/CLAUDE.md"}}' | python3 $H/routing-guard.py); check "routing-guard enforce allows governance edit" "^$" "$o"
-sed -i 's/"enforce"/"observe"/' $H/config.json
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

@@ -29,6 +29,13 @@ marker_fields = cfg.get("subagent_marker_fields") or []
 if marker_fields:
     is_worker = any(data.get(f) for f in marker_fields)
 if is_worker:
+    # Hard rule: sonnet-worker never changes the files that hold shared data rules, settings, build or deploy set-up.
+    if str(data.get("agent_type") or "") == "sonnet-worker":
+        norm = path.replace("\\", "/").lower()
+        hit = next((g for g in cfg.get("sonnet_protected_paths", []) if g.lower() in norm), None)
+        if hit:
+            deny_tool(f"sonnet-worker may not change '{path}' (shared data rules, settings, build or deploy set-up). Stop "
+                      "and return: 'Escalate to opus-worker: this task needs " + hit + "'.")
     sys.exit(0)
 deny_tool(f"Routing rule: source edits must run through a worker subagent, opus-worker or sonnet-worker ({path}). Delegate this change, "
           "or ask the user to authorize main-session execution (touch .claude/state/main-session-edit-authorized).")
