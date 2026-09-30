@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.20: app repositories update their own setup files \u2014 the first session in each app opens a pull request; merge it. claude.ai preferences changed: re-copy docs/claude-ai-preferences.txt.",
+  "update_notice": "v3.1.21: QA/QC rules; the setup files in each app update themselves \u2014 the first session in each app opens a pull request; merge it. claude.ai preferences changed: re-copy docs/claude-ai-preferences.txt.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -34,7 +34,8 @@
     "Stop": [
       "record-guard.py",
       "completion-guard.py",
-      "validation-line.py"
+      "validation-line.py",
+      "qc-guard.py"
     ]
   },
   "read_only_helpers": [
@@ -69,5 +70,17 @@
     "service-worker",
     "schema",
     "migration"
+  ],
+  "destructive_phrases": [
+    "delete (everything|all (the )?files|every (tracked )?file)",
+    "empty (the|this|your) (repo|repository|folder)",
+    "remove all files",
+    "rm -rf",
+    "git reset --hard",
+    "push --force",
+    "force[- ]push",
+    "git clean -f",
+    "delete the (repo|repository|branch main|main branch)",
+    "wipe"
   ]
 }

@@ -1,4 +1,4 @@
-version: 3.1.20
+version: 3.1.21
 agents/opus-worker-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
@@ -8,6 +8,7 @@ hooks/dispatch.py
 hooks/git-guard.py
 hooks/plan-gate.py
 hooks/plan-guard.py
+hooks/qc-guard.py
 hooks/record-guard.py
 hooks/replay-hooks.sh
 hooks/routing-guard.py
