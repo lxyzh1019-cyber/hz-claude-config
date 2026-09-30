@@ -13,7 +13,6 @@ import os
 import shutil
 import subprocess
 import sys
-import urllib.error
 import urllib.request
 
 SOURCE = os.environ.get("HZ_CENTRAL_URL",
@@ -22,18 +21,9 @@ CACHE = os.environ.get("HZ_CACHE_DIR") or os.path.join(os.path.expanduser("~"), 
 KEEP_VERSIONS = 3
 
 
-class Incomplete(Exception):
-    """A file listed in MANIFEST.txt is missing on GitHub: hz-claude-config is incomplete, not unreachable."""
-
-
 def fetch(rel):
-    try:
-        with urllib.request.urlopen(SOURCE + rel, timeout=10) as r:
-            return r.read()
-    except urllib.error.HTTPError as e:
-        if e.code == 404 and rel != "MANIFEST.txt":
-            raise Incomplete(f"hz-claude-config is incomplete on GitHub: {rel} is listed but missing") from e
-        raise
+    with urllib.request.urlopen(SOURCE + rel, timeout=10) as r:
+        return r.read()
 
 
 def safe(rel):
@@ -104,9 +94,7 @@ def main():
                     f"({type(e).__name__}: {e}) and nothing is cached. Stop before any work and tell the user: "
                     "\"Central rules not loaded in this session.\""}}))
                 return 0
-            note = (f"hz-claude-config is incomplete on GitHub ({e}); using cached v{version} — tell the user in the "
-                    "'I need from you' line that the rules repository needs repair" if isinstance(e, Incomplete)
-                    else f"offline: using cached v{version} ({type(e).__name__})")
+            note = f"offline: using cached v{version} ({type(e).__name__})"
     else:
         version = cached_version()
         if not version:

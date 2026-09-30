@@ -1,0 +1,75 @@
+{
+  "model": "fable",
+  "permissions": {
+    "defaultMode": "plan",
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(npm run deploy:*)"
+    ],
+    "deny": [
+      "Bash(git reset --hard:*)",
+      "Bash(git checkout -- :*)",
+      "Bash(git restore:*)",
+      "Bash(git clean:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git stash drop:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; p=$(command -v python3 || command -v python); exec \"$p\" -B \"$r/.claude/hooks/session-start.py\"'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; p=$(command -v python3 || command -v python); exec \"$p\" -B \"$r/.claude/hooks/plan-gate.py\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; p=$(command -v python3 || command -v python); exec \"$p\" -B \"$r/.claude/hooks/skill-router.py\"'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; p=$(command -v python3 || command -v python); exec \"$p\" -B \"$r/.claude/hooks/routing-guard.py\"'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; p=$(command -v python3 || command -v python); exec \"$p\" -B \"$r/.claude/hooks/record-guard.py\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; p=$(command -v python3 || command -v python); exec \"$p\" -B \"$r/.claude/hooks/validation-line.py\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

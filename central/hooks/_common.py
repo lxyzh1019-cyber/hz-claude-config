@@ -58,7 +58,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.18",
+        "version": "3.1.21",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
         "settings": {},
         # keys the stub must NOT set, so the account's own default applies
@@ -66,6 +66,7 @@ DEFAULT_CONFIG = {
                             "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},
         # text each stub file must contain
         "file_text": {".claude/agents/opus-worker.md": ["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"],
+                      ".claude/hz-loader.py": ["incomplete on GitHub", "loader that reports an incomplete rules repository"],
                       ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
                    "Stop": "report checks (completion, top lines)",

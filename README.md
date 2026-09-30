@@ -1,4 +1,4 @@
-# hz-claude-config — central working rules (v3.1.20)
+# hz-claude-config — central working rules (v3.1.21)
 
 Everything central lives here: the rules, the hook logic, the executors' shared instructions and the audit skills (`central/`). Each app repository keeps only a small **stable stub** — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md`, `.claude/agents/sonnet-worker.md`, a pointer `CLAUDE.md` — plus its own `FEATURES.md` and `WORKING_RECORD.md`.
 
@@ -17,15 +17,6 @@ These instructions live only here; chat replies point here. This repository must
 | `.claude/`, `CLAUDE.md` | this repository's own stub, so the rules apply when editing it too |
 | `docs/` | rules review copy (revision markers), skill-trigger tuning procedure, your claude.ai preferences (`claude-ai-preferences.txt`: paste into claude.ai Settings > Profile when an update says so) |
 
-## A. Full reset of this repository (rare — normal updates use Step E)
-Only if this repository is badly damaged. Ask the claude.ai chat for a **full** package of the current version (not a "-changes" zip). Then, with GitHub Desktop:
-1. Open **hz-claude-config**, stay on **main**, press **Pull origin**, then **Branch → New branch**.
-2. **Repository → Show in Explorer**: delete everything in the folder except the hidden `.git` folder.
-3. Right-click the full zip → **Extract All** → set the destination to the repository folder itself.
-4. Check that `central/MANIFEST.txt` shows the version the chat named, then **Commit**, **Publish branch**, **Create Pull Request**, merge on github.com.
-
-No Claude session is needed, so no credits and no permission prompts.
-
 ## B. App repositories update their own setup files (automatic)
 A few setup files live inside each app repository (which helper runs on which model, which checks switch on). They cannot be downloaded at session start like the rules, so the session start **updates them itself**: the first session after a change rewrites them, puts them on a branch named `hz-setup-update-<version>`, opens a pull request, and asks you to merge it. Merge it; the next session there shows `[stub] current`. While that pull request waits, later sessions only remind you — they never open a second one.
 
@@ -37,20 +28,16 @@ A repository without the setup yet needs the installer once: ask the chat for a 
 ## D. GitHub Desktop clones
 For each cloned repository: set **Current Branch** to `main`, then **Fetch origin** → **Pull origin**. Start local sessions only on `main` or a branch made from the current `main`. Optional local check: open a local session in the desktop app on that folder and type `hi` — the same pass criteria prove Python and bash work on your PC. An error mentioning bash or python means one is missing (install Python from python.org).
 
-## E. Every future update (no Claude session, no credits)
-Agree the change list in the claude.ai chat. The chat builds and tests it there and gives you a zip of only the changed files (and says if any file must be deleted — rare). With GitHub Desktop:
+## E. Every update of this repository (no Claude session, no credits)
+The claude.ai chat builds and tests every update and gives you one **full** package (every file of the new version). Before handing it over, it follows these same steps itself on a copy of what is on GitHub now (QA/QC rules). With GitHub Desktop:
 1. Open **hz-claude-config**, stay on **main**, press **Pull origin**.
 2. **Branch → New branch** (any name).
 3. Right-click the zip → **Extract All** → set the destination to the repository folder itself → **Replace** when asked.
-4. Check that GitHub Desktop lists the files the chat named, **Commit**, **Publish branch**, **Create Pull Request**, merge on github.com.
-5. Check on github.com that `central/MANIFEST.txt` shows the new version.
+4. Commit, **Publish branch**, **Create Pull Request**, merge on github.com.
 
-Every repository loads the new version at its next session start (GitHub's cache can delay that a few minutes). When the setup files inside the app repositories change, each app updates itself at its next session and asks you to merge one pull request (Step B). The chat says whether your claude.ai preferences changed.
+What you should see: in step 4, GitHub Desktop lists the number of added / changed files the chat told you, and **0 deleted**. After the merge, `central/MANIFEST.txt` on github.com shows the new version. If you see anything else, stop and tell the chat.
 
-(Do not use github.com's **Upload files** for these zips: it flattens folders and skips the `.claude` folder.)
-
-**v3.1.20:** app repositories now update their own setup files (Step B is automatic). The first session in each app after this update opens a pull request with its new setup — the Opus helper always on Opus 5.5, and the plan check at the Approve step — merge it. Your claude.ai preferences changed too: re-copy `docs/claude-ai-preferences.txt`.
-
+Never use github.com's **Upload files** for these packages (it flattens folders and skips `.claude`).
 
 ## F. Health check (after Step B, once per repository)
 Start a **new** session on the repository (cloud or local; auto mode is fine) on your **account default model**, not the Sonnet session you used for Step B, and paste:
@@ -73,13 +60,13 @@ Pass = seven passes. Your reply's first line and its three plain top lines are p
 | You see | Cause | Fix |
 |---|---|---|
 | `Central rules NOT loaded … nothing is cached` | fetch failed and no earlier copy | check this repo is public and `central/MANIFEST.txt` exists on `main` |
-| `offline: using cached vX` | fetch failed, earlier copy used | usually temporary; persistent → same check as above |
+| `offline: using cached vX` | GitHub could not be reached, earlier copy used | usually temporary; start a new session later |
+| `hz-claude-config is incomplete on GitHub … using cached vX` | files are missing in this repository on GitHub | tell the chat; it sends a full package (Step E) |
 | Old version still loaded after an update | raw-file cache | wait a few minutes; start a new session |
-| `[stub] OUTDATED — … missing: …` | the repository has an older stub | Step B in that repository, default mode, merge |
-| Command denied by the "auto-mode classifier" during Step A or B | session in auto mode | new session in default mode, same paste |
+| `[stub] OUTDATED — … missing: …` | the app's setup files are older | the session updates them itself and asks you to merge (Step B) |
 | Reply opens with "hooks inactive" | cloud session with several repositories: no repository hooks run | expected; for work that needs the checks, open a session on one repository |
-| `INSTALL FAILED — do not merge` | smoke test could not load the rules | run A first (central must be on `main`), then retry |
-| `NOT INSTALLED` after "LOCAL CHANGES FOUND" | the repo improved its v2 rules files locally | fold the improvements into `hz-claude-config` first (see B) |
+| `INSTALL FAILED — do not merge` | smoke test could not load the rules | tell the chat |
+| `NOT INSTALLED` after "LOCAL CHANGES FOUND" | the repo improved its v2 rules files locally | tell the chat |
 | Hook errors in a local session | Python or bash missing on the PC | install Python from python.org |
-| Hooks fire twice | rules v2 copies still in a repo or clone | run B in that repo; Pull origin in its clone |
+| Hooks fire twice | rules v2 copies still in a repo or clone | Pull origin in its clone; if it persists, tell the chat |
 | A local session loads old rules (v2.x) or no loader | the clone is on an old branch made before the install | in GitHub Desktop set **Current Branch** to `main` (or a branch made from today's `main`), **Fetch origin**, **Pull origin**, then start a new session |

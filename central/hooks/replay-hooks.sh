@@ -354,7 +354,7 @@ check "stub report names the missing pieces" "Sonnet worker" "$o"
 S="$T/stubrepo"; rm -rf "$S"; mkdir -p "$S/.claude/agents"
 cp "$H/../../stub/settings.json" "$S/.claude/settings.json"
 cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S/.claude/agents/"
-cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"
+cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S/.claude/"
 o2=$(cd "$H" && python3 -c "
 import sys; sys.path.insert(0,'.')
 from _common import load_config; from stubcheck import stub_status
@@ -384,7 +384,7 @@ check "opus-worker is pinned to Opus 5.5" "yes" "$(grep -qx 'model: claude-opus-
 check "sonnet-worker is pinned to the exact Sonnet 5.5 ID" "yes" "$(grep -qx 'model: claude-sonnet-5-5' "$H/../../stub/sonnet-worker.md" && echo yes)"
 M="$T/modelrepo"; rm -rf "$M"; mkdir -p "$M/.claude/agents"
 cp "$H/../../stub/settings.json" "$M/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$M/.claude/agents/"
-cp "$H/../../stub/CLAUDE-pointer.md" "$M/CLAUDE.md"
+cp "$H/../../stub/CLAUDE-pointer.md" "$M/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$M/.claude/"
 check "a stub with the new model setup is current" "^current" "$(stub_says "$M")"
 python3 -c "
 import json; p='$M/.claude/settings.json'; s=json.load(open(p)); s['model']='opus'; json.dump(s, open(p,'w'))"
@@ -563,7 +563,7 @@ check "a stage of mine is listed by name" "Waiting on you: Merge the changes" "$
 check "a stage of mine is not treated as the session's open work" "open= \[\]" "$o"
 # the stub expects the pinned Opus helper and the plan check
 S3="$T/stub18"; rm -rf "$S3"; mkdir -p "$S3/.claude/agents"
-cp "$H/../../stub/settings.json" "$S3/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S3/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"
+cp "$H/../../stub/settings.json" "$S3/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S3/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "the new stub reads current" "^current" "$o"
 sed -i 's/^model: claude-opus-5-5$/model: inherit/' "$S3/.claude/agents/opus-worker.md"
@@ -574,6 +574,7 @@ for n in settings.json opus-worker.md sonnet-worker.md hz-loader.py CLAUDE-point
   cmp -s "$H/../../stub/$n" "$H/../stub-files/$n" || echo "stub-files out of step: $n"
 done > "$T/stubsync.txt"
 check "the central copies of the setup files match stub/" "^$" "$(cat "$T/stubsync.txt")"
+SV=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;print(load_config()['stub_expect']['version'])")
 U="$T/selfupd"; rm -rf "$U" "$T/selfupd.git"; mkdir -p "$U/.claude/agents"; git init -q --bare "$T/selfupd.git"
 ( cd "$U" && git init -q -b main . && git config user.email t@t && git config user.name t \
   && printf '# Repository rules\n\nold pointer hz-loader.py\n\nRepository-specific files: `FEATURES.md` and `WORKING_RECORD.md`.\n\n## Project Architecture\nkeep me\n' > CLAUDE.md \
@@ -594,12 +595,12 @@ check "the missing hotspot columns are added on the way" "hotspot table: two mis
 check "the app's own settings entries are kept" "Bash(npm test)" "$(cat "$U/.claude/settings.json")"
 check "the app's own CLAUDE.md section is kept" "keep me" "$(cat "$U/CLAUDE.md")"
 check "the Opus helper is pinned after the update" "model: claude-opus-5-5" "$(cat "$U/.claude/agents/opus-worker.md")"
-( cd "$U" && git stash -q && git switch -q -c hz-setup-update-3.1.18 && git stash pop -q && git add -A && git commit -qm upd && git push -q origin hz-setup-update-3.1.18 && git switch -q main )
+( cd "$U" && git stash -q && git switch -q -c hz-setup-update-$SV && git stash pop -q && git add -A && git commit -qm upd && git push -q origin hz-setup-update-$SV && git switch -q main )
 o=$(su); check "while the pull request waits, no second one" "already waiting in a pull request" "$o"
 check "while the pull request waits, nothing is rewritten" "^$" "$(cd "$U" && git status --short)"
-( cd "$U" && git merge -q --ff-only hz-setup-update-3.1.18 )
+( cd "$U" && git merge -q --ff-only hz-setup-update-$SV )
 o=$(su); check "after the merge the stub is current" "STATUS current" "$o"
-L="$T/localedit"; rm -rf "$L"; cp -r "$U" "$L"; ( cd "$L" && git switch -q -c other && git branch -q -D hz-setup-update-3.1.18 && git update-ref -d refs/remotes/origin/hz-setup-update-3.1.18 && git remote remove origin && printf '\n<!-- my own note -->\n' >> .claude/agents/opus-worker.md && sed -i 's/^model: claude-opus-5-5$/model: inherit/' .claude/agents/opus-worker.md )
+L="$T/localedit"; rm -rf "$L"; cp -r "$U" "$L"; ( cd "$L" && git switch -q -c other && git branch -q -D hz-setup-update-$SV && git update-ref -d refs/remotes/origin/hz-setup-update-$SV && git remote remove origin && printf '\n<!-- my own note -->\n' >> .claude/agents/opus-worker.md && sed -i 's/^model: claude-opus-5-5$/model: inherit/' .claude/agents/opus-worker.md )
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$L" python3 -c "
 import sys;sys.path.insert(0,'.')
 from _common import load_config;from stubupdate import update
@@ -610,6 +611,28 @@ import sys,os;sys.path.insert(0,'.')
 from _common import load_config;from stubupdate import update
 print(update(load_config(), os.path.abspath('$H/../..')))")
 check "hz-claude-config itself never updates itself" "(None, None)" "$o"
+# --- v3.1.21: QA/QC — destructive instructions, loader message for an incomplete rules repository
+cat > "$T/destr.jsonl" <<J
+{"type":"user","message":{"role":"user","content":"how do I update"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** Ready.\n> 👉 **I need from you:** Follow the steps.\n> ➡️ **Next:** Merge.\n---\n1. Delete everything in the folder except .git.\n2. Extract the zip.\n\nConfidence: High · Status: Checked"}]}}
+J
+rm -f "$PROJ/.claude/state/qc-rounds.json"
+o=$(echo "{\"transcript_path\":\"$T/destr.jsonl\",\"stop_hook_active\":false}" | python3 $H/qc-guard.py)
+check "a destructive instruction is sent back (QC2)" "QC2" "$o"
+sed 's/2. Extract the zip./2. Extract the zip. This needs your separate yes./' "$T/destr.jsonl" > "$T/destr_ok.jsonl"
+rm -f "$PROJ/.claude/state/qc-rounds.json"
+o=$(echo "{\"transcript_path\":\"$T/destr_ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/qc-guard.py)
+check "the separate-confirmation form passes" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/shortneed.jsonl\",\"stop_hook_active\":false}" | python3 $H/qc-guard.py)
+check "an ordinary reply passes the QC2 check" "^$" "$o"
+check "the README has no step that empties the repository" "clean" "$(grep -ci 'delete everything\|empty the folder' "$H/../../README.md" | sed 's/^0$/clean/')"
+check "the README keeps no old version numbers" "clean" "$(grep -c 'v3\.1\.1[0-9]' "$H/../../README.md" | sed 's/^0$/clean/')"
+IN="$T/incomplete"; rm -rf "$IN"; mkdir -p "$IN/central/hooks" "$IN/proj/.claude" "$T/inc-cache"
+cp "$H/../../stub/hz-loader.py" "$IN/proj/.claude/"; printf 'version: 9.9.9\nhooks/session-start.py\nhooks/missing.py\n' > "$IN/central/MANIFEST.txt"; cp "$H/session-start.py" "$IN/central/hooks/"
+( cd "$IN" && python3 -m http.server 8765 >/dev/null 2>&1 & echo $! > "$T/httpd.pid" ); sleep 1
+o=$(echo '{}' | CLAUDE_PROJECT_DIR="$IN/proj" HZ_CENTRAL_URL=http://127.0.0.1:8765/central/ HZ_CACHE_DIR="$T/inc-cache" python3 "$IN/proj/.claude/hz-loader.py" session-start.py)
+kill $(cat "$T/httpd.pid") 2>/dev/null
+check "the loader names a missing file instead of blaming the network" "incomplete on GitHub: hooks/missing.py" "$o"
 # --- UserPromptSubmit: skill router
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
 # --- PreToolUse: routing guard
