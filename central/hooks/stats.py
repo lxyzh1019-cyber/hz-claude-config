@@ -1,20 +1,78 @@
 #!/usr/bin/env python3
-"""Stop hook that never blocks: when a reply is a finished answer (Status Checked or Validated), show the user a
-short session summary through Claude Code's systemMessage (no AI turn, no cost):
-tokens and time by model (main session and helpers), hand-overs, refusals and send-backs.
+"""Stop hook that never blocks. It speaks to me through Claude Code's systemMessage (no AI turn, no cost) — the
+one notice my app is proven to show ("Stop says: …"):
+- the version line `Rules v<version> · <branch> · setup <state>`, on the session's first reply and with every
+  summary (the session-start notice is not shown in the desktop app, so the version moved here in v3.1.23);
+- when a reply is a finished answer (Status Checked or Validated), a short session summary: tokens and time by
+  model (main session and helpers), how much of the tokens was re-reading, hand-overs, refusals and send-backs.
 Helper (subagent) records are read from the main transcript (sidechain records), from the session's subagents
-folder, or — when neither exists — from the totals Claude Code attaches to each finished hand-over."""
-import glob, json, os, re, sys
+folder, or — when neither exists — from the totals Claude Code attaches to each finished hand-over.
+Every run logs what it showed, or why it showed nothing, to .claude/state/stats.jsonl."""
+import glob, json, os, re, subprocess, sys
 from datetime import datetime
-from _common import read_hook_input, load_config, read_transcript, last_assistant_text, read_stats
+from _common import (read_hook_input, load_config, read_transcript, last_assistant_text, read_stats, log,
+                     central_version, PROJECT_DIR, STATE_DIR)
 
 data = read_hook_input()
 cfg = load_config()
 tp = data.get("transcript_path") or ""
+sid = data.get("session_id") or ""
 records = read_transcript(tp)
 text = last_assistant_text(records)
 m = re.search(cfg["validation_line_pattern"], text or "")
-if not m or m.group(2).split()[0] not in ("Checked", "Validated"):
+final = bool(m) and m.group(2).split()[0] in ("Checked", "Validated")
+
+
+def version_line():
+    try:
+        branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_DIR, capture_output=True,
+                                text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        branch = "unknown"
+    try:
+        from stubcheck import stub_status
+        stub = stub_status(cfg, PROJECT_DIR)
+    except Exception:
+        stub = ""
+    if os.path.exists(os.path.join(STATE_DIR, "setup-pending.json")):
+        stub = "waiting"   # rewritten on disk at session start; the setup pull request is not merged yet
+    elif stub.startswith("OUTDATED"):
+        try:   # the setup-update branch exists: the pull request is waiting for my merge
+            refs = subprocess.run(["git", "for-each-ref", "--format=%(refname)", "refs/heads/hz-setup-update-*",
+                                   "refs/remotes/origin/hz-setup-update-*"], cwd=PROJECT_DIR, capture_output=True,
+                                  text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError, UnicodeError):
+            refs = ""
+        stub = "waiting" if refs else stub
+    word = ("current" if stub.startswith("current") else "waiting for your merge" if stub.startswith("waiting")
+            else "needs attention" if stub else "unknown")
+    return f"Rules v{central_version()} · {branch} · setup {word}"
+
+
+shown_path = os.path.join(STATE_DIR, "version-shown.json")
+try:
+    shown = json.load(open(shown_path, encoding="utf-8"))
+except (OSError, ValueError):
+    shown = {}
+
+
+def mark_shown():
+    shown.clear() if len(shown) > 50 else None
+    shown[sid] = True
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(shown, open(shown_path, "w", encoding="utf-8"))
+    except OSError:
+        pass
+
+
+if not final:
+    if sid and not shown.get(sid):
+        mark_shown()
+        log("stats", {"shown": "version only", "why": "first reply, not a finished answer"})
+        print(json.dumps({"systemMessage": version_line()}))
+    else:
+        log("stats", {"shown": "nothing", "why": "not a finished answer (Status Checked or Validated)"})
     sys.exit(0)
 
 
@@ -41,6 +99,7 @@ def is_prompt(rec):
 
 
 tokens, seconds, seen = {}, {}, set()
+reread = [0]   # tokens that re-read context already sent before (cache reads)
 CAP = 60 * 60
 
 
@@ -60,6 +119,7 @@ def add_file(recs):
                 seen.add(mid)
                 tokens[lab] = tokens.get(lab, 0) + sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+                reread[0] += int(u.get("cache_read_input_tokens") or 0)
             if t is not None and last_t is not None:
                 seconds[lab] = seconds.get(lab, 0) + min(max(t - last_t, 0), CAP)
             last_model, waiting_on_helper = lab, helper_call
@@ -77,7 +137,6 @@ add_file(main)
 helper_found = bool(side)
 if side:
     add_file(side)
-sid = data.get("session_id") or ""
 for pattern in (os.path.splitext(tp)[0] + "/subagents/*.jsonl", os.path.join(os.path.dirname(tp), sid, "subagents", "*.jsonl")):
     for f in sorted(glob.glob(pattern)):
         helper_found = True
@@ -105,11 +164,15 @@ for rec in main:
             tot = tur.get("totalTokens") or sum(int((tur.get("usage") or {}).get(k) or 0) for k in (
                 "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
             tokens[lab] = tokens.get(lab, 0) + int(tot or 0)
+            reread[0] += int((tur.get("usage") or {}).get("cache_read_input_tokens") or 0)
             if tur.get("totalDurationMs"):
                 seconds[lab] = seconds.get(lab, 0) + int(tur["totalDurationMs"]) / 1000
 
 total = sum(tokens.values())
 if not total:
+    mark_shown()
+    log("stats", {"shown": "version only", "why": "no token counts in the transcript"})
+    print(json.dumps({"systemMessage": version_line()}))
     sys.exit(0)
 
 
@@ -118,8 +181,9 @@ def big(n):
 
 
 order = sorted(tokens, key=lambda k: -tokens[k])
-lines = ["Session summary",
-         "Tokens: " + " · ".join(f"{k} {round(100 * tokens[k] / total)}%" for k in order) + f" ({big(total)})"]
+lines = [version_line(), "Session summary",
+         "Tokens: " + " · ".join(f"{k} {round(100 * tokens[k] / total)}%" for k in order) + f" ({big(total)})"
+         + (f" — {big(reread[0])} of it re-reading what was already sent" if reread[0] else "")]
 if seconds:
     lines.append("Time: " + " · ".join(f"{k} {max(1, round(seconds[k] / 60))} min" for k in order if k in seconds))
 names = {"opus-worker": "Opus", "sonnet-worker": "Sonnet"}
@@ -130,4 +194,6 @@ lines.append(f"Refused: planner edits {st.get('refused:routing-guard', 0)} · ha
              f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}")
 if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
     lines.append("This session is long: start a fresh session for the next stage — it costs less per step.")
+mark_shown()
+log("stats", {"shown": "summary", "tokens": total, "reread": reread[0]})
 print(json.dumps({"systemMessage": "\n".join(lines)}))

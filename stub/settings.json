@@ -21,6 +21,7 @@
       "Bash(gh pr merge:*)"
     ]
   },
+  "plansDirectory": "./plans",
   "hooks": {
     "SessionStart": [
       {

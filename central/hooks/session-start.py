@@ -63,20 +63,22 @@ comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:
     facts.append("[completion] " + comp["display"] + "\n— this branch's ledger rows; read the deliverable ledger before "
                  "claiming anything is done, and state these lines in your first reply.")
-facts.append("The version line is shown to me by the session start itself: do not write a 'Rules v…' line. "
-             "Every final answer opens with a "
-             "quote block of three lines in everyday words, followed by a line with just ---:\n"
+facts.append("The version line is shown to me in the notice after your reply: do not write a 'Rules v…' line. "
+             "Every final answer ends with a "
+             "quote block of three lines in everyday words, after a line with just ---, and nothing after it:\n"
+             "---\n"
              "> 📌 **Result:** <status only: what works now or what I get, no requests>\n"
              "> 👉 **I need from you:** <one action, one short line, or nothing>\n"
              "> ➡️ **Next:** <what happens after>\n"
-             "---\n"
-             "Decisions go in a '❓ Decisions' list right under the --- line; technical detail below that. If the stub is "
+             "Above the --- line, in this order: the technical detail, the Completion lines if required, the "
+             "validation line, then a '❓ Decisions' list (one line each with your recommendation). If the stub is "
              "outdated, say so in the 'I need from you' line. No running commentary between tool calls and no progress "
              "reports: dispatch workers in the foreground and wait; if asked for status, one line '⏳ Working on: …'. "
-             "Present every Plan vN in plan mode (plan file + Approve); after approval copy it into plans/. Rules, hooks, worker instructions and skills come from "
+             "Present every Plan vN in plan mode (plan file + Approve); the plan file is written into plans/ in this "
+             "repository — commit the approved one with the work and delete drafts that were not approved. Rules, "
+             "hooks, worker instructions and skills come from "
              "hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
 parts.append("\n".join(facts))
-setup_word = ("current" if stub.startswith("current") else "updating — merge the setup pull request when asked"
-              if "updated on disk" in stub else "waiting for your merge" if stub.startswith("waiting") else "needs attention")
-print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n\n".join(parts)},
-                  "systemMessage": f"Rules v{version} · {branch} · setup {setup_word}"}))
+# v3.1.23: no systemMessage here — the desktop app does not show session-start notices; stats.py shows the
+# version line in the Stop notice instead.
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n\n".join(parts)}}))

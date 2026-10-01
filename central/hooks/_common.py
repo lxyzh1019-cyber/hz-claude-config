@@ -36,7 +36,7 @@ DEFAULT_CONFIG = {
     # the only interim reply: one status line, and only when asked while a worker still runs
     "progress_line_pattern": r"^\s*⏳\s*Working on:\s*\S.*$",
     "need_line_max_words": 30,
-    "validation_line_pattern": r"Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated(\s*—\s*\S.*)?|Uncertain)\s*$",
+    "validation_line_pattern": r"(?m)Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated(\s*—\s*\S.*)?|Uncertain)\s*$",
     "design_triggers": ["redesign", "architecture", "data model", "schema", "migration", "sync layer", "firestore rules", "shared state", "regression", "keeps breaking", "again", "still broken", "refactor"],
     # planner suggestion (plan-gate): strong signals that a plan needs Fable rather than the Opus default
     "fable_planner_signals": ["root cause", "why does", "why is", "investigate", "across all", "every repo", "all repos", "all apps",
@@ -58,9 +58,9 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.21",
+        "version": "3.1.23",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
-        "settings": {},
+        "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"]},
         # keys the stub must NOT set, so the account's own default applies
         "settings_absent": {"model": "account default model (the stub must not set a session model)",
                             "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},

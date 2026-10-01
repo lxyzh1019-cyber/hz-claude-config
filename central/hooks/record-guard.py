@@ -4,12 +4,24 @@ record must be updated and a regression table produced. Governance-only edits ar
 repository (for example Claude Code's own plan files) never count."""
 import os, re, subprocess, sys
 from _common import (PROJECT_DIR, SEED_DIR, is_progress_report, read_hook_input, load_config, read_transcript, last_turn, last_assistant_text,
-                     tool_uses, is_governance_path, block)
+                     tool_uses, is_governance_path, block, use_round)
 
 data = read_hook_input()
-if data.get("stop_hook_active"):
-    sys.exit(0)
 cfg = load_config()
+
+
+def send_back(reason):
+    """v3.1.23: at most auto_fix_max_rounds send-backs per user prompt (prompt number from UserPromptSubmit), like
+    the format check — another check's block no longer makes this one step aside. stop_hook_active only when the
+    prompt number is unknown."""
+    r = use_round("record", data.get("session_id"), int(cfg["auto_fix_max_rounds"]))
+    if r is None and data.get("stop_hook_active"):
+        sys.exit(0)
+    if r is not None and not r[1]:
+        sys.exit(0)
+    block(reason)
+
+
 records_all = read_transcript(data.get("transcript_path"))
 turn = last_turn(records_all)
 edits = tool_uses(turn, {"Edit", "Write", "MultiEdit", "NotebookEdit"})
@@ -84,7 +96,7 @@ try:
 except OSError:
     features_is_template = True
 if features_is_template:
-    block(f"{cfg['features_file']} is missing or still the unfilled template, so no regression check is possible. "
+    send_back(f"{cfg['features_file']} is missing or still the unfilled template, so no regression check is possible. "
           f"Before finishing: if it is missing, create it and {cfg['record_file']} from the templates in {SEED_DIR}; "
           "then extract the manifest of the app's current locked features into it (hz-plan-regression-guard), "
           f"produce the regression table and update {cfg['record_file']}.")
@@ -92,9 +104,9 @@ if not record_touched:
     problems.append(f"update {cfg['record_file']} (request ledger, hotspot counter, deliverable ledger)")
 progress = is_progress_report(text, records_all, cfg)
 if not progress and not re.search(cfg["regression_table_pattern"], text):
-    problems.append(f"end with the regression table against {cfg['features_file']} in exactly this shape (four rows, "
+    problems.append(f"include the regression table against {cfg['features_file']} in exactly this shape (four rows, "
                     "these first-column words):\n| Regression table | Result |\n|---|---|\n| Kept | … |\n| Added | … |\n"
-                    "| Intentionally removed | … |\n| Missing | … |\nUpdate the manifest if features changed")
+                    "| Intentionally removed | … |\n| Missing | … |\nUpdate the manifest if features changed. It goes above the closing lines")
 if problems:
-    block("Implementation happened this turn but the record is incomplete. Before finishing: " + "; ".join(problems) + ".")
+    send_back("Implementation happened this turn but the record is incomplete. Before finishing: " + "; ".join(problems) + ".")
 sys.exit(0)
