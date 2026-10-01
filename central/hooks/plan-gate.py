@@ -2,7 +2,7 @@
 """UserPromptSubmit hook: plan tier, fix-counter reminder, hotspot redesign alerts, and the prompt counter
 (the number the completion guard keys its auto-fix rounds on, so its own feedback cannot reset them)."""
 import json, sys
-import os
+import os, re
 from _common import (read_hook_input, load_config, count_bullets, log, hotspot_alerts, FIX_WORDS,
                      completion_summary, bump_prompt_number, STATE_DIR)
 
@@ -76,6 +76,12 @@ if any(ph in low for ph in cfg["pause_phrases"]):
         msgs.append("[completion] Pause acknowledged: this reply may end with open ledger items; state the Completion line honestly.")
     except OSError:
         pass
+
+if re.search(r"\bmerged\b", low):
+    msgs.append("[fresh-session] I merged a stage. After confirming it, update '## Where we are' in the working record "
+                "(plan name, the next stage, anything the next session must know — a few lines), then end your report "
+                "with: 'To save usage, start a new session for the next stage and type: Continue <plan name> with the "
+                "next stage.'")
 
 comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:

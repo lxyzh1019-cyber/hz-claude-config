@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SessionStart hook (run by the repo's .claude/hz-loader.py): inject the central rules, the version, branch,
 where the worker instructions and skills are, per-repo file status, and hotspot alerts."""
-import os, subprocess
+import json, os, subprocess
 from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, RULES_PATH, SKILLS_DIR,
                      WORKER_PATH, hotspot_alerts, central_version, completion_summary)
 from stubcheck import stub_status
@@ -47,6 +47,14 @@ if stub.startswith("OUTDATED"):
 facts.append("[stub] " + stub)
 if setup_note:
     facts.append(setup_note)
+    if "were updated on disk just now" in setup_note:
+        try:
+            import json as _json
+            os.makedirs(os.path.join(PROJECT_DIR, ".claude", "state"), exist_ok=True)
+            with open(os.path.join(PROJECT_DIR, ".claude", "state", "setup-pending.json"), "w", encoding="utf-8") as f:
+                _json.dump({"branch": "hz-setup-update-" + str((cfg.get("stub_expect") or {}).get("version", "latest"))}, f)
+        except OSError:
+            pass
 if os.path.exists(os.path.join(PROJECT_DIR, "tools", "build_manifest.py")) and cfg.get("update_notice"):
     facts.append("[update] " + cfg["update_notice"] + " Put this in the 'I need from you' line of your first reply.")
 facts.append(f"Note: routing guard mode: {cfg.get('routing_guard_mode', 'observe')}")
@@ -55,7 +63,8 @@ comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:
     facts.append("[completion] " + comp["display"] + "\n— this branch's ledger rows; read the deliverable ledger before "
                  "claiming anything is done, and state these lines in your first reply.")
-facts.append(f"Your first reply's very first line: 'Rules v{version} · {branch}'. Every final answer then opens with a "
+facts.append("The version line is shown to me by the session start itself: do not write a 'Rules v…' line. "
+             "Every final answer opens with a "
              "quote block of three lines in everyday words, followed by a line with just ---:\n"
              "> 📌 **Result:** <status only: what works now or what I get, no requests>\n"
              "> 👉 **I need from you:** <one action, one short line, or nothing>\n"
@@ -67,4 +76,7 @@ facts.append(f"Your first reply's very first line: 'Rules v{version} · {branch}
              "Present every Plan vN in plan mode (plan file + Approve); after approval copy it into plans/. Rules, hooks, worker instructions and skills come from "
              "hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
 parts.append("\n".join(facts))
-add_context("SessionStart", "\n\n".join(parts))
+setup_word = ("current" if stub.startswith("current") else "updating — merge the setup pull request when asked"
+              if "updated on disk" in stub else "waiting for your merge" if stub.startswith("waiting") else "needs attention")
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n\n".join(parts)},
+                  "systemMessage": f"Rules v{version} · {branch} · setup {setup_word}"}))

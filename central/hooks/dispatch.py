@@ -12,7 +12,7 @@ import json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from _common import load_config  # noqa: E402
+from _common import load_config, bump_stat  # noqa: E402
 
 raw = sys.stdin.buffer.read()
 try:
@@ -25,7 +25,8 @@ cfg = load_config()
 entries = (cfg.get("dispatch") or {}).get(event, [])
 
 JOIN_BLOCKS = event in ("Stop", "SubagentStop")   # every check runs; all reasons go back in one message
-contexts, passthrough, reasons = [], None, []
+contexts, passthrough, reasons, notes = [], None, [], []
+sid = data.get("session_id")
 for e in entries:
     if isinstance(e, str):
         e = {"script": e}
@@ -49,10 +50,15 @@ for e in entries:
         contexts.append(out)          # plain stdout counts as added context
         continue
     hso = obj.get("hookSpecificOutput") or {}
+    if obj.get("systemMessage"):
+        notes.append(obj.pop("systemMessage"))   # shown to the user by Claude Code; costs no AI turn
     if JOIN_BLOCKS and obj.get("decision") == "block":
         reasons.append(obj.get("reason", "").strip())
         continue
     if obj.get("decision") == "block" or hso.get("permissionDecision") in ("deny", "ask"):
+        bump_stat(sid, "refused:" + e["script"].replace(".py", ""))
+        if notes:
+            obj["systemMessage"] = "\n".join(notes)
         print(json.dumps(obj))
         sys.exit(0)
     if hso.get("additionalContext"):
@@ -63,10 +69,16 @@ for e in entries:
 if reasons:
     body = reasons[0] if len(reasons) == 1 else "Fix all of these in one reply:\n" + "\n".join(
         f"{i}. {r}" for i, r in enumerate(reasons, 1))
+    bump_stat(sid, "sendbacks")
     print(json.dumps({"decision": "block", "reason": body}))
     sys.exit(0)
+out = {}
 if contexts:
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": "\n\n".join(contexts)}}))
+    out = {"hookSpecificOutput": {"hookEventName": event, "additionalContext": "\n\n".join(contexts)}}
 elif passthrough is not None:
-    print(json.dumps(passthrough))
+    out = passthrough
+if notes:
+    out["systemMessage"] = "\n".join(notes)
+if out:
+    print(json.dumps(out))
 sys.exit(0)

@@ -111,8 +111,8 @@ mv FEATURES.md F.bak
 o=$(echo '{}' | python3 $H/session-start.py); check "missing per-repo file reported" "Missing per-repo files: FEATURES.md" "$o"
 o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard points to seed templates" "seed" "$o"
 mv F.bak FEATURES.md
-o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "router points to central skill file" "hz-guarantee-audit.*read .*skills/hz-guarantee-audit/SKILL.md" "$o"
-check "router prefixes account skill" "anthropic-skills:hz-web-app-audit" "$o"
+o=$(echo '{"prompt":"update the plan to v3"}' | python3 $H/skill-router.py); check "router points to central skill file" "hz-plan-regression-guard.*read .*skills/hz-plan-regression-guard/SKILL.md" "$o"
+o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "router prefixes account skill" "anthropic-skills:hz-reviewer" "$o"
 # --- Loader (only in the hz-claude-config checkout)
 L="$CENTRAL/../stub/hz-loader.py"
 if [ -f "$L" ]; then
@@ -310,7 +310,7 @@ cat > "$T/first_noversion.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** installed.\n> 👉 **I need from you:** merge the pull request.\n> ➡️ **Next:** health check.\n---\n\nConfidence: High · Status: Checked"}]}}
 J
 pn 1
-o=$(vl "$T/first_noversion.jsonl"); check "first reply must open with the version, not a preamble" "very first line must be 'Rules v" "$o"
+o=$(vl "$T/first_noversion.jsonl"); check "the first reply no longer needs a version line" "clean" "$(echo "$o" | grep -c "Rules v" | sed 's/^0$/clean/')"
 # v3.1.14: the first-reply check follows the prompt number, so Stop-hook feedback (another user record in the
 # transcript) does not turn the same prompt into a later reply
 cat > "$T/first_feedback.jsonl" <<J
@@ -319,7 +319,7 @@ cat > "$T/first_feedback.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"This reply is missing its closing line."}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** installed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** health check.\n---\n\nConfidence: High · Status: Checked"}]}}
 J
-o=$(vl "$T/first_feedback.jsonl"); check "feedback does not end the first reply" "very first line must be 'Rules v" "$o"
+o=$(vl "$T/first_feedback.jsonl"); check "feedback no longer triggers a version-line send-back" "clean" "$(echo "$o" | grep -c "very first line" | sed 's/^0$/clean/')"
 pn 2
 cat > "$T/second_notop.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hi"}}
@@ -505,9 +505,18 @@ check "record check shows the four-row table shape" "Intentionally removed" "$o"
 pg(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','tool_input':{'plan':open(sys.argv[1],encoding='utf-8').read()}}))" "$1" | python3 $H/dispatch.py; }
 cat > "$T/plan_good.md" <<'P'
 # Plan v2 — Four new lessons — Awaiting approval
-Summary: This plan opens the four new lessons for the girls after the same check as before. Changed from v1: the new lessons are included too, because you asked for it. You need to approve this plan and later merge the changes.
+| Summary |
+|---|
+| This plan opens the four new lessons for the girls after the same check as before. |
+| Changed from v1: the new lessons are included too, because you asked for it. |
+| You need to approve this plan and later merge the changes. |
+Changes in this version
+```diff
++ 🟩 Rev 2: the four new lessons also open for the pilot
+```
 🟩 **Rev 2** The four new lessons also open for the pilot, after the same check.
 Stages to finish
+4 stages: 2 by Claude, 2 by you.
 1. Build the lessons · Claude
 2. Run the checks · Claude
 3. Merge the changes · You
@@ -515,10 +524,11 @@ Stages to finish
 Technical details: branch below-grade-lessons, commit d00f47f.
 P
 o=$(pg "$T/plan_good.md"); check "a plan with summary, squares and stages passes the Approve check" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/shortneed.jsonl\",\"session_id\":\"sg2\",\"stop_hook_active\":false}" | python3 $H/setup-guard.py); check "no setup note pending: nothing to do" "^$" "$o"
 sed 's/🟩 \*\*Rev 2\*\*/<span style="color:green">Rev 2:<\/span>/' "$T/plan_good.md" > "$T/plan_html.md"
 o=$(pg "$T/plan_html.md"); check "colour code in a plan is sent back" "colour code" "$o"
 check "a Rev label without its square is sent back too" "Missing on: Rev 2" "$o"
-grep -v '^Summary' "$T/plan_good.md" > "$T/plan_nosum.md"
+grep -v '^| Summary' "$T/plan_good.md" > "$T/plan_nosum.md"
 o=$(pg "$T/plan_nosum.md"); check "a plan without the everyday Summary is sent back" "Summary" "$o"
 grep -v 'Stages to finish' "$T/plan_good.md" > "$T/plan_nostages.md"
 o=$(pg "$T/plan_nostages.md"); check "a plan without Stages to finish is sent back" "Stages to finish" "$o"
@@ -633,8 +643,68 @@ cp "$H/../../stub/hz-loader.py" "$IN/proj/.claude/"; printf 'version: 9.9.9\nhoo
 o=$(echo '{}' | CLAUDE_PROJECT_DIR="$IN/proj" HZ_CENTRAL_URL=http://127.0.0.1:8765/central/ HZ_CACHE_DIR="$T/inc-cache" python3 "$IN/proj/.claude/hz-loader.py" session-start.py)
 kill $(cat "$T/httpd.pid") 2>/dev/null
 check "the loader names a missing file instead of blaming the network" "incomplete on GitHub: hooks/missing.py" "$o"
+# --- v3.1.22: session summary, version line from session start, plan counts, queued stages, setup first, tips
+o=$(echo '{}' | python3 $H/session-start.py); check "the session start shows the version line itself" '"systemMessage": "Rules v' "$o"
+cat > "$T/stats.jsonl" <<J
+{"type":"user","timestamp":"2026-10-01T10:00:00Z","message":{"role":"user","content":"build it"}}
+{"type":"assistant","timestamp":"2026-10-01T10:01:00Z","message":{"id":"m1","model":"claude-fable-5-1","role":"assistant","usage":{"input_tokens":1000,"output_tokens":1000,"cache_read_input_tokens":8000},"content":[{"type":"text","text":"planning"}]}}
+{"type":"assistant","timestamp":"2026-10-01T10:01:01Z","message":{"id":"m1","model":"claude-fable-5-1","role":"assistant","usage":{"input_tokens":1000,"output_tokens":1000,"cache_read_input_tokens":8000},"content":[{"type":"tool_use","id":"tu1","name":"Agent","input":{"subagent_type":"opus-worker","prompt":"Task: Build\nLevel: Complex"}}]}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-10-01T10:02:00Z","message":{"id":"s1","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":20000,"output_tokens":5000,"cache_read_input_tokens":45000},"content":[{"type":"text","text":"working"}]}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-10-01T10:20:00Z","message":{"id":"s2","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":10000,"output_tokens":0,"cache_read_input_tokens":10000},"content":[{"type":"text","text":"done"}]}}
+{"type":"user","timestamp":"2026-10-01T10:20:05Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"}]}}
+{"type":"assistant","timestamp":"2026-10-01T10:22:00Z","message":{"id":"m2","model":"claude-fable-5-1","role":"assistant","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0},"content":[{"type":"text","text":"> 📌 **Result:** Built.\n> 👉 **I need from you:** Nothing.\n> ➡️ **Next:** Merge.\n---\n\nConfidence: High · Status: Checked"}]}}
+J
+rm -f "$PROJ/.claude/state/session-stats.json"
+sm(){ python3 -c "import json,sys;t=sys.stdin.read().strip();print(json.loads(t).get('systemMessage','') if t else '')"; }
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"st1\"}" | python3 $H/stats.py | sm)
+check "the summary shows tokens by model" "Tokens: Opus 90% · Fable 10% (100 k)" "$o"
+check "a message written in several parts is counted once" "(100 k)" "$o"
+check "the summary shows time by model, helper waits not counted twice" "Time: Opus 18 min · Fable 3 min" "$o"
+check "the summary shows hand-overs" "Hand-overs: Opus 1" "$o"
+sed 's/Status: Checked/Status: Proposed/' "$T/stats.jsonl" > "$T/stats_prop.jsonl"
+o=$(echo "{\"transcript_path\":\"$T/stats_prop.jsonl\",\"session_id\":\"st1\"}" | python3 $H/stats.py)
+check "no summary on a plan that is not finished work" "^$" "$o"
+grep -v isSidechain "$T/stats.jsonl" | sed 's/"content":\[{"type":"tool_result","tool_use_id":"tu1","content":"ok"}\]}}/"content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"}]},"toolUseResult":{"totalTokens":90000,"totalDurationMs":1080000}}/' > "$T/stats_fb.jsonl"
+o=$(echo "{\"transcript_path\":\"$T/stats_fb.jsonl\",\"session_id\":\"st1\"}" | python3 $H/stats.py | sm)
+check "helper totals are taken from the finished hand-over when no helper records exist" "Tokens: Opus 90% · Fable 10%" "$o"
+echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"st1","tool_input":{"command":"git push origin main"}}' | python3 $H/dispatch.py >/dev/null
+echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"st1\",\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | python3 $H/dispatch.py >/dev/null
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"st1\"}" | python3 $H/stats.py | sm)
+check "the summary counts send-backs" "Send-backs: 1" "$o"
+o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"st1\",\"transcript_path\":\"$T/stats.jsonl\",\"stop_hook_active\":false}" | python3 $H/dispatch.py)
+check "the switchboard passes the summary to me" '"systemMessage": "Session summary' "$o"
+# counted by plan; queued and waiting stages
+P2="$T/planrepo"; rm -rf "$P2"; mkdir -p "$P2"
+( cd "$P2" && git init -q . && git config user.email t@t && git config user.name t \
+  && printf '# WR\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| R3 old round item | NOT STARTED | |\n| Splash redesign · Stage 1 of 3 — PR 1 | COMPLETE | tests 288 |\n| Splash redesign · Stage 2 of 3 — Merge PR 1 | NOT STARTED | |\n| Splash redesign · Stage 3 of 3 — PR 2 | NOT STARTED | |\n' > WORKING_RECORD.md \
+  && git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD \
+  && sed -i 's/| Splash redesign · Stage 2 of 3 — Merge PR 1 | NOT STARTED | |/| Splash redesign · Stage 2 of 3 — Merge PR 1 | WAITING ON YOU — merge PR 1 | |/; s/| Splash redesign · Stage 3 of 3 — PR 2 | NOT STARTED | |/| Splash redesign · Stage 3 of 3 — PR 2 | QUEUED — after Stage 2 | |/' WORKING_RECORD.md )
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$P2" python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config,completion_summary;c=completion_summary(load_config());print(c['line']);print('open=',c['open'])")
+check "the count covers the whole plan, not just this branch" "Completion: 1 of 3 done (33%) · Waiting on you: 1 · Queued: 1 — Splash redesign" "$o"
+check "old rounds and queued stages are not open work" "open= \[\]" "$o"
+# setup update first
+SG="$T/setuprepo"; rm -rf "$SG"; mkdir -p "$SG/.claude/state"; ( cd "$SG" && git init -q . && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m b )
+echo '{"branch":"hz-setup-update-9.9"}' > "$SG/.claude/state/setup-pending.json"
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$SG" python3 $H/setup-guard.py)
+check "no other answer before the setup pull request" "Do the setup update before anything else" "$o"
+( cd "$SG" && git branch -q hz-setup-update-9.9 )
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$SG" python3 $H/setup-guard.py)
+check "once the setup branch exists, answers go out" "^$" "$o"
+check "the pending note is cleared" "gone" "$([ -f "$SG/.claude/state/setup-pending.json" ] && echo still || echo gone)"
+# after a merge: where we are + fresh session
+o=$(echo '{"prompt":"merged, move on"}' | python3 $H/plan-gate.py); check "after a merge the session is told to suggest a fresh session" "fresh-session" "$o"
+# plan check: changes box, count line, Fable tip
+grep -v '```\|^+ \|^Changes in this version' "$T/plan_good.md" > "$T/plan_nodiff.md"
+o=$(pg "$T/plan_nodiff.md"); check "a revised plan without the changes box is sent back" "Changes in this version" "$o"
+grep -v '^4 stages' "$T/plan_good.md" > "$T/plan_nocount.md"
+o=$(pg "$T/plan_nocount.md"); check "a plan without the stage-count line is sent back" "explains the count" "$o"
+o=$(python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','transcript_path':'$T/stats.jsonl','tool_input':{'plan':open('$T/plan_good.md',encoding='utf-8').read()}}))" | python3 $H/dispatch.py)
+check "after a Fable plan passes, I get the switch-to-Opus tip" "type /model opus" "$o"
 # --- UserPromptSubmit: skill router
-o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches guarantee-audit" "hz-guarantee-audit" "$o"
+o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "skill-router matches hz-reviewer" "anthropic-skills:hz-reviewer" "$o"
+o=$(echo '{"prompt":"build the whole app, full version"}' | python3 $H/skill-router.py); check "skill-router matches hz-planner" "anthropic-skills:hz-planner" "$o"
+o=$(echo '{"prompt":"start a new chat but keep where we are"}' | python3 $H/skill-router.py); check "skill-router matches hz-chat-handoff" "anthropic-skills:hz-chat-handoff" "$o"
+o=$(echo '{"prompt":"is this rule file right?"}' | python3 $H/skill-router.py); check "a rules-file question goes to hz-reviewer" "anthropic-skills:hz-reviewer" "$o"
 # --- PreToolUse: routing guard
 o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard (enforce by default) refuses the planner's own source edit" '"deny"' "$o"
 o=$(echo '{"tool_name":"Edit","session_id":"s1","agent_id":"a77","agent_type":"opus-worker","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard lets a worker's source edit through" "^$" "$o"
