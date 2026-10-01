@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Stop hook:
-- (the version line is shown to the user by session-start; replies do not write it)
-- a final answer opens with a three-line quote block (📌 Result / 👉 I need from you / ➡️ Next) followed by a ---
-  line, and ends with the validation line. Result is status only; "I need from you" is one short action;
-  decisions go in a "❓ Decisions" list under the --- line;
+- a final answer ends with a three-line quote block (📌 Result / 👉 I need from you / ➡️ Next), after a --- line,
+  so the lines I act on sit right above where I type. Above the --- line, in this order: the technical detail,
+  the Completion lines when required, the validation line, then the "❓ Decisions" list. Result is status only;
+  "I need from you" is one short action;
+- the version line is shown to me by the Stop notice (stats.py); replies do not write it;
 - the only interim reply is one status line ("⏳ Working on: …") while a dispatched worker still runs.
 Loop guard: at most auto_fix_max_rounds send-backs per user prompt (counted from the UserPromptSubmit hook's
 prompt number, so another check's block does not make this one step aside). If the prompt number is unknown,
@@ -33,32 +34,31 @@ def send_back(problems):
         sys.exit(0)            # no prompt number here: never loop
     if r is not None and not r[1]:
         sys.exit(0)            # limit reached for this prompt
-    block(" ".join(problems) + " Send only what is missing, placed at the top: do not repeat the rest of the "
-          "report, which I already see. Your re-send is short: the missing lines, then the Completion line if one "
-          "is required, then the validation line.")
+    block(" ".join(problems) + " Send only what is missing: do not repeat the rest of the report, which I "
+          "already see. Your re-send is short: the Completion line if one is required, the validation line, then "
+          "a line with just --- and the three closing lines last.")
 
 
 problems = []
 if re.search(cfg["validation_line_pattern"], text):
     lines = plain_lines(text)
-    if lines and lines[0].startswith("Rules v"):
-        lines = lines[1:]
     labels = cfg["report_top_labels"]
-    top = lines[:len(labels)]
-    if len(top) < len(labels) or not all(norm(l).startswith(norm(lab)) for l, lab in zip(top, labels)):
-        problems.append("A final answer opens with a quote block of three lines, in everyday words with no file names, "
-                        "commands or code, then a line with just ---:\n"
+    tail = lines[-len(labels):]
+    if len(tail) < len(labels) or not all(norm(l).startswith(norm(lab)) for l, lab in zip(tail, labels)):
+        problems.append("A final answer ends with a quote block of three lines, in everyday words with no file names, "
+                        "commands or code, after a line with just ---. Nothing comes after these three lines:\n"
+                        "---\n"
                         "> 📌 **Result:** <status only: what works now or what I get — no requests>\n"
                         "> 👉 **I need from you:** <one action, one short line, or nothing>\n"
                         "> ➡️ **Next:** <what happens after>\n"
-                        "---\n"
-                        "Decisions for me go in a '❓ Decisions' list under the --- line, one line each with your "
-                        "recommendation. The icons are part of the labels.")
+                        "Above the --- line: the detail, the Completion lines if required, the validation line, then "
+                        "decisions for me in a '❓ Decisions' list, one line each with your recommendation. The icons "
+                        "are part of the labels.")
     else:
-        need = re.sub(r"^.*?I need from you:\s*", "", top[1].replace("*", ""), flags=re.I)
+        need = re.sub(r"^.*?I need from you:\s*", "", tail[1].replace("*", ""), flags=re.I)
         if len(need.split()) > int(cfg["need_line_max_words"]):
             problems.append(f"The 'I need from you' line is one action in at most {cfg['need_line_max_words']} words. "
-                            "Move explanations below the --- line and decisions into the '❓ Decisions' list.")
+                            "Move explanations above the --- line and decisions into the '❓ Decisions' list.")
     if problems:
         send_back(problems)
     sys.exit(0)
@@ -69,5 +69,5 @@ if is_progress_report(text, records, cfg):
     sys.exit(0)
 send_back(problems + ["This reply has no closing line. While a worker runs, send nothing; if I ask for status, reply "
                       "with one line only: '⏳ Working on: <names> · <n> of <m> done'. Otherwise this is a final answer: "
-                      "open with the quote block and end with 'Confidence: High|Medium|Low · Status: "
-                      "Proposed|Checked|Validated — <what was run>|Uncertain' with honest values."])
+                      "include 'Confidence: High|Medium|Low · Status: Proposed|Checked|Validated — <what was run>|"
+                      "Uncertain' with honest values, and end with --- and the three closing quote lines."])

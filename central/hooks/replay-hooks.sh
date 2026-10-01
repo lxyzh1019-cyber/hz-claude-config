@@ -24,7 +24,7 @@ cat > "$T/ok.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/WORKING_RECORD.md"}}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** login works again.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** I open the pull request.\n---\n\nRegression table\n| Feature | Status |\n| login | kept |\n\nConfidence: Medium · Status: Validated — npm test 12/12"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n\nRegression table\n| Feature | Status |\n| login | kept |\n\nConfidence: Medium · Status: Validated — npm test 12/12\n---\n> 📌 **Result:** login works again.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** I open the pull request."}]}}
 J
 cat > "$T/noline.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hello"}}
@@ -46,11 +46,11 @@ o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | { 
 o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "validation-line blocks missing line" '"decision": "block"' "$o"
 o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":true}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "validation-line no loop" "^$" "$o"
 # --- Stop: record guard
-o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard passes complete turn" "^$" "$o"
-o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard blocks missing record+table" "regression table" "$o"
-o=$(echo "{\"transcript_path\":\"$T/gov.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard exempts governance edits" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard passes complete turn" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard blocks missing record+table" "regression table" "$o"
+o=$(echo "{\"transcript_path\":\"$T/gov.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard exempts governance edits" "^$" "$o"
 printf '# FEATURES — <app or plan name> — manifest v1\n' > FEATURES.md
-o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard blocks on template manifest" "unfilled template" "$o"
+o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard blocks on template manifest" "unfilled template" "$o"
 printf '# FEATURES — test app — manifest v1\n- login\n' > FEATURES.md
 # --- SessionStart
 o=$(echo '{}' | python3 $H/session-start.py); check "session-start injects version" "Rules v" "$o"
@@ -61,16 +61,16 @@ cat > "$T/planfile.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/root/.claude/plans/plan-1.md"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Plan v1 — awaiting approval"}]}}
 J
-o=$(echo "{\"transcript_path\":\"$T/planfile.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard ignores files outside the repo" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/planfile.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard ignores files outside the repo" "^$" "$o"
 cat > "$T/dispatch.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"install it"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Agent","input":{"subagent_type":"opus-worker"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The worker could not run the command."}]}}
 J
 git add -A >/dev/null 2>&1; git commit -qm base >/dev/null 2>&1
-o=$(echo "{\"transcript_path\":\"$T/dispatch.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard allows a worker turn that changed nothing" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/dispatch.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard allows a worker turn that changed nothing" "^$" "$o"
 mkdir -p js && echo "x" > js/app.js
-o=$(echo "{\"transcript_path\":\"$T/dispatch.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard catches a worker turn that changed files" "record is incomplete" "$o"
+o=$(echo "{\"transcript_path\":\"$T/dispatch.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard catches a worker turn that changed files" "record is incomplete" "$o"
 rm -rf js
 # --- UserPromptSubmit: plan gate
 o=$(echo '{"prompt":"please:\n- add a button\n- fix colour\n- change the schema"}' | python3 $H/plan-gate.py); check "plan-gate full tier on 3 bullets" "Full 'Plan vN" "$o"
@@ -109,7 +109,7 @@ check "rules text injected" "My Environment" "$o"
 check "worker instructions path given" "Worker instructions: .*opus-worker-instructions.md" "$o"
 mv FEATURES.md F.bak
 o=$(echo '{}' | python3 $H/session-start.py); check "missing per-repo file reported" "Missing per-repo files: FEATURES.md" "$o"
-o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record-guard points to seed templates" "seed" "$o"
+o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard points to seed templates" "seed" "$o"
 mv F.bak FEATURES.md
 o=$(echo '{"prompt":"update the plan to v3"}' | python3 $H/skill-router.py); check "router points to central skill file" "hz-plan-regression-guard.*read .*skills/hz-plan-regression-guard/SKILL.md" "$o"
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "router prefixes account skill" "anthropic-skills:hz-reviewer" "$o"
@@ -131,7 +131,7 @@ cat > "$T/arch.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/ARCHITECTURE.md"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Updated."}]}}
 J
-o=$(echo "{\"transcript_path\":\"$T/arch.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "ARCHITECTURE.md edits are exempt" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/arch.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "ARCHITECTURE.md edits are exempt" "^$" "$o"
 cat > "$T/shellrec.jsonl" <<J
 {"type":"user","timestamp":"2000-01-01T00:00:00Z","message":{"role":"user","content":"fix it"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
@@ -139,9 +139,9 @@ cat > "$T/shellrec.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\n| Feature | Status |\n| login | kept |"}]}}
 J
 touch -d '1999-01-01' WORKING_RECORD.md
-o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record not touched this turn still blocks" "update WORKING_RECORD.md" "$o"
+o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record not touched this turn still blocks" "update WORKING_RECORD.md" "$o"
 touch WORKING_RECORD.md
-o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "record updated by a shell command counts" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record updated by a shell command counts" "^$" "$o"
 rec "$NEWH" "$NEWS" '| Pocket money | 3 | 0 | 0 | 0 | x | **yes** 2026-09-20 |'
 o=$(echo '{}' | python3 $H/session-start.py); check "bold **yes** counts as reviewed" "clean" "$(echo "$o" | grep -c 'has hit the redesign threshold' | sed 's/^0$/clean/')"
 # --- v3.1.4: escaped pipes and malformed rows in the hotspot table
@@ -166,12 +166,12 @@ o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":fa
 o=$(echo "{\"transcript_path\":\"$T/prog_nodispatch.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "status line refused when no worker was dispatched" "Working on" "$o"
 o=$(echo "{\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/validation-line.py; }); check "missing line explains the status line and the final answer" "Working on" "$o"
 touch WORKING_RECORD.md
-o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "progress turn needs no regression table" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "progress turn needs no regression table" "^$" "$o"
 touch -d '1999-01-01' WORKING_RECORD.md
 python3 - "$T/prog_earlier.jsonl" <<'PY'
 import sys; p=sys.argv[1]; l=open(p).read().replace('"content":"show me the status"}','"content":"show me the status"},"timestamp":"2000-01-01T00:00:00Z"',1); open(p,"w").write(l)
 PY
-o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py); check "progress turn still needs the record update" "update WORKING_RECORD.md" "$o"
+o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "progress turn still needs the record update" "update WORKING_RECORD.md" "$o"
 touch WORKING_RECORD.md
 # --- v3.1.6: git-guard (no prompts; main protected)
 gg(){ printf '%s' "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")}}" | python3 $H/git-guard.py; }
@@ -307,7 +307,7 @@ cat > "$T/first_noversion.jsonl" <<J
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll start by reading the current state."}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** installed.\n> 👉 **I need from you:** merge the pull request.\n> ➡️ **Next:** health check.\n---\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** installed.\n> 👉 **I need from you:** merge the pull request.\n> ➡️ **Next:** health check."}]}}
 J
 pn 1
 o=$(vl "$T/first_noversion.jsonl"); check "the first reply no longer needs a version line" "clean" "$(echo "$o" | grep -c "Rules v" | sed 's/^0$/clean/')"
@@ -315,15 +315,15 @@ o=$(vl "$T/first_noversion.jsonl"); check "the first reply no longer needs a ver
 # transcript) does not turn the same prompt into a later reply
 cat > "$T/first_feedback.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"install the stub"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** installed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** health check."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n---\n> 📌 **Result:** installed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** health check."}]}}
 {"type":"user","message":{"role":"user","content":"This reply is missing its closing line."}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** installed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** health check.\n---\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Confidence: High · Status: Checked\n---\n> 📌 **Result:** installed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** health check."}]}}
 J
 o=$(vl "$T/first_feedback.jsonl"); check "feedback no longer triggers a version-line send-back" "clean" "$(echo "$o" | grep -c "very first line" | sed 's/^0$/clean/')"
 pn 2
 cat > "$T/second_notop.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hi"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n> 📌 **Result:** ready.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting.\n---\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** ready.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting."}]}}
 {"type":"user","message":{"role":"user","content":"what changed?"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The hook now checks X in file y.py.\n\nConfidence: High · Status: Checked"}]}}
 J
@@ -331,20 +331,20 @@ o=$(vl "$T/second_notop.jsonl"); check "final answer without the quote top is se
 check "later replies need no version line" "clean" "$(echo "$o" | grep -c 'first reply of the session' | sed 's/^0$/clean/')"
 cat > "$T/second_top.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hi"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\nResult: ready.\nI need from you: nothing.\nNext: waiting.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.11 · main\n\nConfidence: High · Status: Checked\n---\nResult: ready.\nI need from you: nothing.\nNext: waiting."}]}}
 {"type":"user","message":{"role":"user","content":"what changed?"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"📌 Result: the check now runs at every start.\n👉 I need from you: nothing\n> ➡️ **Next:** nothing to do.\n---\n\nDetails: hook y.py.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Details: hook y.py.\n\nConfidence: High · Status: Checked\n---\n📌 Result: the check now runs at every start.\n👉 I need from you: nothing\n> ➡️ **Next:** nothing to do."}]}}
 J
 o=$(vl "$T/second_top.jsonl"); check "quote top accepted with or without the quote marker and bold" "^$" "$o"
 # v3.1.14: the icons are part of the labels
 cat > "$T/second_noicons.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"what changed?"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> **Result:** the check now runs.\n> **I need from you:** nothing\n> **Next:** nothing to do.\n---\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Confidence: High · Status: Checked\n---\n> **Result:** the check now runs.\n> **I need from you:** nothing\n> **Next:** nothing to do."}]}}
 J
 o=$(vl "$T/second_noicons.jsonl"); check "labels without icons are sent back" "quote block of three lines" "$o"
 cat > "$T/second_plainarrow.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"what changed?"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** the check now runs.\n> 👉 **I need from you:** nothing\n> ➡ **Next:** nothing to do.\n---\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Confidence: High · Status: Checked\n---\n> 📌 **Result:** the check now runs.\n> 👉 **I need from you:** nothing\n> ➡ **Next:** nothing to do."}]}}
 J
 o=$(vl "$T/second_plainarrow.jsonl"); check "arrow without the invisible character is accepted" "^$" "$o"
 o=$(vl "$T/prog_earlier.jsonl"); check "progress report needs no plain top" "^$" "$o"
@@ -413,12 +413,12 @@ check "installer refreshes an existing pointer" "updated" "$(cat "$T/ptr.out")"
 check "pointer refresh keeps the repo's own section" "keep me" "$(cat "$P/CLAUDE.md")"
 check "refreshed pointer has the multi-repo fallback" "hooks inactive" "$(cat "$P/CLAUDE.md")"
 # --- v3.1.12: central switchboard
-dp(){ rm -f "$PROJ/.claude/state/format-rounds.json"; python3 $H/dispatch.py; }
+dp(){ rm -f "$PROJ/.claude/state/format-rounds.json" "$PROJ/.claude/state/record-rounds.json"; python3 $H/dispatch.py; }
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push origin main"}}' | dp); check "switchboard passes on a git-guard deny" '"deny"' "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | dp); check "switchboard quiet on a harmless command" "^$" "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"x"}}' | dp); check "switchboard skips checks for other tools" "^$" "$o"
 o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard passes on a Stop block" '"decision": "block"' "$o"
-o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/second_top.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard quiet when every Stop check passes" "^$" "$o"
+o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/second_top.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard sends nothing back when every Stop check passes (only the version notice)" "clean" "$(echo "$o" | grep -c decision | sed 's/^0$/clean/')"
 o=$(echo '{"hook_event_name":"UserPromptSubmit","prompt":"the sync layer keeps breaking"}' | dp); check "switchboard joins prompt contexts" "Executor: opus-worker" "$o"
 check "switchboard answers once for the prompt event" "1" "$(echo "$o" | grep -c hookSpecificOutput)"
 o=$(echo '{"hook_event_name":"SubagentStop"}' | dp); check "switchboard quiet on an event with no checks" "^$" "$o"
@@ -470,12 +470,12 @@ rm -f "$PROJ/.claude/state/format-rounds.json" "$PROJ/.claude/state/prompt.json"
 # separated top block
 cat > "$T/longneed.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hi"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.15 · main\n> 📌 **Result:** Plan ready.\n> 👉 **I need from you:** Say approved or tell me what to change, and note that two points need your OK: item 4 wording is already gone so I will put it where it sits now, and I add one encoding fix.\n> ➡️ **Next:** I build it.\n---\n\nConfidence: High · Status: Proposed"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.15 · main\n\nConfidence: High · Status: Proposed\n---\n> 📌 **Result:** Plan ready.\n> 👉 **I need from you:** Say approved or tell me what to change, and note that two points need your OK: item 4 wording is already gone so I will put it where it sits now, and I add one encoding fix.\n> ➡️ **Next:** I build it."}]}}
 J
 o=$(vl "$T/longneed.jsonl"); check "request line longer than 30 words is sent back" "at most 30 words" "$o"
 cat > "$T/shortneed.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"hi"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.15 · main\n> 📌 **Result:** Plan ready.\n> 👉 **I need from you:** Approve Plan v1, or name what to change.\n> ➡️ **Next:** I build it.\n---\n❓ Decisions\n1. Extra stdin fix — recommend yes.\n\nConfidence: High · Status: Proposed"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Rules v3.1.15 · main\n❓ Decisions\n1. Extra stdin fix — recommend yes.\n\nConfidence: High · Status: Proposed\n---\n> 📌 **Result:** Plan ready.\n> 👉 **I need from you:** Approve Plan v1, or name what to change.\n> ➡️ **Next:** I build it."}]}}
 J
 o=$(vl "$T/shortneed.jsonl"); check "one short request with a Decisions list passes" "^$" "$o"
 cat > "$T/statusplus.jsonl" <<J
@@ -499,7 +499,7 @@ python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['advi
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S2'))")
 check "a repository still on the Fable advisor shows OUTDATED" "OUTDATED.*advisor off" "$o"
 # --- v3.1.17: the record check shows the exact table shape, so the first report is right and nothing is repeated
-o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py)
+o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; })
 check "record check shows the four-row table shape" "Intentionally removed" "$o"
 # --- v3.1.18: plan check at Approve, foreground workers, "waiting on you" stages, Opus helper pinned
 pg(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','tool_input':{'plan':open(sys.argv[1],encoding='utf-8').read()}}))" "$1" | python3 $H/dispatch.py; }
@@ -624,7 +624,7 @@ check "hz-claude-config itself never updates itself" "(None, None)" "$o"
 # --- v3.1.21: QA/QC — destructive instructions, loader message for an incomplete rules repository
 cat > "$T/destr.jsonl" <<J
 {"type":"user","message":{"role":"user","content":"how do I update"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** Ready.\n> 👉 **I need from you:** Follow the steps.\n> ➡️ **Next:** Merge.\n---\n1. Delete everything in the folder except .git.\n2. Extract the zip.\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"1. Delete everything in the folder except .git.\n2. Extract the zip.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** Ready.\n> 👉 **I need from you:** Follow the steps.\n> ➡️ **Next:** Merge."}]}}
 J
 rm -f "$PROJ/.claude/state/qc-rounds.json"
 o=$(echo "{\"transcript_path\":\"$T/destr.jsonl\",\"stop_hook_active\":false}" | python3 $H/qc-guard.py)
@@ -644,7 +644,7 @@ o=$(echo '{}' | CLAUDE_PROJECT_DIR="$IN/proj" HZ_CENTRAL_URL=http://127.0.0.1:87
 kill $(cat "$T/httpd.pid") 2>/dev/null
 check "the loader names a missing file instead of blaming the network" "incomplete on GitHub: hooks/missing.py" "$o"
 # --- v3.1.22: session summary, version line from session start, plan counts, queued stages, setup first, tips
-o=$(echo '{}' | python3 $H/session-start.py); check "the session start shows the version line itself" '"systemMessage": "Rules v' "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "v3.1.23: the session start sends no notice (the app does not show it)" "clean" "$(echo "$o" | grep -c systemMessage | sed 's/^0$/clean/')"
 cat > "$T/stats.jsonl" <<J
 {"type":"user","timestamp":"2026-10-01T10:00:00Z","message":{"role":"user","content":"build it"}}
 {"type":"assistant","timestamp":"2026-10-01T10:01:00Z","message":{"id":"m1","model":"claude-fable-5-1","role":"assistant","usage":{"input_tokens":1000,"output_tokens":1000,"cache_read_input_tokens":8000},"content":[{"type":"text","text":"planning"}]}}
@@ -652,7 +652,7 @@ cat > "$T/stats.jsonl" <<J
 {"type":"assistant","isSidechain":true,"timestamp":"2026-10-01T10:02:00Z","message":{"id":"s1","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":20000,"output_tokens":5000,"cache_read_input_tokens":45000},"content":[{"type":"text","text":"working"}]}}
 {"type":"assistant","isSidechain":true,"timestamp":"2026-10-01T10:20:00Z","message":{"id":"s2","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":10000,"output_tokens":0,"cache_read_input_tokens":10000},"content":[{"type":"text","text":"done"}]}}
 {"type":"user","timestamp":"2026-10-01T10:20:05Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"}]}}
-{"type":"assistant","timestamp":"2026-10-01T10:22:00Z","message":{"id":"m2","model":"claude-fable-5-1","role":"assistant","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0},"content":[{"type":"text","text":"> 📌 **Result:** Built.\n> 👉 **I need from you:** Nothing.\n> ➡️ **Next:** Merge.\n---\n\nConfidence: High · Status: Checked"}]}}
+{"type":"assistant","timestamp":"2026-10-01T10:22:00Z","message":{"id":"m2","model":"claude-fable-5-1","role":"assistant","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0},"content":[{"type":"text","text":"Confidence: High · Status: Checked\n---\n> 📌 **Result:** Built.\n> 👉 **I need from you:** Nothing.\n> ➡️ **Next:** Merge."}]}}
 J
 rm -f "$PROJ/.claude/state/session-stats.json"
 sm(){ python3 -c "import json,sys;t=sys.stdin.read().strip();print(json.loads(t).get('systemMessage','') if t else '')"; }
@@ -672,7 +672,7 @@ echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"st1\",\"transcript_path\":\
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"st1\"}" | python3 $H/stats.py | sm)
 check "the summary counts send-backs" "Send-backs: 1" "$o"
 o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"st1\",\"transcript_path\":\"$T/stats.jsonl\",\"stop_hook_active\":false}" | python3 $H/dispatch.py)
-check "the switchboard passes the summary to me" '"systemMessage": "Session summary' "$o"
+check "the switchboard passes the summary to me" 'Session summary' "$o"
 # counted by plan; queued and waiting stages
 P2="$T/planrepo"; rm -rf "$P2"; mkdir -p "$P2"
 ( cd "$P2" && git init -q . && git config user.email t@t && git config user.name t \
@@ -710,5 +710,54 @@ o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ
 o=$(echo '{"tool_name":"Edit","session_id":"s1","agent_id":"a77","agent_type":"opus-worker","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard lets a worker's source edit through" "^$" "$o"
 o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/js/app.js"}}' | python3 $H/routing-guard.py); check "routing-guard enforce denies main-session source edit" '"deny"' "$o"
 o=$(echo '{"tool_name":"Edit","session_id":"s1","tool_input":{"file_path":"$PROJ/CLAUDE.md"}}' | python3 $H/routing-guard.py); check "routing-guard enforce allows governance edit" "^$" "$o"
+# --- v3.1.23: closing block at the bottom, version line in the Stop notice, notices kept on a send-back,
+#     re-read tokens shown, record check per prompt, plan files in the repository
+cat > "$T/top_old.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** ready.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting.\n---\n\nDetail.\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(vl "$T/top_old.jsonl"); check "the three lines at the top are now sent back" "ends with a quote block" "$o"
+check "the send-back asks for the three lines last" "three closing lines last" "$o"
+cat > "$T/bottom_tail.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Detail.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** ready.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting.\n\nOne more thing after the block."}]}}
+J
+o=$(vl "$T/bottom_tail.jsonl"); check "text after the closing lines is sent back" "Nothing comes after these three lines" "$o"
+o=$(echo "{\"transcript_path\":\"$T/shortneed.jsonl\",\"session_id\":\"v23\"}" | python3 $H/stats.py | sm)
+check "the first reply shows the version line even before finished work" "^Rules v$VER · " "$o"
+check "the first reply's notice is the version line only" "clean" "$(echo "$o" | grep -c 'Session summary' | sed 's/^0$/clean/')"
+o=$(echo "{\"transcript_path\":\"$T/shortneed.jsonl\",\"session_id\":\"v23\"}" | python3 $H/stats.py)
+check "the version line is shown once, not on every plan" "^$" "$o"
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23\"}" | python3 $H/stats.py | sm)
+check "the summary opens with the version line" "^Rules v$VER · " "$o"
+check "the summary shows how much was re-reading" "63 k of it re-reading what was already sent" "$o"
+check "the stats log says what was shown" '"shown": "summary"' "$(cat "$PROJ/.claude/state/stats.jsonl")"
+o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"v23\",\"transcript_path\":\"$T/top_old.jsonl\",\"stop_hook_active\":false}" | dp)
+check "a send-back keeps the notice beside it" '"systemMessage": "Rules v' "$o"
+check "a send-back still sends back" '"decision": "block"' "$o"
+check "the switchboard logs every Stop" '"sent_back": 1' "$(cat "$PROJ/.claude/state/dispatch.jsonl")"
+SP="$T/setupwait"; rm -rf "$SP"; mkdir -p "$SP/.claude"; ( cd "$SP" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git branch -q hz-setup-update-3.1.23 )
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23b\"}" | CLAUDE_PROJECT_DIR="$SP" python3 $H/stats.py | sm)
+check "an outdated setup with its update branch waiting reads 'waiting for your merge'" "setup waiting for your merge" "$o"
+pn 7; rm -f "$PROJ/.claude/state/record-rounds.json"; touch -d '1999-01-01' WORKING_RECORD.md
+o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":true}" | python3 $H/record-guard.py)
+check "record check still sends back when another check blocked first (stop_hook_active)" "record is incomplete" "$o"
+o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":true}" | python3 $H/record-guard.py)
+check "record check sends back once per request, then never loops" "^$" "$o"
+pn 8
+o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | python3 $H/record-guard.py)
+check "a new request gets its own record send-back" "record is incomplete" "$o"
+rm -f "$PROJ/.claude/state/prompt-number.json" "$PROJ/.claude/state/record-rounds.json"; touch WORKING_RECORD.md
+check "the stub writes plan files into the repository" '"plansDirectory": "./plans"' "$(cat "$H/../../stub/settings.json")"
+S3="$T/stubplans"; rm -rf "$S3"; mkdir -p "$S3/.claude/agents"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$S3/.claude/agents/"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"
+python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s.pop('plansDirectory');json.dump(s,open('$S3/.claude/settings.json','w'))"
+o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
+check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
+python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
+o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.23)" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "written into plans/ in this" "$o"
+check "session start describes the closing lines at the end" "Every final answer ends with a" "$o"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
