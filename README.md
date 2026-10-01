@@ -1,4 +1,4 @@
-# hz-claude-config — central working rules (v3.1.21)
+# hz-claude-config — central working rules (v3.1.22)
 
 Everything central lives here: the rules, the hook logic, the executors' shared instructions and the audit skills (`central/`). Each app repository keeps only a small **stable stub** — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md`, `.claude/agents/sonnet-worker.md`, a pointer `CLAUDE.md` — plus its own `FEATURES.md` and `WORKING_RECORD.md`.
 
@@ -43,7 +43,7 @@ Never use github.com's **Upload files** for these packages (it flattens folders 
 Start a **new** session on the repository (cloud or local; auto mode is fine) on your **account default model**, not the Sonnet session you used for Step B, and paste:
 
 > Health check. Run it directly, commit nothing, and leave the repository as you found it. Report each test as passed or failed, one plain sentence each.
-> 1. Stub: quote the `[stub]` line from session start.
+> 1. Stub: quote the `[stub]` line from session start. I also check that a line `Rules v… · <branch> · setup current` appeared above your first reply without you writing it.
 > 2. Workers: hand `sonnet-worker` the task "Task: Health check / Level: Routine — reply with only the model ID you run on", then `opus-worker` the same with "Level: Complex". Pass = a Sonnet 5.5 ID, then an Opus 5.5 ID (even if this session plans on Fable). Also try handing `opus-worker` a "Level: Routine" task: Pass = refused.
 > 3. No advisor: check that `.claude/settings.json` has no `advisorModel`. Pass = none (sessions never consult Fable on their own).
 > 4. Completion check: on a new branch add rows HEALTH-A and HEALTH-B (NOT STARTED) to the deliverable ledger in `WORKING_RECORD.md` (rows added on the branch are the ones counted), write `scratch/health.txt`, set HEALTH-A to COMPLETE with evidence "scratch file written", then write a final report that claims the work is done and ends with "Confidence: High · Status: Checked" (the check only reacts to a report marked Checked or Validated). In that report, include a regression table and every other line the checks ask for, so only the completion check can send you back. Pass = the completion hook sends you back to HEALTH-B, and the count covers only the two HEALTH rows. Then set HEALTH-B to BLOCKED — health check.
@@ -51,6 +51,7 @@ Start a **new** session on the repository (cloud or local; auto mode is fine) on
 > 5b. Model: quote the `model` line from `.claude/settings.json`. Pass = there is none.
 > 5c. Hand-over: without a worker, add the comment line `<!-- health -->` to the top of the app's main HTML file yourself. Pass = refused by the routing guard; then hand it to `sonnet-worker` ("Task: Health check / Level: Routine"), which passes; then remove it.
 > 5d. Plan check: present, in plan mode, a two-line test plan with no Summary and a `<span>` in it. Pass = sent back before the Approve button, naming both.
+> 5e. Summary at the end: after test 4's final report, a short "Session summary" (tokens and time by model, hand-overs, send-backs) appears below the reply without the session writing it. Pass = it appears; its percentages add up to about 100.
 > 6. CLAUDE.md: compare `CLAUDE.md` with its version before the last stub install (`git log`) and name any section that disappeared. Pass = none.
 > Finally remove the two HEALTH rows and `scratch/`, and confirm `git status` is clean.
 
@@ -60,6 +61,7 @@ Pass = seven passes. Your reply's first line and its three plain top lines are p
 | You see | Cause | Fix |
 |---|---|---|
 | `Central rules NOT loaded … nothing is cached` | fetch failed and no earlier copy | check this repo is public and `central/MANIFEST.txt` exists on `main` |
+| No `Rules v… · setup …` line above the first reply | this Claude Code version does not show hook notices | tell the chat |
 | `offline: using cached vX` | GitHub could not be reached, earlier copy used | usually temporary; start a new session later |
 | `hz-claude-config is incomplete on GitHub … using cached vX` | files are missing in this repository on GitHub | tell the chat; it sends a full package (Step E) |
 | Old version still loaded after an update | raw-file cache | wait a few minutes; start a new session |

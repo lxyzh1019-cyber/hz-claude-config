@@ -2,7 +2,7 @@
   "_comment": "Deterministic skill invocation. Keywords are case-insensitive substrings; patterns are regex. Edit freely; keep it short. Skills not found under .claude/skills/ are invoked with account_skill_prefix.",
   "account_skill_prefix": "anthropic-skills:",
   "skills": {
-    "hz-guarantee-audit": {
+    "hz-reviewer": {
       "keywords": [
         "is this working",
         "does this work",
@@ -14,13 +14,31 @@
         "check this",
         "review the",
         "review my",
-        "look at the"
+        "look at the",
+        "keeps breaking",
+        "still broken",
+        "every version",
+        "is this actually working",
+        "stayed broken",
+        "polishing",
+        "index.html",
+        "safe to deploy",
+        "dead code",
+        "github pages",
+        "firebase app",
+        "stored procedure",
+        "t-sql",
+        "vba",
+        "macro",
+        "formula",
+        "crq",
+        "query is slow",
+        "rule file",
+        "does this rule",
+        "is this right",
+        "rules file"
       ],
-      "patterns": [
-        "\\.(md|html|js|sql|json|xlsx)\\b",
-        "\\bv\\d+\\b"
-      ],
-      "note": "whole-artifact verdict first, then the specific point"
+      "note": "whole thing first, grade, then the point; checklists: web-app, app-screens, sql-excel, prompts"
     },
     "hz-plan-regression-guard": {
       "keywords": [
@@ -33,59 +51,19 @@
         "v2 of",
         "v3 of"
       ],
-      "patterns": [
-        "\\bv\\d+\\b.*\\b(update|revise|add|change)"
-      ],
-      "note": "manifest before edit, regression table after"
+      "note": "local copy until PR 2 renames it hz-change-guard; manifest before edit, kept/changed/removed after"
     },
-    "hz-outcome-audit": {
+    "hz-planner": {
       "keywords": [
-        "keeps breaking",
-        "still broken",
-        "again",
-        "every version",
-        "is this actually working",
-        "stayed broken",
-        "polishing"
+        "whole app",
+        "full version",
+        "rewrite the entire",
+        "multi-part",
+        "cut off last time",
+        "which AI",
+        "I have an idea for"
       ],
-      "note": "audit, no build this turn"
-    },
-    "hz-web-app-audit": {
-      "keywords": [
-        "index.html",
-        "safe to deploy",
-        "dead code",
-        "github pages",
-        "firebase app",
-        "firestore"
-      ],
-      "patterns": [
-        "\\.(html|js)\\b"
-      ],
-      "note": "deep mode for single-file Firebase apps"
-    },
-    "hz-task-planner": {
-      "keywords": [
-        "build me",
-        "generate a",
-        "create a",
-        "make a script",
-        "add this feature",
-        "large file"
-      ],
-      "note": "model, effort, chunking before any large artifact"
-    },
-    "hz-sql-excel-auditor": {
-      "keywords": [
-        "stored procedure",
-        "t-sql",
-        "vba",
-        "macro",
-        "formula",
-        "crq",
-        "query is slow"
-      ],
-      "note": ""
+      "note": "frame challenge, package, which AI, size and chunk before any large artifact"
     },
     "hz-chat-handoff": {
       "keywords": [

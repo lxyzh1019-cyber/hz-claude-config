@@ -428,6 +428,8 @@ def _record_table(cfg, heading_regex, text=None):
 
 COMPLETE_WORDS = ("complete", "done", "✅")
 WAITING_WORDS = ("waiting on you", "waiting for you", "your step")
+QUEUED_WORDS = ("queued",)
+PLAN_ROW = re.compile(r"^(?P<plan>.+?)\s*·\s*Stage\s+(?P<k>\d+[a-z]?)\s+of\s+(?P<m>\d+)\b", re.I)
 BLOCKED_WORDS = ("blocked", "cannot", "won't fix", "wont fix", "dropped", "superseded", "deferred")
 
 
@@ -451,6 +453,8 @@ def deliverable_ledger(cfg, text=None):
         out.append({"name": name, "state": state,
                     "complete": any(w in low for w in COMPLETE_WORDS) and not any(w in low for w in ("incomplete", "not complete")),
                     "waiting": any(w in low for w in WAITING_WORDS),
+                    "queued": any(w in low for w in QUEUED_WORDS),
+                    "plan": (PLAN_ROW.match(name).group("plan").strip() if PLAN_ROW.match(name) else None),
                     "blocked": any(w in low for w in BLOCKED_WORDS) and not any(w in low for w in WAITING_WORDS),
                     "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip(),
                     "row": " | ".join(c.strip() for c in r)})
@@ -458,32 +462,49 @@ def deliverable_ledger(cfg, text=None):
 
 
 def completion_summary(cfg):
-    """{total, complete, blocked, open (names), no_evidence (names), pct, line, display, scoped}.
+    """{total, complete, blocked, open, waiting, queued, no_evidence, pct, line, display, scoped, plan}.
 
-    Only rows added or changed on this branch against the base ref count: rows identical to the base
-    belong to earlier rounds, so they never block and are never listed as this turn's work. When the
-    base ref cannot be read (no fetch is ever made), scoped is False: the Completion line is still
-    shown, but the guard does not block on open items."""
-    items = deliverable_ledger(cfg)
+    Counted by PLAN when the ledger has plan stage rows ("<plan name> · Stage k of M — …"): every stage of the
+    current plan counts, on whatever branch it was done, so a close-out branch shows the same number as the
+    plan. The current plan is the one whose rows this branch added or changed, otherwise the last plan in the
+    record. Without plan rows, only rows added or changed on this branch count (earlier rounds never block).
+    When the base ref cannot be read, scoped is False and the guard does not block on open items."""
+    all_items = deliverable_ledger(cfg)
     base = base_record_text(cfg)
     scoped = base is not None
+    changed = all_items
     if scoped:
         base_rows = {}
         for i in deliverable_ledger(cfg, base):
             base_rows.setdefault(i["name"], set()).add(i["row"])
-        items = [i for i in items if i["row"] not in base_rows.get(i["name"], set())]
+        changed = [i for i in all_items if i["row"] not in base_rows.get(i["name"], set())]
+    plans = [i["plan"] for i in all_items if i.get("plan")]
+    plan = None
+    if plans:
+        touched = [i["plan"] for i in changed if i.get("plan")]
+        plan = touched[-1] if touched else plans[-1]
+        items = [i for i in all_items if i.get("plan") == plan]
+        scoped = True
+    else:
+        items = changed
     total = len(items)
     done = [i for i in items if i["complete"]]
     blocked = [i for i in items if i["blocked"] and not i["complete"]]
     waiting = [i["name"] for i in items if i.get("waiting") and not i["complete"]]
-    open_ = [i["name"] for i in items if not i["complete"] and not i["blocked"] and not i.get("waiting")]
+    queued = [i["name"] for i in items if i.get("queued") and not i["complete"]]
+    open_ = [i["name"] for i in items if not i["complete"] and not i["blocked"] and not i.get("waiting")
+             and not i.get("queued")]
     no_ev = [i["name"] for i in done if not i["evidence"]]
     pct = round(100 * len(done) / total) if total else 0
     line = f"Completion: {len(done)} of {total} done ({pct}%)"
     if waiting:
         line += f" · Waiting on you: {len(waiting)}"
+    if queued:
+        line += f" · Queued: {len(queued)}"
+    if plan:
+        line = f"{line} — {plan}"
     return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
-            "waiting": waiting, "pct": pct, "line": line,
+            "waiting": waiting, "queued": queued, "pct": pct, "line": line, "plan": plan,
             "display": completion_display(cfg, line, open_, waiting), "scoped": scoped}
 
 
@@ -496,3 +517,33 @@ def completion_display(cfg, line, open_names, waiting=()):
         out.append(f"+{len(open_names) - shown} more in the record")
     out += [f"- Waiting on you: {n}" for n in list(waiting)[:shown]]
     return "\n".join(out)
+
+
+# ---- Session statistics (switchboard counts send-backs and refusals; the end-of-task summary reads them) --------
+STATS_PATH = os.path.join(STATE_DIR, "session-stats.json")
+
+
+def bump_stat(session_id, key, by=1):
+    try:
+        with open(STATS_PATH, encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = {}
+    s = st.setdefault(session_id or "", {})
+    s[key] = int(s.get(key, 0)) + by
+    if len(st) > 30:
+        st = {session_id or "": s}
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(STATS_PATH, "w", encoding="utf-8") as f:
+            json.dump(st, f)
+    except OSError:
+        pass
+
+
+def read_stats(session_id):
+    try:
+        with open(STATS_PATH, encoding="utf-8") as f:
+            return json.load(f).get(session_id or "", {})
+    except (OSError, ValueError):
+        return {}

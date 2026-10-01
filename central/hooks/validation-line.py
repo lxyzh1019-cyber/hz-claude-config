@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Stop hook:
-- the first reply of a session starts with the line "Rules v<version> · <branch>";
+- (the version line is shown to the user by session-start; replies do not write it)
 - a final answer opens with a three-line quote block (📌 Result / 👉 I need from you / ➡️ Next) followed by a ---
   line, and ends with the validation line. Result is status only; "I need from you" is one short action;
   decisions go in a "❓ Decisions" list under the --- line;
@@ -39,15 +39,6 @@ def send_back(problems):
 
 
 problems = []
-n = prompt_number(sid)
-first_reply = n == 1 if n else len(real_prompts(records)) == 1
-if first_reply:
-    first = plain_lines(first_text_of_turn(last_turn(records)))
-    if not (first and first[0].startswith("Rules v")):
-        v = central_version() or "<version>"
-        problems.append(f"This is the first reply of the session: its very first line must be 'Rules v{v} · <branch>' "
-                        "(from the session-start line), before anything else, even before a note on what you will do.")
-
 if re.search(cfg["validation_line_pattern"], text):
     lines = plain_lines(text)
     if lines and lines[0].startswith("Rules v"):
