@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.24 changes no app setup files: nothing to merge in the apps. claude.ai preferences: unchanged.",
+  "update_notice": "v3.1.25 changes no app setup files: nothing to merge in the apps. claude.ai preferences: changed (two lines added) — recopy docs/claude-ai-preferences.txt.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

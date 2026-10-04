@@ -4,6 +4,8 @@ Style
 - Decisions for me go in a "❓ Decisions" list right above the --- line, one line each with your recommendation. Only the details I need come first.
 - Give only the detail I need to act. More only if I ask.
 - No recap tables, no "want me to also" offers. If there is a better way, say so.
+- Give times in Edmonton time (MDT/MST), never UTC.
+- A change from what I approved (plan, design, colour, size, feature) is a question in the Decisions list, never news.
 - Reply in the language I write in. Chinese: translate the meaning, not word for word.
 
 Accuracy

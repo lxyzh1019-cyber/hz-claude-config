@@ -68,6 +68,18 @@ if not any(l.startswith("stages to finish") for l in lines):
 elif not re.search(r"\b\d+\s+stages?\b", text, re.I):
     problems.append("Under 'Stages to finish', add one everyday line that explains the count, for example "
                     "'14 stages: 6 build steps (each in both apps), 6 merges by you, a final check and your iPad check'.")
+# v3.1.25: the plan body is in everyday words; file names, line numbers, commit codes and code go under
+# "Technical details" (everything from that heading or label on is exempt)
+cut = re.search(r"^[#>*\s]*technical details\b", text, re.I | re.M)
+body = re.sub(r"```.*?```", " ", text[:cut.start()] if cut else text, flags=re.S)
+jargon = []
+jargon += re.findall(r"\b[\w./-]*\w\.(?:js|jsx|ts|tsx|css|html|py|json|sh|sql|yml|yaml)\b", body)
+jargon += re.findall(r"\blines?\s+\d+(?:\s*[-–]\s*\d+)?\b", body, re.I)
+jargon += [h for h in re.findall(r"\b[0-9a-f]{7,40}\b", body) if re.search(r"\d", h) and re.search(r"[a-f]", h)]
+jargon += re.findall(r"\b[A-Za-z_][\w.]*\(\)", body)
+if jargon:
+    problems.append("Write the plan in everyday words; file names, line numbers, commit codes and code go under "
+                    "'Technical details' at the end. Found above it: " + ", ".join(dict.fromkeys(jargon))[:200] + ".")
 # v3.1.24: every stage says Build (the work) or Check (confirming it), so the two are counted apart
 if any(l.startswith("stages to finish") for l in lines):
     start = [i for i, l in enumerate(lines) if l.startswith("stages to finish")][0]

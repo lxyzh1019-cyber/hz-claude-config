@@ -41,6 +41,12 @@ def send_back(problems):
 
 problems = []
 if re.search(cfg["validation_line_pattern"], text):
+    outside_code = re.sub(r"```.*?```", " ", text, flags=re.S)
+    utc = re.findall(r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:UTC|GMT)\b|\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z\b"
+                     "", outside_code)
+    if utc:   # v3.1.25: times for me are in Edmonton time
+        problems.append(f"Give times in Edmonton time (MDT/MST), not UTC ({', '.join(sorted(set(utc))[:3])}); the "
+                        "session start gives the current Edmonton time. Logs inside a code block may keep UTC.")
     lines = plain_lines(text)
     labels = cfg["report_top_labels"]
     tail = lines[-len(labels):]

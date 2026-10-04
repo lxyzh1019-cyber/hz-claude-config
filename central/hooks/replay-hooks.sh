@@ -918,5 +918,81 @@ cat > "$T/plainclose.jsonl" <<'J'
 J
 o=$(vl "$T/plainclose.jsonl"); check "codes in the details are fine when the closing lines are plain" "^$" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start says a change from what I approved is a question" "is a question in that list" "$o"
+# --- v3.1.25: tokens by activity (planning, coding, testing, other) in the session summary
+python3 - "$T/act.jsonl" <<'PY'
+import json, sys
+def a(i, tools, tok):
+    c = [{"type": "tool_use", "id": f"t{i}{k}", "name": n, "input": inp} for k, (n, inp) in enumerate(tools)]
+    return {"type": "assistant", "timestamp": f"2026-10-04T10:{i:02d}:00Z", "message": {"id": f"m{i}", "model": "claude-opus-5-5",
+            "role": "assistant", "usage": {"input_tokens": tok, "output_tokens": 0}, "content": c or [{"type": "text", "text": "x"}]}}
+recs = [{"type": "user", "message": {"role": "user", "content": "go"}},
+        a(1, [("Read", {"file_path": "js/app.js"}), ("Grep", {"pattern": "x"})], 300),
+        a(2, [("Agent", {"subagent_type": "Explore", "prompt": "look"})], 100),
+        a(3, [("Edit", {"file_path": "js/app.js"})], 400),
+        a(4, [("Bash", {"command": "npm test"})], 150),
+        a(5, [("Bash", {"command": "npx playwright test tests/smoke.spec.js"}), ("Read", {"file_path": "x"})], 50),
+        a(6, [("Bash", {"command": "git push -u origin claude/x"})], 80),
+        a(7, [("Edit", {"file_path": "a"}), ("Bash", {"command": "npm test"})], 20),
+        a(8, [], 100)]
+recs[-1]["message"]["content"] = [{"type": "text", "text": "Done.\n\nConfidence: High · Status: Checked"}]
+open(sys.argv[1], "w", encoding="utf-8").write("\n".join(json.dumps(r) for r in recs) + "\n")
+PY
+o=$(echo "{\"transcript_path\":\"$T/act.jsonl\",\"session_id\":\"act1\"}" | python3 $H/stats.py | sm)
+check "the summary shows tokens by activity" "^Activity: planning 33% · coding 33% · testing 18% · other 15%" "$o"
+check "the activity line says it is an estimate" "estimate" "$o"
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"act2\"}" | python3 $H/stats.py | sm)
+check "helper totals count by helper type (workers code, Explore and Plan plan)" "^Activity: " "$o"
+# --- v3.1.25b: plan body in everyday words, Edmonton time, in-between messages counted
+sed 's/^1\. Build the lessons · Claude · Build$/1. Build the lessons in js\/lessons.js line 120 with saveWeek() · Claude · Build/' "$T/plan_good.md" > "$T/plan_jargon.md"
+o=$(pg "$T/plan_jargon.md"); check "a plan body with file names, line numbers or code is sent back" "js/lessons.js" "$o"
+check "the send-back points to Technical details" "Technical details" "$o"
+printf '\nTechnical details: js/lessons.js line 120, saveWeek(), commit 8b56fdb.\n' >> "$T/plan_good2.md"; cat "$T/plan_good.md" > "$T/plan_good2.md"; printf 'More technical notes: js/lessons.js line 120, saveWeek().\n' >> "$T/plan_good2.md"
+o=$(pg "$T/plan_good2.md"); check "file names and code inside Technical details are fine" "^$" "$o"
+cat > "$T/utc.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Merged at 00:02 UTC.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** merged.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** nothing."}]}}
+J
+o=$(vl "$T/utc.jsonl"); check "a UTC time in a finished answer is sent back" "Edmonton time" "$o"
+cat > "$T/utc_iso.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Deployed 2026-10-04T06:02:11Z.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** deployed.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** nothing."}]}}
+J
+o=$(vl "$T/utc_iso.jsonl"); check "a raw UTC timestamp is sent back too" "Edmonton time" "$o"
+cat > "$T/utc_code.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Merged at 6:02 PM MDT.\n```\nlog 2026-10-04T00:02:11Z ok\n```\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** merged.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** nothing."}]}}
+J
+o=$(vl "$T/utc_code.jsonl"); check "local time passes, and a log inside a code block is left alone" "^$" "$o"
+o=$(cd "$H" && python3 -c "
+import sys;sys.path.insert(0,'.');from _common import edmonton_time;from datetime import datetime,timezone as z
+for d in ((2026,10,4,6,0),(2026,12,1,7,0),(2026,3,8,8,59),(2026,3,8,9,0),(2026,11,1,7,59),(2026,11,1,8,0)): print(edmonton_time(datetime(*d,tzinfo=z.utc)))")
+check "Edmonton time in summer is MDT (UTC-6)" "Oct 4, 12:00 AM MDT" "$o"
+check "Edmonton time in winter is MST (UTC-7)" "Dec 1, 12:00 AM MST" "$o"
+check "daylight time starts on the second Sunday of March" "Mar 8, 1:59 AM MST" "$o"
+check "  ...at 2 AM local" "Mar 8, 3:00 AM MDT" "$o"
+check "daylight time ends on the first Sunday of November" "Nov 1, 1:59 AM MDT" "$o"
+check "  ...back to 1 AM MST" "Nov 1, 1:00 AM MST" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "session start gives the current Edmonton time" "Times for me are in Edmonton time" "$o"
+python3 - "$T/chat.jsonl" <<'PY'
+import json, sys
+def a(i, blocks): return {"type": "assistant", "message": {"id": f"c{i}", "model": "claude-opus-5-5", "role": "assistant", "usage": {"input_tokens": 10}, "content": blocks}}
+def tu(i): return {"type": "tool_use", "id": f"u{i}", "name": "Read", "input": {}}
+def tx(s): return {"type": "text", "text": s}
+recs = [{"type": "user", "message": {"role": "user", "content": "go"}},
+        a(1, [tx("Now I'll read the file."), tu(1)]),
+        {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "u1", "content": "x"}]}},
+        a(2, [tu(2)]),
+        {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "u2", "content": "x"}]}},
+        a(3, [tx("Retrying.")]), a(4, [tu(4)]),
+        {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "u4", "content": "x"}]}},
+        a(5, [tx("Done.\n\nConfidence: High · Status: Checked")])]
+open(sys.argv[1], "w", encoding="utf-8").write("\n".join(json.dumps(r) for r in recs) + "\n")
+PY
+o=$(echo "{\"transcript_path\":\"$T/chat.jsonl\",\"session_id\":\"ch1\"}" | python3 $H/stats.py | sm)
+check "the summary counts in-between messages (2 here, the final answer not counted)" "In-between messages: 2" "$o"
+# --- v3.1.25c: the completion send-back keeps the closing lines last; preferences carry Edmonton time
+check "the completion send-back puts its lines before the validation line, closing lines last" "the three closing lines stay last" "$(cat $H/completion-guard.py)"
+check "claude.ai preferences ask for Edmonton time" "Edmonton time" "$(cat $H/../../docs/claude-ai-preferences.txt)"
+check "claude.ai preferences make changes from the approval a question" "is a question in the Decisions list" "$(cat $H/../../docs/claude-ai-preferences.txt)"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
