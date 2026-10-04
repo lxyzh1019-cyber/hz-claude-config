@@ -99,6 +99,29 @@ def is_prompt(rec):
 
 
 tokens, seconds, seen = {}, {}, set()
+activity = {}   # v3.1.25: tokens by what the step was doing (an estimate, one group per step)
+TEST_CMD = re.compile(r"\b(npm\s+(run\s+)?test|npx\s+(playwright|jest|vitest)|playwright|pytest|jest|vitest|unittest|"
+                      r"smoke|replay-hooks|node\s+\S*tests?[/\\]|run[-_]?tests?)\b", re.I)
+EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+PLAN_TOOLS = {"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "ExitPlanMode", "EnterPlanMode", "TodoWrite"}
+CODE_HELPERS = {"opus-worker", "sonnet-worker"}
+PLAN_HELPERS = {"explore", "plan"}
+
+
+def activity_of(rec, content):
+    """testing > coding > planning > other: the first that applies to the step's tools."""
+    uses = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
+    names = {b.get("name") for b in uses}
+    if any(b.get("name") == "Bash" and TEST_CMD.search(str((b.get("input") or {}).get("command") or "")) for b in uses):
+        return "testing"
+    helpers = {str((b.get("input") or {}).get("subagent_type") or "").lower() for b in uses
+               if b.get("name") in ("Agent", "Task")}
+    if names & EDIT_TOOLS or helpers & CODE_HELPERS:
+        return "coding"
+    if names & PLAN_TOOLS or helpers & PLAN_HELPERS or rec.get("permissionMode") == "plan":
+        return "planning"
+    return "other"
+
 reread = [0]   # tokens that re-read context already sent before (cache reads)
 CAP = 60 * 60
 
@@ -120,6 +143,9 @@ def add_file(recs):
                 tokens[lab] = tokens.get(lab, 0) + sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
                 reread[0] += int(u.get("cache_read_input_tokens") or 0)
+                act = activity_of(rec, content)
+                activity[act] = activity.get(act, 0) + sum(int(u.get(k) or 0) for k in (
+                    "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
             if t is not None and last_t is not None:
                 seconds[lab] = seconds.get(lab, 0) + min(max(t - last_t, 0), CAP)
             last_model, waiting_on_helper = lab, helper_call
@@ -164,6 +190,8 @@ for rec in main:
             tot = tur.get("totalTokens") or sum(int((tur.get("usage") or {}).get(k) or 0) for k in (
                 "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
             tokens[lab] = tokens.get(lab, 0) + int(tot or 0)
+            act = ("coding" if st in CODE_HELPERS else "planning" if st.lower() in PLAN_HELPERS else "other")
+            activity[act] = activity.get(act, 0) + int(tot or 0)
             reread[0] += int((tur.get("usage") or {}).get("cache_read_input_tokens") or 0)
             if tur.get("totalDurationMs"):
                 seconds[lab] = seconds.get(lab, 0) + int(tur["totalDurationMs"]) / 1000
@@ -196,16 +224,35 @@ order = sorted(tokens, key=lambda k: -tokens[k])
 lines = [version_line(), "Session summary",
          "Tokens: " + " · ".join(f"{k} {round(100 * tokens[k] / total)}%" for k in order) + f" ({big(total)})"
          + (f" — {big(reread[0])} of it re-reading what was already sent" if reread[0] else "")]
+# v3.1.25: messages written between tool steps (the rules ask for none); the last text of each request is the answer
+between, cur_texts = 0, []
+for rec in main + [{"type": "user", "message": {"role": "user", "content": "end"}}]:
+    if is_prompt(rec):
+        ids = [m for m, _ in cur_texts]
+        last = ids[-1] if ids else None
+        between += len({m for m in ids if m != last})
+        cur_texts = []
+    elif rec.get("type") == "assistant":
+        msg = rec.get("message") or {}
+        for b in msg.get("content") or [] if isinstance(msg.get("content"), list) else []:
+            if isinstance(b, dict) and b.get("type") == "text" and (b.get("text") or "").strip():
+                cur_texts.append((msg.get("id") or id(rec), b["text"]))
+act_total = sum(activity.values())
+if act_total:
+    lines.append("Activity: " + " · ".join(f"{k} {round(100 * activity[k] / act_total)}%"
+                                           for k in ("planning", "coding", "testing", "other") if activity.get(k))
+                 + " (an estimate: a step that does several things counts once — testing before coding before planning)")
 if seconds:
     lines.append("Time: " + " · ".join(f"{k} {max(1, round(seconds[k] / 60))} min" for k in order if k in seconds))
 names = {"opus-worker": "Opus", "sonnet-worker": "Sonnet"}
 ho = " · ".join(f"{names.get(k, k)} {v}" for k, v in sorted(handovers.items())) or "none"
 lines.append(f"Hand-overs: {ho}" + (f" · escalated {escalated}" if escalated else ""))
+lines.append(f"In-between messages: {between} (written between tool steps; the rules ask for none)")
 st = read_stats(sid)
 lines.append(f"Refused: planner edits {st.get('refused:routing-guard', 0)} · hand-overs {st.get('refused:worker-guard', 0)}"
              f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}")
 if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
     lines.append("This session is long: at the next stage break the session hands off and gives you a restart line.")
 mark_shown()
-log("stats", {"shown": "summary", "tokens": total, "reread": reread[0]})
+log("stats", {"shown": "summary", "tokens": total, "reread": reread[0], "activity": activity})
 print(json.dumps({"systemMessage": "\n".join(lines)}))

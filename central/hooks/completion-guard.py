@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook: a final report may not claim done while the deliverable ledger has open items.
-- On an implementation turn (source edits or a dispatched worker), a final report must end with the ledger's
-  Completion line; a wrong count is corrected.
+- On an implementation turn (source edits or a dispatched worker), a final report carries the ledger's
+  Completion lines just before the validation line; a wrong count is corrected.
 - Only ledger rows added or changed on this branch against origin/main count: rows from earlier rounds never block.
   When origin/main cannot be read, the Completion line is still shown but open items never block.
 - If items are still open (neither COMPLETE nor BLOCKED), the report is blocked and the session continues with the
@@ -109,5 +109,5 @@ if comp["no_evidence"]:
 if reasons:
     bump()
     log("completion-guard", {"send_back": used + 1, "open": open_items})
-    block(" ".join(reasons) + "\nEnd the final report with these lines before the validation line:\n" + comp["display"])
+    block(" ".join(reasons) + "\nPut these lines just before the validation line (the three closing lines stay last):\n" + comp["display"])
 sys.exit(0)

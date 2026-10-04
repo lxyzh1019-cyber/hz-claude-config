@@ -649,3 +649,23 @@ def read_stats(session_id):
             return json.load(f).get(session_id or "", {})
     except (OSError, ValueError):
         return {}
+
+
+# ---- Edmonton time (v3.1.25) ----------------------------------------------------------------------------------
+def edmonton_time(now_utc=None):
+    """'Oct 4, 6:02 PM MDT' — Mountain Time worked out here (no tz database: Windows Python often lacks one).
+    Daylight time (MDT, UTC-6) runs from the second Sunday of March, 2 AM local, to the first Sunday of November,
+    2 AM local; otherwise MST (UTC-7)."""
+    from datetime import datetime, timedelta, timezone
+
+    def nth_sunday(year, month, n):
+        d = datetime(year, month, 1, tzinfo=timezone.utc)
+        d += timedelta(days=(6 - d.weekday()) % 7)
+        return d + timedelta(weeks=n - 1)
+    now = now_utc or datetime.now(timezone.utc)
+    start = nth_sunday(now.year, 3, 2) + timedelta(hours=9)   # 2 AM MST = 09:00 UTC
+    end = nth_sunday(now.year, 11, 1) + timedelta(hours=8)    # 2 AM MDT = 08:00 UTC
+    dst = start <= now < end
+    local = now + timedelta(hours=-6 if dst else -7)
+    hour = local.hour % 12 or 12
+    return f"{local.strftime('%b')} {local.day}, {hour}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'} {'MDT' if dst else 'MST'}"

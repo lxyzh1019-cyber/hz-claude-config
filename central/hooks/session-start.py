@@ -63,6 +63,13 @@ comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:
     facts.append("[completion] " + comp["display"] + "\n— this branch's ledger rows; read the deliverable ledger before "
                  "claiming anything is done, and state these lines in your first reply.")
+try:
+    from _common import edmonton_time
+    facts.append(f"Times for me are in Edmonton time: it is now {edmonton_time()}. Convert any UTC time "
+                 "(MDT = UTC-6 from the second Sunday of March, MST = UTC-7 from the first Sunday of November); a "
+                 "finished answer that shows a UTC time is sent back.")
+except Exception:
+    pass
 facts.append("The version line is shown to me in the notice after your reply: do not write a 'Rules v…' line. "
              "Every final answer ends with a "
              "quote block of three lines in everyday words, after a line with just ---, and nothing after it:\n"
