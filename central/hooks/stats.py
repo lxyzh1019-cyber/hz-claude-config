@@ -169,6 +169,18 @@ for rec in main:
                 seconds[lab] = seconds.get(lab, 0) + int(tur["totalDurationMs"]) / 1000
 
 total = sum(tokens.values())
+try:   # v3.1.24: the prompt hook reads this to ask for the hand-off once the session is long
+    tp_ = os.path.join(STATE_DIR, "session-tokens.json")
+    try:
+        st_ = json.load(open(tp_, encoding="utf-8"))
+    except (OSError, ValueError):
+        st_ = {}
+    st_ = {k: v for k, v in st_.items()} if len(st_) < 50 else {}
+    st_[sid] = total
+    os.makedirs(STATE_DIR, exist_ok=True)
+    json.dump(st_, open(tp_, "w", encoding="utf-8"))
+except OSError:
+    pass
 if not total:
     mark_shown()
     log("stats", {"shown": "version only", "why": "no token counts in the transcript"})
@@ -193,7 +205,7 @@ st = read_stats(sid)
 lines.append(f"Refused: planner edits {st.get('refused:routing-guard', 0)} · hand-overs {st.get('refused:worker-guard', 0)}"
              f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}")
 if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
-    lines.append("This session is long: start a fresh session for the next stage — it costs less per step.")
+    lines.append("This session is long: at the next stage break the session hands off and gives you a restart line.")
 mark_shown()
 log("stats", {"shown": "summary", "tokens": total, "reread": reread[0]})
 print(json.dumps({"systemMessage": "\n".join(lines)}))

@@ -13,7 +13,7 @@
 import json, os, re, sys
 from _common import (PROJECT_DIR, STATE_DIR, read_hook_input, load_config, read_transcript, last_turn,
                      last_assistant_text, tool_uses, is_governance_path, is_progress_report, completion_summary,
-                     prompt_number, block, log)
+                     prompt_number, block, log, handoff_text)
 
 data = read_hook_input()
 cfg = load_config()
@@ -91,6 +91,18 @@ elif not stated:
     reasons.append("Implementation happened this turn: add the completion lines before the validation line.")
 elif wrong_count:
     reasons.append("The stated Completion line does not match this branch's ledger rows; fix the ledger or the line.")
+if comp.get("build_done") and comp.get("check_open") and comp.get("plan"):
+    # v3.1.24: the hand-off is due in the report where Build reaches 100% — once per plan: the restart line then
+    # stands in '## Where we are' (pushed), which every later session reads
+    try:
+        record = open(os.path.join(PROJECT_DIR, cfg["record_file"]), encoding="utf-8", errors="replace").read()
+    except OSError:
+        record = ""
+    if not re.search(r"Continue\s+" + re.escape(comp["plan"]), text + "\n" + record):
+        reasons.append("Build is at 100% and only checks are left: " + handoff_text(cfg, comp, after_build=True))
+if comp.get("untagged_checks"):   # v3.1.24: the label keeps a check a check after it is ticked COMPLETE
+    reasons.append("Add ' (Check)' to the end of these row names in the ledger, so they still count as Check once "
+                   "they are COMPLETE: " + "; ".join(comp["untagged_checks"][:6]) + ".")
 if comp["no_evidence"]:
     reasons.append("COMPLETE without evidence in the deliverable ledger: " + ", ".join(comp["no_evidence"]) +
                    ". Fill the Evidence cell (what ran and its result) or set the state back to PARTIAL.")
