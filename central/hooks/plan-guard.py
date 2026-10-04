@@ -10,7 +10,7 @@ Opus after approval costs less.
 The plan text is taken from the tool input, or from a plan file the input names, or from the newest plan file."""
 import glob, os, re, time
 import json
-from _common import read_hook_input, deny_tool, log, read_transcript
+from _common import read_hook_input, deny_tool, log, read_transcript, PROJECT_DIR
 
 data = read_hook_input()
 inp = data.get("tool_input") or {}
@@ -24,7 +24,9 @@ def plan_text():
         if isinstance(v, str) and v.endswith(".md") and os.path.isfile(v):
             return open(v, encoding="utf-8", errors="replace").read()
     home = os.path.expanduser("~")
-    files = sorted(glob.glob(os.path.join(home, ".claude", "plans", "*.md")), key=os.path.getmtime, reverse=True)
+    # v3.1.24: the stub's plansDirectory writes plan files into the repository's plans/ (since v3.1.23)
+    files = sorted(glob.glob(os.path.join(PROJECT_DIR, "plans", "*.md")) +
+                   glob.glob(os.path.join(home, ".claude", "plans", "*.md")), key=os.path.getmtime, reverse=True)
     if files and time.time() - os.path.getmtime(files[0]) < 1800:
         return open(files[0], encoding="utf-8", errors="replace").read()
     return ""
@@ -66,6 +68,24 @@ if not any(l.startswith("stages to finish") for l in lines):
 elif not re.search(r"\b\d+\s+stages?\b", text, re.I):
     problems.append("Under 'Stages to finish', add one everyday line that explains the count, for example "
                     "'14 stages: 6 build steps (each in both apps), 6 merges by you, a final check and your iPad check'.")
+# v3.1.24: every stage says Build (the work) or Check (confirming it), so the two are counted apart
+if any(l.startswith("stages to finish") for l in lines):
+    start = [i for i, l in enumerate(lines) if l.startswith("stages to finish")][0]
+    stage_lines = []
+    for raw in raw_lines[start + 1:]:
+        low_l = raw.lower()
+        if raw.startswith(("#", "|", "```")):
+            break
+        if re.match(r"^(\d+[.)]|[-*•])\s", raw):
+            if re.search(r"\b(claude|you)\b", low_l):
+                stage_lines.append(low_l)
+        elif stage_lines:
+            break
+    unmarked = [l for l in stage_lines if not re.search(r"\b(build|check)\b", l)]
+    if unmarked:
+        problems.append("Mark every stage under 'Stages to finish' as Build (the work Claude changes and proves) or "
+                        "Check (merges, live-site check, device check), next to Claude or You — "
+                        f"{len(unmarked)} stage(s) have neither.")
 if problems:
     log("plan-guard", {"sent_back": len(problems)})
     deny_tool("Plan sent back before approval: " + " ".join(problems) + " Fix it and present the plan again.")

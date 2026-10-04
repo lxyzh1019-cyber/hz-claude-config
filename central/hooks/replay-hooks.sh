@@ -289,7 +289,7 @@ printf '| again | NOT STARTED | |\n' >> WORKING_RECORD.md
 o=$(echo '{}' | python3 $H/session-start.py); check "session-start: completion line when items open" "Completion: 2 of 3 done (67%)" "$o"
 # v3.1.14: at most five open items are listed, the rest are counted
 for i in 1 2 3 4 5 6; do printf '| open-%s | NOT STARTED | |\n' "$i" >> WORKING_RECORD.md; done
-o=$(echo '{}' | python3 $H/session-start.py); check "long open list is cut after five names" "+2 more in the record" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "long open list is cut after five names" "+2 more open in the record" "$o"
 check "the sixth open name is not listed" "clean" "$(echo "$o" | grep -c 'open-6' | sed 's/^0$/clean/')"
 python3 - <<'PY'
 import re
@@ -517,13 +517,19 @@ Changes in this version
 🟩 **Rev 2** The four new lessons also open for the pilot, after the same check.
 Stages to finish
 4 stages: 2 by Claude, 2 by you.
-1. Build the lessons · Claude
-2. Run the checks · Claude
-3. Merge the changes · You
-4. Check on the iPad · You
+1. Build the lessons · Claude · Build
+2. Run the checks · Claude · Build
+3. Merge the changes · You · Check
+4. Try it on the iPad · You · Check
 Technical details: branch below-grade-lessons, commit d00f47f.
 P
 o=$(pg "$T/plan_good.md"); check "a plan with summary, squares and stages passes the Approve check" "^$" "$o"
+sed 's/ · Build$//; s/ · Check$//' "$T/plan_good.md" > "$T/plan_nophase.md"
+o=$(pg "$T/plan_nophase.md"); check "v3.1.24: stages without Build or Check are sent back" "3 stage(s) have neither" "$o"
+mkdir -p "$PROJ/plans"; cp "$T/plan_nophase.md" "$PROJ/plans/zz-latest.md"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"ExitPlanMode","tool_input":{}}' | python3 $H/dispatch.py)
+check "v3.1.24: with no plan text in the call, the plan file in the repository's plans/ is checked" "have neither" "$o"
+rm -rf "$PROJ/plans"
 o=$(echo "{\"transcript_path\":\"$T/shortneed.jsonl\",\"session_id\":\"sg2\",\"stop_hook_active\":false}" | python3 $H/setup-guard.py); check "no setup note pending: nothing to do" "^$" "$o"
 sed 's/🟩 \*\*Rev 2\*\*/<span style="color:green">Rev 2:<\/span>/' "$T/plan_good.md" > "$T/plan_html.md"
 o=$(pg "$T/plan_html.md"); check "colour code in a plan is sent back" "colour code" "$o"
@@ -639,8 +645,11 @@ check "the README has no step that empties the repository" "clean" "$(grep -ci '
 check "the README keeps no old version numbers" "clean" "$(grep -c 'v3\.1\.1[0-9]' "$H/../../README.md" | sed 's/^0$/clean/')"
 IN="$T/incomplete"; rm -rf "$IN"; mkdir -p "$IN/central/hooks" "$IN/proj/.claude" "$T/inc-cache"
 cp "$H/../../stub/hz-loader.py" "$IN/proj/.claude/"; printf 'version: 9.9.9\nhooks/session-start.py\nhooks/missing.py\n' > "$IN/central/MANIFEST.txt"; cp "$H/session-start.py" "$IN/central/hooks/"
-( cd "$IN" && python3 -m http.server 8765 >/dev/null 2>&1 & echo $! > "$T/httpd.pid" ); sleep 1
-o=$(echo '{}' | CLAUDE_PROJECT_DIR="$IN/proj" HZ_CENTRAL_URL=http://127.0.0.1:8765/central/ HZ_CACHE_DIR="$T/inc-cache" python3 "$IN/proj/.claude/hz-loader.py" session-start.py)
+# v3.1.24: a free port and a wait until the server answers (a fixed port and "sleep 1" failed on back-to-back runs)
+PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
+( cd "$IN" && python3 -m http.server "$PORT" --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$T/httpd.pid" )
+for _ in $(seq 1 50); do python3 -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:$PORT/central/MANIFEST.txt',timeout=1)" 2>/dev/null && break; sleep 0.1; done
+o=$(echo '{}' | CLAUDE_PROJECT_DIR="$IN/proj" HZ_CENTRAL_URL=http://127.0.0.1:$PORT/central/ HZ_CACHE_DIR="$T/inc-cache" python3 "$IN/proj/.claude/hz-loader.py" session-start.py)
 kill $(cat "$T/httpd.pid") 2>/dev/null
 check "the loader names a missing file instead of blaming the network" "incomplete on GitHub: hooks/missing.py" "$o"
 # --- v3.1.22: session summary, version line from session start, plan counts, queued stages, setup first, tips
@@ -680,7 +689,7 @@ P2="$T/planrepo"; rm -rf "$P2"; mkdir -p "$P2"
   && git add -A && git commit -qm base && git update-ref refs/remotes/origin/main HEAD \
   && sed -i 's/| Splash redesign · Stage 2 of 3 — Merge PR 1 | NOT STARTED | |/| Splash redesign · Stage 2 of 3 — Merge PR 1 | WAITING ON YOU — merge PR 1 | |/; s/| Splash redesign · Stage 3 of 3 — PR 2 | NOT STARTED | |/| Splash redesign · Stage 3 of 3 — PR 2 | QUEUED — after Stage 2 | |/' WORKING_RECORD.md )
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$P2" python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config,completion_summary;c=completion_summary(load_config());print(c['line']);print('open=',c['open'])")
-check "the count covers the whole plan, not just this branch" "Completion: 1 of 3 done (33%) · Waiting on you: 1 · Queued: 1 — Splash redesign" "$o"
+check "the count covers the whole plan, not just this branch (v3.1.24: the merge waiting on you counts as Check)" "Completion: Build 1 of 2 done (50%) · Check 0 of 1 — Splash redesign" "$o"
 check "old rounds and queued stages are not open work" "open= \[\]" "$o"
 # setup update first
 SG="$T/setuprepo"; rm -rf "$SG"; mkdir -p "$SG/.claude/state"; ( cd "$SG" && git init -q . && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m b )
@@ -692,7 +701,7 @@ o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_
 check "once the setup branch exists, answers go out" "^$" "$o"
 check "the pending note is cleared" "gone" "$([ -f "$SG/.claude/state/setup-pending.json" ] && echo still || echo gone)"
 # after a merge: where we are + fresh session
-o=$(echo '{"prompt":"merged, move on"}' | python3 $H/plan-gate.py); check "after a merge the session is told to suggest a fresh session" "fresh-session" "$o"
+o=$(echo '{"prompt":"merged, move on"}' | python3 $H/plan-gate.py); check "after a merge the session is told to hand off" "hand-off" "$o"
 # plan check: changes box, count line, Fable tip
 grep -v '```\|^+ \|^Changes in this version' "$T/plan_good.md" > "$T/plan_nodiff.md"
 o=$(pg "$T/plan_nodiff.md"); check "a revised plan without the changes box is sent back" "Changes in this version" "$o"
@@ -759,5 +768,155 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.23)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "written into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Every final answer ends with a" "$o"
+# --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
+HB="$T/h24"; rm -rf "$HB"; mkdir -p "$HB"; git init -q --bare "$HB/origin.git"; HA="$HB/app"; git init -q "$HA"
+( cd "$HA" && git config user.email t@t && git config user.name t && git remote add origin ../origin.git
+cat > WORKING_RECORD.md <<'R'
+# WORKING RECORD
+
+## Where we are
+- start
+
+## Deliverable ledger
+| Deliverable | State | Evidence |
+|---|---|---|
+| R14 / Plan v3 — Sunday v15 · Stage 1 of 5 — kids page | COMPLETE | tests |
+| R14 / Plan v3 — Sunday v15 · Stage 2 of 5 — ritual | COMPLETE | tests |
+| R14 / Plan v3 — Sunday v15 · Stage 3 of 5 — grown-ups | NOT STARTED | |
+| R14 / Plan v3 — Sunday v15 · Stage 4 of 5 — looks | BLOCKED — needs icons | |
+| R14 / Plan v3 — Sunday v15 · Stage 5 of 5 — old export | SUPERSEDED | |
+| R14 / Plan v3 — Sunday v15 · Stage 6 of 6 — PR | QUEUED — after Stage 4 | |
+R
+mkdir plans && printf '# R14 · Plan v3 — Sunday v15\n' > plans/a.md && echo x > index.html && git add -A && git commit -qm base \
+  && git push -q origin HEAD:main && git checkout -qb claude/sunday-v15 && git push -q -u origin claude/sunday-v15 ) >/dev/null 2>&1
+hg(){ printf '%s' "$1" > "$HB/t.jsonl"; rm -f "$HA/.claude/state/handoff-rounds.json"; echo "{\"transcript_path\":\"$HB/t.jsonl\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$HA" python3 $H/handoff-guard.py; }
+msg(){ python3 -c "import json,sys;print(json.dumps({'type':'assistant','message':{'role':'assistant','content':[{'type':'text','text':sys.argv[1]}]}}))" "$1"; }
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
+check "superseded rows are not counted" "Completion: 2 of 5 done" "$o"
+check "blocked items are listed with their state" "Stage 4 of 5 — looks (blocked)" "$o"
+check "queued items are listed with their state" "Stage 6 of 6 — PR (queued)" "$o"
+check "done plus listed adds up (3 listed for 3 not done)" "^3$" "$(echo "$o" | grep -c '^- ')"
+o=$(hg "$(msg 'Plan v5 is ready.
+Confidence: High · Status: Proposed')"); check "a Plan vN only in the chat is sent back" "names Plan v5, but the newest plan file in plans/ is Plan v3" "$o"
+o=$(hg "$(msg 'Plan v3 is ready.
+Confidence: High · Status: Proposed')"); check "the plan number of the newest plan file passes" "^$" "$o"
+printf '# R14 · Plan v5 — Sunday v15\n' > "$HA/plans/b.md"
+o=$(hg "$(msg 'Plan v5 is ready.')"); check "a ledger plan name with an older version is renamed" "Rename the plan's rows" "$o"
+rm -f "$HA/plans/b.md"
+L1='Completion: 2 of 5 done (40%)
+- R14 / Plan v3 — Sunday v15 · Stage 3 of 5 — grown-ups
+- R14 / Plan v3 — Sunday v15 · Stage 4 of 5 — looks (blocked)
+- R14 / Plan v3 — Sunday v15 · Stage 6 of 6 — PR (queued)
+```
+Continue R14 / Plan v3 — Sunday v15 on branch claude/sunday-v15; next: Stage 3 of 5 — grown-ups.
+```
+Confidence: High · Status: Checked'
+echo "- next: Stage 3" >> "$HA/WORKING_RECORD.md"
+o=$(hg "$(msg "$L1")"); check "a restart line with the record not committed is sent back" "Commit and push WORKING_RECORD.md" "$o"
+( cd "$HA" && git commit -qam where ) >/dev/null
+o=$(hg "$(msg "$L1")"); check "a restart line with the record committed but not pushed is sent back" "Commit and push" "$o"
+( cd "$HA" && git push -q ) >/dev/null 2>&1
+o=$(hg "$(msg "$L1")"); check "a pushed record, the ledger name, this branch and every row listed: passes" "^$" "$o"
+o=$(hg "$(msg 'Continue R14 / Plan v5 — Sunday on branch claude/sunday-v15; next: Stage 3.')")
+check "a restart line with another plan name is sent back with the exact line" "Plan v3 .u2014 Sunday v15 on branch claude/sunday-v15; next: Stage 3 of 5" "$o"
+check "a restart line without the not-complete rows is sent back" "List every row of the plan that is not complete" "$o"
+o=$(hg "$(msg 'Continue R14 / Plan v3 — Sunday v15 on branch main; next: Stage 3.')"); check "a restart line with the wrong branch is sent back" "names branch main, but this session is on claude/sunday-v15" "$o"
+printf '{"session":"hs","n":3}' > "$HA/.claude/state/prompt-number.json"; rm -f "$HA/.claude/state/handoff-rounds.json"
+printf '%s' "$(msg 'Plan v9.')" > "$HB/t.jsonl"
+o=$(echo "{\"transcript_path\":\"$HB/t.jsonl\",\"session_id\":\"hs\"}" | CLAUDE_PROJECT_DIR="$HA" python3 $H/handoff-guard.py); check "hand-off check: first send-back" "Plan v9" "$o"
+o=$(echo "{\"transcript_path\":\"$HB/t.jsonl\",\"session_id\":\"hs\"}" | CLAUDE_PROJECT_DIR="$HA" python3 $H/handoff-guard.py); check "hand-off check: once per request, never loops" "^$" "$o"
+rm -f "$HA/.claude/state/prompt-number.json"
+o=$(echo '{"prompt":"merged, go on","session_id":"m1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
+check "after a merge the session gets the hand-off with the exact restart line" "Plan v3 .u2014 Sunday v15 on branch claude/sunday-v15; next: Stage 3 of 5" "$o"
+check "the hand-off asks to commit and push the record" "commit and push WORKING_RECORD.md to claude/sunday-v15" "$o"
+check "the hand-off asks for every row that is not complete" "open, blocked, queued" "$o"
+check "the hand-off points to the plan file instead of copying it" "its plan file path" "$o"
+mkdir -p "$HA/.claude/state"; printf '{"long1": 2000000}' > "$HA/.claude/state/session-tokens.json"
+o=$(echo '{"prompt":"next step please","session_id":"long1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
+check "a long session is asked to hand off at the next stage break" "This session is long (2.0 M tokens)" "$o"
+o=$(echo '{"prompt":"next step please","session_id":"long1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
+check "the long-session hand-off is asked once per session" "clean" "$(echo "$o" | grep -c 'This session is long' | sed 's/^0$/clean/')"
+o=$(echo '{"prompt":"next step please","session_id":"short1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
+check "a short session is not asked to hand off" "clean" "$(echo "$o" | grep -c 'hand-off' | sed 's/^0$/clean/')"
+o=$(echo '{"prompt":"Continue R14 / Plan v3 — Sunday v15 on branch claude/sunday-v15; next: Stage 3 of 5.","session_id":"r1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
+check "a restart line makes the new session switch to its branch first" "First switch to branch claude/sunday-v15" "$o"
+check "the new session reads Where we are and waits" "Wait for my OK" "$o"
+o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"v24\",\"transcript_path\":\"$T/top_old.jsonl\",\"stop_hook_active\":false}" | dp)
+check "a send-back carries only the version line, not the summary" "clean" "$(echo "$o" | grep -c 'Session summary' | sed 's/^0$/clean/')"
+check "the switchboard runs the hand-off check on Stop" "handoff-guard.py" "$(cat $H/config.json)"
+# --- v3.1.24b: Build and Check counted apart; hand-off when Build reaches 100%
+HC="$T/hc"; rm -rf "$HC"; mkdir -p "$HC"; git init -q --bare "$HC/origin.git"; HCA="$HC/app"; git init -q "$HCA"
+( cd "$HCA" && git config user.email t@t && git config user.name t && git remote add origin ../origin.git
+cat > WORKING_RECORD.md <<'R'
+# WORKING RECORD
+
+## Where we are
+- start
+
+## Deliverable ledger
+| Deliverable | State | Evidence |
+|---|---|---|
+| Sunday recovery · Stage 1 of 7 — failing tests | COMPLETE | 6 tests red |
+| Sunday recovery · Stage 2 of 7 — change in both apps | COMPLETE | tests green |
+| Sunday recovery · Stage 3 of 7 — run every test | COMPLETE | 120/120 |
+| Sunday recovery · Stage 4 of 7 — draft pull requests | COMPLETE | PR 12, PR 13 |
+| Sunday recovery · Stage 5 of 7 — merge both (Check) | WAITING ON YOU — merge PR 12 and 13 | |
+| Sunday recovery · Stage 6 of 7 — live site updated (Check) | QUEUED — after Stage 5 | |
+| Sunday recovery · Stage 7 of 7 — Sunday recovery on the device (Check) | QUEUED — after Stage 6 | |
+R
+echo x > index.html && git add -A && git commit -qm base && git push -q origin HEAD:main && git checkout -qb claude/recovery && git push -q -u origin claude/recovery ) >/dev/null 2>&1
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
+check "Build and Check are counted apart: Build 100% when Claude's work is done" "Completion: Build 4 of 4 done (100%) · Check 0 of 3" "$o"
+check "the checks are listed under their own heading" "^Check:" "$o"
+check "Build done says the rest is checking and how to come back" "Build is done; the rest is checking" "$o"
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;c=completion_summary(load_config());print(restart_line(c))")
+check "after Build, the restart line points to the first check" "next: Stage 5 of 7 — merge both" "$o"
+printf '%s' "$(msg 'Done.
+Completion: Build 4 of 4 done (100%) · Check 0 of 3
+Confidence: High · Status: Checked')" > "$HC/t.jsonl"
+o=$(echo "{\"transcript_path\":\"$HC/t.jsonl\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$HCA" python3 $H/completion-guard.py)
+check "v3.1.24: a report at Build 100% without the restart line is sent back for the hand-off" "Build is at 100% and only checks are left" "$o"
+check "that send-back carries the exact restart line with the first check" "next: Stage 5 of 7" "$o"
+( cd "$HCA" && sed -i 's/^- start$/- start\n- Restart: Continue Sunday recovery on branch claude\/recovery; next: Stage 5 of 7 — merge both (Check)./' WORKING_RECORD.md )
+o=$(echo "{\"transcript_path\":\"$HC/t.jsonl\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$HCA" python3 $H/completion-guard.py)
+check "once the restart line stands in Where we are, later reports pass" "^$" "$o"
+( cd "$HCA" && sed -i 's/| Sunday recovery · Stage 4 of 7 — draft pull requests | COMPLETE | PR 12, PR 13 |/| Sunday recovery · Stage 4 of 7 — draft pull requests | NOT STARTED | |/' WORKING_RECORD.md )
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['line'])")
+check "an open Build stage keeps Build below 100%" "Completion: Build 3 of 4 done (75%) · Check 0 of 3" "$o"
+o=$(echo '{"prompt":"go on","session_id":"b1"}' | CLAUDE_PROJECT_DIR="$HCA" python3 $H/plan-gate.py)
+check "while Build is open, the session is told to hand off when Build reaches 100%" "When the last Build stage is finished" "$o"
+check "that hand-off names the first check as next" "next: Stage 5 of 7" "$o"
+printf '%s' "$(msg 'Not yet.
+Completion: Build 3 of 4 done (75%) · Check 0 of 3
+Confidence: High · Status: Checked')" > "$HC/t.jsonl"
+printf '{"session":"cg9","n":1}' > "$HCA/.claude/state/prompt-number.json" 2>/dev/null || { mkdir -p "$HCA/.claude/state"; printf '{"session":"cg9","n":1}' > "$HCA/.claude/state/prompt-number.json"; }
+o=$(echo "{\"transcript_path\":\"$HC/t.jsonl\",\"session_id\":\"cg9\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$HCA" python3 $H/completion-guard.py)
+check "an open Build stage is still sent back" "draft pull requests" "$o"
+check "checks are never named as work to do now" "clean" "$(echo "$o" | grep -c 'Continue with .Sunday recovery · Stage 5' | sed 's/^0$/clean/')"
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['line'])" )
+( cd "$HCA" && sed -i 's/| Sunday recovery · Stage 5 of 7 — merge both (Check) | WAITING ON YOU — merge PR 12 and 13 | |/| Sunday recovery · Stage 5 of 7 — merge both | WAITING ON YOU — merge PR 12 and 13 | |/' WORKING_RECORD.md )
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['line'])")
+check "a stage waiting on you counts as Check even without the label" "Check 0 of 3" "$o"
+printf '%s' "$(msg 'Build still open.
+Completion: Build 3 of 4 done (75%) · Check 0 of 3
+Confidence: High · Status: Checked')" > "$HC/t.jsonl"; printf '{"session":"cg9","n":2}' > "$HCA/.claude/state/prompt-number.json"
+o=$(echo "{\"transcript_path\":\"$HC/t.jsonl\",\"session_id\":\"cg9\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$HCA" python3 $H/completion-guard.py)
+check "an unlabelled check row is sent back to get its (Check) label, so ticking it never moves it to Build" "Add ' (Check)' to the end of these row names" "$o"
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$PROJ" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['line'])")
+check "a plan without checks keeps the plain line" "^Completion: [0-9][0-9]* of [0-9][0-9]* done" "$o"
+check "the rules name rows by the plan name only (no R-number)" "plan name only" "$(cat $H/../rules/CLAUDE-rules.md)"
+# --- v3.1.24c: closing lines without colour codes or sizes
+cat > "$T/jargon.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Detail.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** Every button is at least 44px tall, and the orange-red #c14a24 is drawn as #b8441f.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting."}]}}
+J
+o=$(vl "$T/jargon.jsonl"); check "colour codes in the closing lines are sent back" "no colour codes or sizes (#b8441f, #c14a24, 44px)" "$o"
+check "the send-back says a change from what I approved is a question" "is a question in the " "$o"
+cat > "$T/plainclose.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Buttons are 44px; colour #b8441f (details may keep codes).\n\nConfidence: High · Status: Checked\n❓ Decisions\n1. Use a slightly darker orange-red? Recommended: no.\n---\n> 📌 **Result:** Buttons are finger-sized now.\n> 👉 **I need from you:** Answer the colour question.\n> ➡️ **Next:** I keep your colour unless you say otherwise."}]}}
+J
+o=$(vl "$T/plainclose.jsonl"); check "codes in the details are fine when the closing lines are plain" "^$" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "session start says a change from what I approved is a question" "is a question in that list" "$o"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

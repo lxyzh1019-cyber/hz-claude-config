@@ -55,6 +55,13 @@ if re.search(cfg["validation_line_pattern"], text):
                         "decisions for me in a '❓ Decisions' list, one line each with your recommendation. The icons "
                         "are part of the labels.")
     else:
+        jargon = sorted({j.strip() for l in tail for j in re.findall(
+            r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b\d+(?:\.\d+)?\s?(?:px|pt|rem|em)\b", l)})
+        if jargon:   # v3.1.24: colour codes and sizes mean nothing to me; say what I will see
+            problems.append("The three closing lines are in everyday words: no colour codes or sizes (" +
+                            ", ".join(jargon[:4]) + "). Say what I will see — for example 'a slightly darker "
+                            "orange-red' or 'finger-sized buttons'. A change from what I approved is a question in "
+                            "the '❓ Decisions' list, not news.")
         need = re.sub(r"^.*?I need from you:\s*", "", tail[1].replace("*", ""), flags=re.I)
         if len(need.split()) > int(cfg["need_line_max_words"]):
             problems.append(f"The 'I need from you' line is one action in at most {cfg['need_line_max_words']} words. "

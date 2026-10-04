@@ -4,7 +4,7 @@
 import json, sys
 import os, re
 from _common import (read_hook_input, load_config, count_bullets, log, hotspot_alerts, FIX_WORDS,
-                     completion_summary, bump_prompt_number, STATE_DIR)
+                     completion_summary, bump_prompt_number, handoff_text, STATE_DIR)
 
 data = read_hook_input()
 prompt = data.get("prompt") or ""
@@ -77,16 +77,54 @@ if any(ph in low for ph in cfg["pause_phrases"]):
     except OSError:
         pass
 
-if re.search(r"\bmerged\b", low):
-    msgs.append("[fresh-session] I merged a stage. After confirming it, update '## Where we are' in the working record "
-                "(plan name, the next stage, anything the next session must know — a few lines), then end your report "
-                "with: 'To save usage, start a new session for the next stage and type: Continue <plan name> with the "
-                "next stage.'")
-
 comp = completion_summary(cfg)
+sid = data.get("session_id") or ""
+
+# v3.1.24: resuming from a restart line — switch to its branch and read the record before anything else
+resume = re.search(r"\bcontinue\s+(.+?)\s+on branch\s+([\w./-]+)", prompt, re.I)
+if resume:
+    br = resume.group(2).rstrip(".;,`")
+    msgs.append(f"[resume] This session continues earlier work. First switch to branch {br} (fetch it from origin if it "
+                f"is only on GitHub), read '## Where we are' in {cfg['record_file']} and the newest plan file in plans/, "
+                "then tell me the plan name, its newest Plan vN, the Completion lines and the next stage. Wait for my OK "
+                "before changing anything.")
+
+# v3.1.24: hand-off after a merge, or once a session is long — done by the session itself, in one reply
+handoff_why = ""
+if re.search(r"\bmerged\b", low) and not comp["total"]:
+    msgs.append("[hand-off] I merged. After confirming it, update '## Where we are' in the working record and commit "
+                "and push it; if more work follows, suggest a fresh session for it.")
+elif re.search(r"\bmerged\b", low):
+    handoff_why = "I merged a stage. After confirming the merge, "
+else:
+    try:
+        used = int((json.load(open(os.path.join(STATE_DIR, "session-tokens.json"), encoding="utf-8")) or {}).get(sid, 0))
+    except (OSError, ValueError, TypeError):
+        used = 0
+    warned = os.path.join(STATE_DIR, "long-session-warned.txt")
+    try:
+        already = sid and sid in open(warned, encoding="utf-8").read().split()
+    except OSError:
+        already = False
+    if sid and used >= int(cfg.get("fresh_session_hint_tokens", 1500000)) and comp["total"] and not already:
+        handoff_why = (f"This session is long ({round(used / 1e6, 1)} M tokens): every step re-reads all of it. Finish "
+                       "the current stage (or, if it is finished, stop here), then in that reply ")
+        try:
+            os.makedirs(STATE_DIR, exist_ok=True)
+            with open(warned, "a", encoding="utf-8") as f:
+                f.write(sid + "\n")
+        except OSError:
+            pass
+if (not handoff_why and not resume and comp.get("check_total") and comp["total"] and not comp.get("build_done")):
+    # v3.1.24: Build and Check are counted apart; the hand-off happens in the report where Build reaches 100%
+    msgs.append("[hand-off] When the last Build stage is finished, " + handoff_text(cfg, comp, after_build=True))
+if handoff_why and not resume:
+    log("plan-gate", {"handoff": handoff_why[:40]})
+    msgs.append("[hand-off] " + handoff_why + handoff_text(cfg, comp))
+
 if comp["total"] and comp["open"]:
-    msgs.append("[completion] " + comp["display"] + "\n— this branch's ledger rows; the final report must end with "
-                "these lines (before the validation line) and may claim done only when nothing is open." +
+    msgs.append("[completion] " + comp["display"] + "\n— this plan's ledger rows; the final report carries "
+                "these lines (just before the validation line) and may claim done only when nothing is open." +
                 ("" if comp["scoped"] else " The base branch could not be read, so nothing is blocked on this count."))
 
 if msgs:

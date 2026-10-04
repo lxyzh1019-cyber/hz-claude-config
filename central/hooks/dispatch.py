@@ -72,8 +72,10 @@ if reasons:
         f"{i}. {r}" for i, r in enumerate(reasons, 1))
     bump_stat(sid, "sendbacks")
     out = {"decision": "block", "reason": body}
+    # v3.1.23: a send-back keeps the notices; v3.1.24: only the version line, so the summary shows once, at the end
+    notes = [n.split("\n")[0] if n.startswith("Rules v") else n for n in notes]
     if notes:
-        out["systemMessage"] = "\n".join(notes)   # v3.1.23: a send-back no longer swallows the notices
+        out["systemMessage"] = "\n".join(notes)
     log("dispatch", {"event": event, "sent_back": len(reasons), "notices": len(notes)})
     print(json.dumps(out))
     sys.exit(0)

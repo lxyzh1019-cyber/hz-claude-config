@@ -45,7 +45,7 @@ DEFAULT_CONFIG = {
     # completion guard (Stop): auto-fix rounds per turn before a final report may stand with open ledger items
     "auto_fix_max_rounds": 1,
     "pause_phrases": ["stop here", "pause here", "that's enough for now", "that is enough for now", "leave the rest", "stop for now"],
-    "completion_line_pattern": r"Completion:\s*(\d+)\s+of\s+(\d+)",
+    "completion_line_pattern": r"Completion:\s*(?:Build\s+)?(\d+)\s+of\s+(\d+)",
     # completion guard: compare the ledger with this ref (read only, never fetched); rows unchanged against it
     # belong to earlier rounds and are neither counted nor listed
     "ledger_base_ref": "origin/main",
@@ -429,6 +429,7 @@ def _record_table(cfg, heading_regex, text=None):
 COMPLETE_WORDS = ("complete", "done", "✅")
 WAITING_WORDS = ("waiting on you", "waiting for you", "your step")
 QUEUED_WORDS = ("queued",)
+CHECK_TAG = re.compile(r"\((?:check|checking)\)", re.I)
 PLAN_ROW = re.compile(r"^(?P<plan>.+?)\s*·\s*Stage\s+(?P<k>\d+[a-z]?)\s+of\s+(?P<m>\d+)\b", re.I)
 BLOCKED_WORDS = ("blocked", "cannot", "won't fix", "wont fix", "dropped", "superseded", "deferred")
 
@@ -456,6 +457,10 @@ def deliverable_ledger(cfg, text=None):
                     "queued": any(w in low for w in QUEUED_WORDS),
                     "plan": (PLAN_ROW.match(name).group("plan").strip() if PLAN_ROW.match(name) else None),
                     "blocked": any(w in low for w in BLOCKED_WORDS) and not any(w in low for w in WAITING_WORDS),
+                    "superseded": "superseded" in low and not any(w in low for w in COMPLETE_WORDS if w != "✅"),
+                    # v3.1.24: a Check stage (confirming the work: merges, live check, device check) — labelled
+                    # "(Check)" in its name, or a stage waiting on the user
+                    "check": bool(CHECK_TAG.search(name)) or any(w in low for w in WAITING_WORDS),
                     "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip(),
                     "row": " | ".join(c.strip() for c in r)})
     return out
@@ -487,36 +492,133 @@ def completion_summary(cfg):
         scoped = True
     else:
         items = changed
-    total = len(items)
-    done = [i for i in items if i["complete"]]
-    blocked = [i for i in items if i["blocked"] and not i["complete"]]
-    waiting = [i["name"] for i in items if i.get("waiting") and not i["complete"]]
-    queued = [i["name"] for i in items if i.get("queued") and not i["complete"]]
-    open_ = [i["name"] for i in items if not i["complete"] and not i["blocked"] and not i.get("waiting")
+    items = [i for i in items if not i.get("superseded")]   # v3.1.24: dropped by an approval, so not counted
+    checks = [i for i in items if i.get("check")]
+    if plan and checks:   # v3.1.24: Build (the work) and Check (confirming it) are counted apart
+        build = [i for i in items if not i.get("check")]
+    else:
+        checks, build = [], items
+    total = len(build)
+    done = [i for i in build if i["complete"]]
+    blocked = [i for i in build if i["blocked"] and not i["complete"]]
+    waiting = [i["name"] for i in build if i.get("waiting") and not i["complete"]]
+    queued = [i["name"] for i in build if i.get("queued") and not i["complete"]]
+    open_ = [i["name"] for i in build if not i["complete"] and not i["blocked"] and not i.get("waiting")
              and not i.get("queued")]
     no_ev = [i["name"] for i in done if not i["evidence"]]
     pct = round(100 * len(done) / total) if total else 0
-    line = f"Completion: {len(done)} of {total} done ({pct}%)"
-    if waiting:
-        line += f" · Waiting on you: {len(waiting)}"
-    if queued:
-        line += f" · Queued: {len(queued)}"
+    check_open = [i["name"] for i in checks if not i["complete"]]
+    if checks:
+        line = (f"Completion: Build {len(done)} of {total} done ({pct}%) · Check {len(checks) - len(check_open)} "
+                f"of {len(checks)}")
+    else:
+        line = f"Completion: {len(done)} of {total} done ({pct}%)"
+        if waiting:
+            line += f" · Waiting on you: {len(waiting)}"
+        if queued:
+            line += f" · Queued: {len(queued)}"
     if plan:
         line = f"{line} — {plan}"
+    display = completion_display(cfg, line, open_, waiting, [i["name"] for i in blocked], queued)
+    if checks:
+        states = {i["name"]: i for i in checks}
+        display += "\nCheck:\n" + "\n".join(
+            f"- {n}" + (" (waiting on you)" if states[n].get("waiting") else " (queued)" if states[n].get("queued")
+                        else " (blocked)" if states[n]["blocked"] else "") for n in check_open)
+        if not open_ and not blocked and not waiting and not queued and check_open:
+            display += ("\nBuild is done; the rest is checking. If a check finds a problem, tell this session or "
+                        "start a new one with the restart line: it becomes a new Build row.")
     return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
-            "waiting": waiting, "queued": queued, "pct": pct, "line": line, "plan": plan,
-            "display": completion_display(cfg, line, open_, waiting), "scoped": scoped}
+            "waiting": waiting, "queued": queued, "pct": pct, "line": line, "plan": plan, "display": display,
+            "scoped": scoped, "check_open": check_open, "check_total": len(checks),
+            "build_done": total > 0 and len(done) == total,
+            "untagged_checks": [i["name"] for i in checks if not CHECK_TAG.search(i["name"])],
+            "not_done": [i["name"] for i in build + checks if not i["complete"]]}
 
 
-def completion_display(cfg, line, open_names, waiting=()):
-    """The Completion line, then the open items one per line, names only, at most a few, then the stages
-    waiting on the user."""
+def completion_display(cfg, line, open_names, waiting=(), blocked=(), queued=()):
+    """The Completion line, then every item that is not complete, one per line, names only: open items (at most a
+    few, then "+N more"), then blocked, queued and waiting ones with their state — so done plus the listed items
+    always adds up to the total (v3.1.24: blocked and queued items used to be counted but not shown)."""
     shown = int(cfg.get("completion_open_shown", 5))
     out = [line] + [f"- {n}" for n in open_names[:shown]]
     if len(open_names) > shown:
-        out.append(f"+{len(open_names) - shown} more in the record")
-    out += [f"- Waiting on you: {n}" for n in list(waiting)[:shown]]
+        out.append(f"+{len(open_names) - shown} more open in the record")
+    out += [f"- {n} (blocked)" for n in blocked]
+    out += [f"- {n} (queued)" for n in queued]
+    out += [f"- Waiting on you: {n}" for n in waiting]
     return "\n".join(out)
+
+
+# ---- Plan files and the hand-off to a fresh session (v3.1.24) -----------------------------------------------
+PLAN_NUMBER = re.compile(r"\bPlan v(\d+)\b")
+
+
+def newest_plan_version():
+    """Highest 'Plan vN' named in the plan files in plans/ (the stub's plansDirectory), or None without plan files."""
+    best = None
+    folder = os.path.join(PROJECT_DIR, "plans")
+    try:
+        names = [n for n in os.listdir(folder) if n.lower().endswith(".md")]
+    except OSError:
+        return None
+    for n in names:
+        try:
+            with open(os.path.join(folder, n), encoding="utf-8", errors="replace") as f:
+                text = f.read(200000)
+        except OSError:
+            continue
+        for v in PLAN_NUMBER.findall(text + " " + n.replace("-plan-v", " Plan v")):
+            best = max(best or 0, int(v))
+    return best
+
+
+def current_branch():
+    try:
+        return run_text(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5).stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def next_stage(comp):
+    """The first item still to do: open, then queued, then waiting, then blocked."""
+    name = None
+    for key in ("open", "queued", "waiting", "check_open"):
+        if comp.get(key):
+            name = comp[key][0]
+            break
+    name = name or (comp.get("not_done") or ["the next stage"])[0]
+    m = PLAN_ROW.match(name)
+    return name[m.start("k") - len("Stage "):].strip() if m and name[:m.start("k")].rstrip().lower().endswith("stage") else name
+
+
+def restart_line(comp, branch=None):
+    plan = comp.get("plan") or "the current work"
+    return f"Continue {plan} on branch {branch or current_branch()}; next: {next_stage(comp)}."
+
+
+def handoff_text(cfg, comp, after_build=False):
+    """The hand-off the session does itself in one reply, so the user never has to ask for it."""
+    branch = current_branch()
+    rec = cfg["record_file"]
+    return ("do the hand-off yourself in this reply; the user must not have to ask for it: "
+            f"1) update '## Where we are' in {rec} (the plan name exactly as in the ledger, the newest Plan vN and its plan "
+            "file path, the next stage, the restart line itself, what the next session must know — a few lines that point to plan files, "
+            "commits and pull requests by path or number instead of copying them, with no keys or passwords), then "
+            "commit and push "
+            f"{rec} to {branch}; "
+            "2) show the Completion lines: every row of the plan that is not complete — open, blocked, queued, "
+            f"waiting, Build and Check — so done plus listed adds up ({comp.get('line', '')}); "
+            "3) above the --- line, give this restart line in a code block, exactly: "
+            f"`{restart_line(comp, branch) if not after_build else restart_after_build(comp, branch)}` — and in the "
+            "'I need from you' line ask the user for the first check, and to start a new session with that line if "
+            "a check finds a problem later.")
+
+
+def restart_after_build(comp, branch=None):
+    """The restart line for the moment Build reaches 100%: next is the first check."""
+    first = (comp.get("check_open") or [None])[0]
+    return restart_line(dict(comp, open=[], queued=[], waiting=[], check_open=[first] if first else []), branch)
 
 
 # ---- Session statistics (switchboard counts send-backs and refusals; the end-of-task summary reads them) --------
