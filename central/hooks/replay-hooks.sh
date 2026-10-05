@@ -12,6 +12,7 @@ cd "$PROJ"
 git init -q . && git config user.email t@t && git config user.name t
 pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
+export HZ_RULES_FIRST_OFF=1        # v3.1.29: older tests run as if the rules were read; the v3.1.29 tests switch it on
 check(){ # name expected_substring actual
   if grep -q -- "$2" <<<"$3"; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 -> ${3:0:200}"; fail=$((fail+1)); fi; }
 pn(){ # set the prompt counter the UserPromptSubmit hook would have written
@@ -106,7 +107,7 @@ listed="$(tail -n +2 "$CENTRAL/MANIFEST.txt" | sort)"
 actual="$(cd "$CENTRAL" && find . -type f ! -name MANIFEST.txt ! -path '*__pycache__*' | sed 's#^\./##' | sort)"
 check "MANIFEST lists exactly the central files" "same" "$([ "$listed" = "$actual" ] && echo same || echo "differs: run tools/build_manifest.py")"
 o=$(echo '{}' | python3 $H/session-start.py); check "session-start reports manifest version" "Rules v$VER loaded" "$o"
-check "rules text injected" "My Environment" "$o"
+check "rules file named at session start (v3.1.29: read, not injected)" "read the full working rules with the Read tool" "$o"
 check "worker instructions path given" "Worker instructions: .*opus-worker-instructions.md" "$o"
 mv FEATURES.md F.bak
 o=$(echo '{}' | python3 $H/session-start.py); check "missing per-repo file reported" "Missing per-repo files: FEATURES.md" "$o"
@@ -727,7 +728,7 @@ cat > "$T/top_old.jsonl" <<'J'
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"> 📌 **Result:** ready.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting.\n---\n\nDetail.\n\nConfidence: High · Status: Checked"}]}}
 J
 o=$(vl "$T/top_old.jsonl"); check "the three lines at the top are now sent back" "ends with a quote block" "$o"
-check "the send-back asks for the three lines last" "three closing lines last" "$o"
+check "the send-back asks for the three lines last (v3.1.29: only --- and the three lines)" "Send only a line with just --- and the three closing lines" "$o"
 cat > "$T/bottom_tail.jsonl" <<'J'
 {"type":"user","message":{"role":"user","content":"go"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Detail.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** ready.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** waiting.\n\nOne more thing after the block."}]}}
@@ -1384,5 +1385,58 @@ check "the self-update adds the explorer" "explore.md" "$(ls "$SU/.claude/agents
 check "worker instructions: report Stuck after two tries" "Stuck: <check>" "$(cat $H/../agents/opus-worker-instructions.md)"
 check "worker instructions: start from the map" "Start from the map" "$(cat $H/../agents/opus-worker-instructions.md)"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start names the explorer and reviewer instructions" "Reviewer instructions:" "$o"
+# --- v3.1.29: real Weekly-Planner replies (PR 114 session): a note after Status passes; a send-back asks only for what failed
+mkt(){ python3 -c "
+import json,sys
+print(json.dumps({'type':'user','message':{'role':'user','content':'is there another request'}}))
+print(json.dumps({'type':'assistant','message':{'role':'assistant','content':[{'type':'tool_use','name':'Bash','input':{'command':'gh pr list'}}]}}))
+print(json.dumps({'type':'user','message':{'role':'user','content':[{'type':'tool_result','content':'ok'}]}}))
+print(json.dumps({'type':'assistant','message':{'role':'assistant','content':[{'type':'text','text':sys.argv[1]}]}}))" "$1" > "$2"; }
+mkt $'No, don\'t create a new pull request.\n\nConfidence: Medium · Status: Checked. I\'m not sure which prompt you\'re seeing.\n---\n> 📌 **Result:** The setup update is merged.\n> 👉 **I need from you:** Use Pull origin in GitHub Desktop.\n> ➡️ **Next:** I am ready for your request.' "$T/v129_note.jsonl"
+o=$(vl "$T/v129_note.jsonl"); check "v3.1.29: a short note after Status passes (real reply)" "^$" "$o"
+mkt $'Ready to merge.\n\nConfidence: High · Status: Checked — PR checked on GitHub\n---\n> 📌 **Result:** Ready to merge.\n> 👉 **I need from you:** Merge it.\n> ➡️ **Next:** New setup next session.' "$T/v129_dash.jsonl"
+o=$(vl "$T/v129_dash.jsonl"); check "v3.1.29: a note after a dash passes for Checked" "^$" "$o"
+mkt $'📌 Result: Ready to merge. The setup update is pushed.\nI need from you: please merge pull request 114.\nConfidence: High · Status: Checked' "$T/v129_badblock.jsonl"
+o=$(vl "$T/v129_badblock.jsonl"); check "v3.1.29: a bad closing block is sent back (real reply)" '"decision": "block"' "$o"
+check "v3.1.29: the re-send skips a validation line that was already right" "do not repeat the validation line" "$o"
+mkt $'Merged.\n---\n> 📌 **Result:** Merged.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** Ready.' "$T/v129_noline.jsonl"
+o=$(vl "$T/v129_noline.jsonl"); check "v3.1.29: only the validation line missing -> send back" '"decision": "block"' "$o"
+check "v3.1.29: the re-send is only the validation line" "Send only the validation line" "$o"
+o=$(cd "$H" && python3 -c "
+import re,sys;sys.path.insert(0,'.')
+from _common import load_config
+p=load_config()['validation_line_pattern']
+for s in ['Confidence: High · Status: Checked — PR checked','Confidence: Low · Status: Proposed','Confidence: High · Status: Validated — npm test 4/4','Confidence: High · Status: Checked.','Confidence: High · Status: Checkedx','Confidence: High · Status: Done']:
+  m=re.search(p,s); print(m.group(2).split()[0] if m else 'none')" | tr '\n' ' ')
+check "v3.1.29: the status word is read the same way by every check" "^Checked Proposed Validated Checked none none $" "$o"
+check "v3.1.29: rules allow a short note after any status" "a short note after" "$(cat $H/../rules/CLAUDE-rules.md)"
+# --- v3.1.29: session start stays under Claude Code's 10,000-character cut; the main session reads the rules first
+o=$(echo '{"session_id":"rf1"}' | python3 $H/session-start.py)
+n=$(printf '%s' "$o" | python3 -c "import json,sys;print(len(json.load(sys.stdin)['hookSpecificOutput']['additionalContext']))")
+check "v3.1.29: session start text is under 10,000 characters ($n)" "yes" "$([ "$n" -lt 10000 ] && echo yes || echo no)"
+check "v3.1.29: session start no longer carries the rules text" "clean" "$(echo "$o" | grep -c 'Global Working Rules' | sed 's/^0$/clean/')"
+check "v3.1.29: session start keeps the loaded line the pointer looks for" "\[session-start\] Rules v" "$o"
+check "v3.1.29: session start names the rules file to read first" "FIRST, before any other tool or reply: read the full working rules" "$o"
+check "v3.1.29: the closing block format is inside the first 10,000 characters" "I need from you" "$o"
+rg(){ echo "$1" | HZ_RULES_FIRST_OFF= python3 $H/rules-first-guard.py; }
+RP=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import RULES_PATH;print(RULES_PATH)")
+o=$(rg '{"session_id":"rf1","tool_name":"Bash","tool_input":{"command":"git status"}}'); check "v3.1.29: a command before the rules are read is refused with the path" "Read the working rules first" "$o"
+o=$(rg '{"session_id":"rf1","tool_name":"Grep","tool_input":{"pattern":"x"}}'); check "v3.1.29: searching is allowed before the rules are read" "^$" "$o"
+o=$(rg '{"session_id":"rf1","tool_name":"Edit","agent_id":"w1","tool_input":{"file_path":"a.js"}}'); check "v3.1.29: a worker is never stopped by the rules-first check" "^$" "$o"
+o=$(rg "{\"session_id\":\"rf1\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$RP\"}}"); check "v3.1.29: reading the rules file is allowed" "^$" "$o"
+o=$(rg '{"session_id":"rf1","tool_name":"Bash","tool_input":{"command":"git status"}}'); check "v3.1.29: after the rules are read, commands pass" "^$" "$o"
+o=$(rg '{"session_id":"rf2","tool_name":"Bash","tool_input":{"command":"git status"}}'); check "v3.1.29: a new session must read the rules again" "Read the working rules first" "$o"
+o=$(rg '{"session_id":"rf3","tool_name":"Read","tool_input":{"file_path":"C:\\Users\\h\\.cache\\hz-rules\\3.1.29\\rules\\CLAUDE-rules.md"}}'); o=$(rg '{"session_id":"rf3","tool_name":"Bash","tool_input":{"command":"ls"}}'); check "v3.1.29: a Windows path to the rules counts as read" "^$" "$o"
+echo '{"session_id":"rf3"}' | python3 $H/session-start.py >/dev/null
+o=$(rg '{"session_id":"rf3","tool_name":"Bash","tool_input":{"command":"ls"}}'); check "v3.1.29: a new session start (or /compact) asks for the rules again" "Read the working rules first" "$o"
+o=$(echo '{"session_id":"rf4","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}' | HZ_RULES_FIRST_OFF= python3 $H/dispatch.py PreToolUse); check "v3.1.29: the switchboard runs the rules-first check" "Read the working rules first" "$o"
+rm -f "$PROJ/.claude/state/rules-read.json"
+python3 -c "import json;p='$H/config.json';d=json.load(open(p));d['session_start_max_chars']=1500;json.dump(d,open(p,'w'))"
+o=$(echo '{"session_id":"rf5"}' | python3 $H/session-start.py)
+n=$(printf '%s' "$o" | python3 -c "import json,sys;print(len(json.load(sys.stdin)['hookSpecificOutput']['additionalContext']))")
+check "v3.1.29: over the limit, the facts move to a file instead of being cut ($n)" "yes" "$([ "$n" -lt 1500 ] && echo yes || echo no)"
+check "v3.1.29: ...and the session is told to read that file" "session-facts.md" "$o"
+check "v3.1.29: ...and the facts file holds the closing block format" "I need from you" "$(cat "$PROJ/.claude/state/session-facts.md")"
+cp "$T/config.bak" "$H/config.json"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

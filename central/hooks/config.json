@@ -7,13 +7,17 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.28 changes the app setup (adds the reviewer and the explorer): each app opens one setup pull request at its next session — merge each. claude.ai preferences: changed (STE-lite writing) — recopy docs/claude-ai-preferences.txt.",
+  "update_notice": "v3.1.29: no app setup change (no setup pull request). The rules are read from their file at session start (Claude Code cut the long start text); the format check accepts a short note after any Status and a send-back repeats only the part that failed. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
       "skill-router.py"
     ],
     "PreToolUse": [
+      {
+        "script": "rules-first-guard.py",
+        "tools": ".*"
+      },
       {
         "script": "worker-budget.py",
         "tools": ".*"

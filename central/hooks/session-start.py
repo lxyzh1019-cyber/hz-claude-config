@@ -2,7 +2,7 @@
 """SessionStart hook (run by the repo's .claude/hz-loader.py): inject the central rules, the version, branch,
 where the worker instructions and skills are, per-repo file status, and hotspot alerts."""
 import json, os, subprocess
-from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, RULES_PATH, SKILLS_DIR, PLAN_TEMPLATE,
+from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, STATE_DIR, RULES_PATH, SKILLS_DIR, PLAN_TEMPLATE,
                      WORKER_PATH, hotspot_alerts, central_version, completion_summary)
 from stubcheck import stub_status
 
@@ -16,11 +16,14 @@ except (OSError, subprocess.SubprocessError, UnicodeError):
     branch = "unknown"
 
 parts = []
+# v3.1.29: Claude Code saves hook text over 10,000 characters to a file and shows only a 2,000-character preview, so
+# the rules (about 25,000) are no longer sent here. The short facts are sent, and the session reads the rules file
+# itself before any other tool (rules-first-guard.py).
+loaded = os.path.exists(RULES_PATH)
 try:
-    parts.append(open(RULES_PATH, encoding="utf-8").read())
-    loaded = True
+    os.remove(os.path.join(STATE_DIR, "rules-read.json"))   # every start (also after /compact) reads the rules again
 except OSError:
-    loaded = False
+    pass
 
 note = os.environ.get("HZ_LOADER_NOTE", "")
 facts = [f"[session-start] Rules v{version} loaded · branch: {branch}" + (f" · {note}" if note else "")
@@ -104,7 +107,25 @@ facts.append("The version line is shown to me in the notice after your reply: do
              "repository — commit the approved one with the work and delete drafts that were not approved. Rules, "
              "hooks, worker instructions and skills come from "
              "hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
-parts.append("\n".join(facts))
+if loaded:
+    facts.append(f"FIRST, before any other tool or reply: read the full working rules with the Read tool: {RULES_PATH} "
+                 "— they are not in this message. Other tools wait until it is read.")
+text = "\n".join(facts)
+LIMIT = int(cfg.get("session_start_max_chars", 9500))
+if len(text) > LIMIT:   # never let Claude Code cut this text: move the rest into a file read together with the rules
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        extra = os.path.join(STATE_DIR, "session-facts.md")
+        with open(extra, "w", encoding="utf-8") as f:
+            f.write(text)
+        head = text[:LIMIT - 400].rsplit("\n", 1)[0]
+        text = (head + f"\n… the rest of these session facts is in {extra} — read it with the rules, first."
+                + (f"\nFIRST, before any other tool or reply: read the full working rules with the Read tool: "
+                   f"{RULES_PATH}" if loaded else ""))
+    except OSError:
+        pass
+    log("session-start", {"facts_chars": len("\n".join(facts)), "moved_to_file": True})
+parts.append(text)
 # v3.1.23: no systemMessage here — the desktop app does not show session-start notices; stats.py shows the
 # version line in the Stop notice instead.
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n\n".join(parts)}}))
