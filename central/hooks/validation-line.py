@@ -44,15 +44,30 @@ def norm(s):
     return re.sub(r"\s+", " ", (s or "").replace("\ufe0f", "")).strip().lower()
 
 
-def send_back(problems):
+RESEND_DEFAULT = ("Send only what is missing: do not repeat the rest of the report, which I already see. Your re-send "
+                  "is short: the Completion line if one is required, the validation line, then a line with just --- "
+                  "and the three closing lines last.")
+# v3.1.29: everything already on my screen stays there, so a re-send repeats only the part that failed
+RESEND_CLOSING = ("Send only a line with just --- and the three closing lines: do not repeat the validation line or "
+                  "the rest of the report, which I already see.")
+RESEND_LINE = ("Send only the validation line, nothing else: the three closing lines above were right, and I already "
+               "see them.")
+
+
+def send_back(problems, resend=RESEND_DEFAULT):
     r = use_round("format", sid, int(cfg["auto_fix_max_rounds"]))
     if r is None and data.get("stop_hook_active"):
         sys.exit(0)            # no prompt number here: never loop
     if r is not None and not r[1]:
         sys.exit(0)            # limit reached for this prompt
-    block(" ".join(problems) + " Send only what is missing: do not repeat the rest of the report, which I "
-          "already see. Your re-send is short: the Completion line if one is required, the validation line, then "
-          "a line with just --- and the three closing lines last.")
+    block(" ".join(problems) + " " + resend)
+
+
+def closing_ok(t):
+    lines = plain_lines(t)
+    labels = cfg["report_top_labels"]
+    tail = lines[-len(labels):]
+    return len(tail) == len(labels) and all(norm(l).startswith(norm(lab)) for l, lab in zip(tail, labels))
 
 
 problems = []
@@ -100,14 +115,20 @@ if re.search(cfg["validation_line_pattern"], text):
             problems.append(f"The 'I need from you' line is one action in at most {cfg['need_line_max_words']} words. "
                             "Move explanations above the --- line and decisions into the '❓ Decisions' list.")
     if problems:
-        send_back(problems)
+        # only the closing block failed (no time, colour or picture problem in the body) → re-send just that block
+        only_closing = len(problems) == 1 and problems[0].startswith("A final answer ends with a quote block")
+        send_back(problems, RESEND_CLOSING if only_closing else RESEND_DEFAULT)
     sys.exit(0)
 
 if is_progress_report(text, records, cfg):
     if problems:
         send_back(problems)
     sys.exit(0)
+if closing_ok(text):   # v3.1.29: the closing block is right; only the validation line is missing or malformed
+    send_back(problems + ["This reply has no valid validation line: 'Confidence: High|Medium|Low · Status: "
+                          "Proposed|Checked|Validated|Uncertain', optionally followed by ' — <short note>' "
+                          "(Validated names what was run)."], RESEND_LINE)
 send_back(problems + ["This reply has no closing line. While a worker runs, send nothing; if I ask for status, reply "
                       "with one line only: '⏳ Working on: <names> · <n> of <m> done'. Otherwise this is a final answer: "
                       "include 'Confidence: High|Medium|Low · Status: Proposed|Checked|Validated — <what was run>|"
-                      "Uncertain' with honest values, and end with --- and the three closing quote lines."])
+                      "Uncertain' with honest values (a short note after ' — ' is fine for any status), and end with --- and the three closing quote lines."])

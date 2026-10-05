@@ -1,4 +1,4 @@
-version: 3.1.28
+version: 3.1.29
 agents/explorer-instructions.md
 agents/opus-worker-instructions.md
 agents/reviewer-instructions.md
@@ -16,6 +16,7 @@ hooks/record-edit-guard.py
 hooks/record-guard.py
 hooks/replay-hooks.sh
 hooks/routing-guard.py
+hooks/rules-first-guard.py
 hooks/rules-read-guard.py
 hooks/session-start.py
 hooks/setup-guard.py

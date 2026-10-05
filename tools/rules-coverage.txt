@@ -15,6 +15,7 @@ Stub files listed | R | `.claude/hz-loader.py`
 Never copy central files or edit the stub | R | Never copy central files in or edit the stub
 Report missing per-repo files; stop without rules | R | Report missing per-repo files first
 Session start injects facts; version line in the notice | R | so replies never write a version line
+Rules file read first, other tools wait (v3.1.29) | R | read the rules file first (other tools wait until it is read)
 Setup update: own branch, ready PR, ask to merge, never two | R | Never two setup pull requests at once
 Setup never updated by hand | R | never update the setup by hand
 Sessions without hooks read rules as text | R | read by hand — hooks inactive
@@ -151,6 +152,7 @@ No codes or sizes in closing lines | R | colour codes or sizes
 Send-back asks only for what is missing | R | A send-back asks only for what is missing
 Short chat replies exempt | R | Short chat replies that used no tools are exempt
 Validation line | R | **Validation line (Hook).**
+Status note allowed for any status (v3.1.29) | R | a short note after ` — ` is allowed for any status
 Validated needs what ran | R | `Validated — npm test 42/42`
 Edmonton time | R | **Times in Edmonton time (Hook).**
 End-of-task summary | R | **End-of-task summary (Hook, no AI turn).**

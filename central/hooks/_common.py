@@ -36,7 +36,9 @@ DEFAULT_CONFIG = {
     # the only interim reply: one status line, and only when asked while a worker still runs
     "progress_line_pattern": r"^\s*⏳\s*Working on:\s*\S.*$",
     "need_line_max_words": 30,
-    "validation_line_pattern": r"(?m)Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated(\s*—\s*\S.*)?|Uncertain)\s*$",
+    # v3.1.29: a short note may follow any status ("Checked — PR checked", "Checked. Not sure which prompt"); group 2
+    # is the status word alone, so every check reads it the same way
+    "validation_line_pattern": r"(?m)Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated|Uncertain)\b(\s*[—–\-.;:,]\s*\S.*|\s*\.)?\s*$",
     "design_triggers": ["redesign", "architecture", "data model", "schema", "migration", "sync layer", "firestore rules", "shared state", "regression", "keeps breaking", "again", "still broken", "refactor"],
     # planner suggestion (plan-gate): strong signals that a plan needs Fable rather than the Opus default
     "fable_planner_signals": ["root cause", "why does", "why is", "investigate", "across all", "every repo", "all repos", "all apps",
