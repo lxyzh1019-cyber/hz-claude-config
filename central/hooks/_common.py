@@ -58,7 +58,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.23",
+        "version": "3.1.26",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
         "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"]},
         # keys the stub must NOT set, so the account's own default applies
@@ -73,8 +73,10 @@ DEFAULT_CONFIG = {
 },
         # which tools an event's matcher must cover ("<needle in the matcher>", "<plain name>")
         "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"],
-                           "PreToolUse ": ["ExitPlanMode", "plan check before approval"]},
-        "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission"},
+                           "PreToolUse ": ["ExitPlanMode", "plan check before approval"],
+                           "PreToolUse  ": ["Read|Glob|Grep", "worker step count on reads (v3.1.26)"]},
+        "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission",
+                  "Read(~/.cache/hz-rules/**)": "reading the central rules without a prompt (v3.1.26)"},
         "pointer_text": {"hooks inactive": "multi-repo fallback in CLAUDE.md"},
     },
     "update_notice": "",
@@ -527,7 +529,7 @@ def completion_summary(cfg):
                         else " (blocked)" if states[n]["blocked"] else "") for n in check_open)
         if not open_ and not blocked and not waiting and not queued and check_open:
             display += ("\nBuild is done; the rest is checking. If a check finds a problem, tell this session or "
-                        "start a new one with the restart line: it becomes a new Build row.")
+                        "start a new one with the restart line from the record: it becomes a new Build row.")
     return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
             "waiting": waiting, "queued": queued, "pct": pct, "line": line, "plan": plan, "display": display,
             "scoped": scoped, "check_open": check_open, "check_total": len(checks),
@@ -611,8 +613,9 @@ def handoff_text(cfg, comp, after_build=False):
             f"waiting, Build and Check — so done plus listed adds up ({comp.get('line', '')}); "
             "3) above the --- line, give this restart line in a code block, exactly: "
             f"`{restart_line(comp, branch) if not after_build else restart_after_build(comp, branch)}` — and in the "
-            "'I need from you' line ask the user for the first check, and to start a new session with that line if "
-            "a check finds a problem later.")
+            "'I need from you' line ask the user only for the next action that is theirs (a merge, a check), or "
+            "nothing. Do not ask the user to open a new session: this session carries on; the restart line is kept "
+            "for picking the work up later, if this session is ever closed.")
 
 
 def restart_after_build(comp, branch=None):
@@ -669,3 +672,28 @@ def edmonton_time(now_utc=None):
     local = now + timedelta(hours=-6 if dst else -7)
     hour = local.hour % 12 or 12
     return f"{local.strftime('%b')} {local.day}, {hour}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'} {'MDT' if dst else 'MST'}"
+
+
+# ---- The plan shape that passes the plan check the first time (v3.1.26) --------------------------------------
+PLAN_TEMPLATE = """# Plan vN — <short plan name>
+
+| Summary |
+|---|
+| What this plan does, in everyday words |
+| What changed from the last version and why (first version: "First version") |
+| What I need to do |
+
+Changes in this version (from the second version on; squares cycle 🟦 Rev 1 · 🟩 Rev 2 · 🟧 Rev 3 · 🟪 Rev 4):
+```diff
++ 🟩 Rev 2 — <line added or changed>
+- 🟩 Rev 2 — <line removed>
+```
+
+<the plan itself, in everyday words, at most about 2 pages (6,000 characters); a changed section starts with its label, e.g. "🟩 Rev 2 — …">
+
+Stages to finish
+<n> stages: <x> build steps by Claude, then <y> checks (<what they are>)
+1. <stage> · Claude · Build
+2. <stage> · You · Check
+
+Technical details: <file names, line numbers, commits, code, and any longer detail — only here>"""

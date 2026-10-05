@@ -9,7 +9,7 @@
 Loop guard: at most auto_fix_max_rounds send-backs per user prompt (counted from the UserPromptSubmit hook's
 prompt number, so another check's block does not make this one step aside). If the prompt number is unknown,
 it falls back to stop_hook_active."""
-import re, sys
+import os, re, sys
 from _common import (read_hook_input, load_config, read_transcript, last_assistant_text, block, is_progress_report,
                      real_prompts, last_turn, first_text_of_turn, plain_lines, central_version, prompt_number,
                      use_round)
@@ -20,6 +20,22 @@ sid = data.get("session_id")
 records = read_transcript(data.get("transcript_path"))
 text = last_assistant_text(records)
 if not text:
+    sys.exit(0)
+# v3.1.26: a short chat reply in a request that used no tools (a greeting, a quick answer) is not sent back for its
+# closing lines — a send-back re-reads the whole session for a few words. Work reports still are.
+_turn = last_turn(records)
+_used_tools = any(isinstance(b, dict) and b.get("type") == "tool_use"
+                  for r in _turn if r.get("type") == "assistant"
+                  for b in ((r.get("message") or {}).get("content") or []) if isinstance((r.get("message") or {}).get("content"), list))
+_limit = int(os.environ.get("HZ_CHAT_REPLY_MAX_CHARS") or cfg.get("chat_reply_max_chars", 800))
+if not _used_tools and len(text) <= _limit:
+    sys.exit(0)
+# v3.1.26: work started in the background this request (a worker or command still running) — a short note without
+# the closing lines is a status message, not a final answer; the final answer comes when the work returns
+_bg = any(isinstance(b, dict) and b.get("type") == "tool_use" and (b.get("input") or {}).get("run_in_background")
+          for r in _turn if r.get("type") == "assistant"
+          for b in ((r.get("message") or {}).get("content") or []) if isinstance((r.get("message") or {}).get("content"), list))
+if _bg and len(text) <= min(_limit, 400) and not re.search(cfg["validation_line_pattern"], text):
     sys.exit(0)
 
 

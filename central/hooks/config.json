@@ -7,13 +7,17 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.25 changes no app setup files: nothing to merge in the apps. claude.ai preferences: changed (two lines added) — recopy docs/claude-ai-preferences.txt.",
+  "update_notice": "v3.1.26 changes the app setup files (reading the rules without a prompt; the worker step count): each app opens one setup pull request at its next session — merge it. claude.ai preferences: changed — recopy docs/claude-ai-preferences.txt (or the block from the chat).",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
       "skill-router.py"
     ],
     "PreToolUse": [
+      {
+        "script": "worker-budget.py",
+        "tools": ".*"
+      },
       {
         "script": "routing-guard.py",
         "tools": "Edit|Write|MultiEdit|NotebookEdit"
@@ -29,6 +33,14 @@
       {
         "script": "worker-guard.py",
         "tools": "Agent|Task"
+      },
+      {
+        "script": "record-edit-guard.py",
+        "tools": "Edit|Write|MultiEdit"
+      },
+      {
+        "script": "rules-read-guard.py",
+        "tools": "Bash"
       }
     ],
     "Stop": [
@@ -86,5 +98,8 @@
     "delete the (repo|repository|branch main|main branch)",
     "wipe"
   ],
-  "fresh_session_hint_tokens": 1500000
+  "fresh_session_hint_tokens": 1500000,
+  "plan_everyday_max_chars": 6000,
+  "worker_step_warn": 120,
+  "worker_step_stop": 150
 }

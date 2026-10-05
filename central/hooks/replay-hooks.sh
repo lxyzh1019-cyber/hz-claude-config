@@ -11,6 +11,7 @@ trap 'cp "$T/config.bak" "$H/config.json"; rm -rf "$PROJ" "$T" "$FAKEHOME"' EXIT
 cd "$PROJ"
 git init -q . && git config user.email t@t && git config user.name t
 pass=0; fail=0
+export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
 check(){ # name expected_substring actual
   if grep -q -- "$2" <<<"$3"; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 -> ${3:0:200}"; fail=$((fail+1)); fi; }
 pn(){ # set the prompt counter the UserPromptSubmit hook would have written
@@ -523,7 +524,7 @@ Stages to finish
 4. Try it on the iPad · You · Check
 Technical details: branch below-grade-lessons, commit d00f47f.
 P
-o=$(pg "$T/plan_good.md"); check "a plan with summary, squares and stages passes the Approve check" "^$" "$o"
+o=$(pg "$T/plan_good.md"); check "a plan with summary, squares and stages passes the Approve check" "Plan size: about" "$o"
 sed 's/ · Build$//; s/ · Check$//' "$T/plan_good.md" > "$T/plan_nophase.md"
 o=$(pg "$T/plan_nophase.md"); check "v3.1.24: stages without Build or Check are sent back" "3 stage(s) have neither" "$o"
 mkdir -p "$PROJ/plans"; cp "$T/plan_nophase.md" "$PROJ/plans/zz-latest.md"
@@ -765,7 +766,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.23)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.26)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "written into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Every final answer ends with a" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -938,7 +939,7 @@ recs[-1]["message"]["content"] = [{"type": "text", "text": "Done.\n\nConfidence:
 open(sys.argv[1], "w", encoding="utf-8").write("\n".join(json.dumps(r) for r in recs) + "\n")
 PY
 o=$(echo "{\"transcript_path\":\"$T/act.jsonl\",\"session_id\":\"act1\"}" | python3 $H/stats.py | sm)
-check "the summary shows tokens by activity" "^Activity: planning 33% · coding 33% · testing 18% · other 15%" "$o"
+check "the summary shows tokens by activity (v3.1.26 groups)" "^Activity: planning 33% · coding 33% · testing 18% · git & pull requests 7% · talking 8%" "$o"
 check "the activity line says it is an estimate" "estimate" "$o"
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"act2\"}" | python3 $H/stats.py | sm)
 check "helper totals count by helper type (workers code, Explore and Plan plan)" "^Activity: " "$o"
@@ -947,7 +948,7 @@ sed 's/^1\. Build the lessons · Claude · Build$/1. Build the lessons in js\/le
 o=$(pg "$T/plan_jargon.md"); check "a plan body with file names, line numbers or code is sent back" "js/lessons.js" "$o"
 check "the send-back points to Technical details" "Technical details" "$o"
 printf '\nTechnical details: js/lessons.js line 120, saveWeek(), commit 8b56fdb.\n' >> "$T/plan_good2.md"; cat "$T/plan_good.md" > "$T/plan_good2.md"; printf 'More technical notes: js/lessons.js line 120, saveWeek().\n' >> "$T/plan_good2.md"
-o=$(pg "$T/plan_good2.md"); check "file names and code inside Technical details are fine" "^$" "$o"
+o=$(pg "$T/plan_good2.md"); check "file names and code inside Technical details are fine" "Plan size: about" "$o"
 cat > "$T/utc.jsonl" <<'J'
 {"type":"user","message":{"role":"user","content":"go"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Merged at 00:02 UTC.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** merged.\n> 👉 **I need from you:** nothing.\n> ➡️ **Next:** nothing."}]}}
@@ -994,5 +995,200 @@ check "the summary counts in-between messages (2 here, the final answer not coun
 check "the completion send-back puts its lines before the validation line, closing lines last" "the three closing lines stay last" "$(cat $H/completion-guard.py)"
 check "claude.ai preferences ask for Edmonton time" "Edmonton time" "$(cat $H/../../docs/claude-ai-preferences.txt)"
 check "claude.ai preferences make changes from the approval a question" "is a question in the Decisions list" "$(cat $H/../../docs/claude-ai-preferences.txt)"
+check "claude.ai preferences keep the step-writing line" "ASD-STE100-lite" "$(cat $H/../../docs/claude-ai-preferences.txt)"
+check "claude.ai preferences keep the hz-designer line" "use hz-designer, not design-critique" "$(cat $H/../../docs/claude-ai-preferences.txt)"
+check "claude.ai preferences: Projects end with the closing block too" "still end with my closing block" "$(cat $H/../../docs/claude-ai-preferences.txt)"
+# --- v3.1.26: main vs helpers, clearer activity groups, helper time counted once
+SD="$T/s26"; rm -rf "$SD"; mkdir -p "$SD/sess26/subagents"
+python3 - "$SD" <<'PY'
+import json, sys, os
+d = sys.argv[1]
+def a(i, tools, tok, ts, side=False, text=None):
+    c = [{"type": "tool_use", "id": f"t{i}{k}", "name": n, "input": inp} for k, (n, inp) in enumerate(tools)]
+    if text: c = [{"type": "text", "text": text}]
+    r = {"type": "assistant", "timestamp": ts, "message": {"id": f"m{i}", "model": "claude-opus-5-5", "role": "assistant",
+         "usage": {"input_tokens": tok, "output_tokens": 0}, "content": c}}
+    if side: r["isSidechain"] = True
+    return r
+u = {"type": "user", "timestamp": "2026-10-04T10:00:00Z", "message": {"role": "user", "content": "go"}}
+main = [u,
+  a(1, [("Bash", {"command": "cat js/app.js | head -50"})], 100, "2026-10-04T10:01:00Z"),
+  a(2, [("Bash", {"command": "git commit -m x && git push"})], 100, "2026-10-04T10:02:00Z"),
+  a(3, [("Bash", {"command": "gh pr create --draft"})], 100, "2026-10-04T10:03:00Z"),
+  a(4, [], 100, "2026-10-04T10:04:00Z", text="Checking the next part."),
+  a(5, [("Bash", {"command": "node tools/capture-screenshots.js"})], 100, "2026-10-04T10:05:00Z"),
+  a(6, [("Bash", {"command": "npm run build"})], 100, "2026-10-04T10:06:00Z"),
+  a(7, [("Agent", {"subagent_type": "opus-worker", "prompt": "Task: x / Level: Complex"})], 100, "2026-10-04T10:07:00Z"),
+  {"type": "user", "timestamp": "2026-10-04T10:29:00Z", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t70", "content": "done"}]}},
+  a(8, [], 100, "2026-10-04T10:30:00Z", text="Done.\n\nConfidence: High · Status: Checked")]
+open(os.path.join(d, "sess26.jsonl"), "w").write("\n".join(json.dumps(r) for r in main) + "\n")
+helper = [a(20, [("Edit", {"file_path": "a"})], 2000, "2026-10-04T10:08:00Z"),
+          a(21, [("Bash", {"command": "grep -rn foo js/"})], 2000, "2026-10-04T10:18:00Z"),
+          a(22, [("Edit", {"file_path": "b"})], 2000, "2026-10-04T10:28:00Z")]
+open(os.path.join(d, "sess26", "subagents", "agent-1.jsonl"), "w").write("\n".join(json.dumps(r) for r in helper) + "\n")
+PY
+o=$(echo "{\"transcript_path\":\"$SD/sess26.jsonl\",\"session_id\":\"sess26\"}" | python3 $H/stats.py | sm)
+check "the token line shows main versus helpers" "main 12% · helpers 88%" "$o"
+check "shell reads count as planning, git and pull requests get their own group, text-only steps are talking" "^Activity: planning 31% · coding 60% · testing 1% · git & pull requests 3% · talking 3% · other 1%" "$o"
+check "the activity line lists every group that has tokens" "git & pull requests 3% · talking 3%" "$o"
+check "screenshot scripts count as testing (visual checks)" "testing 1%" "$o"
+check "helper time is counted once, not twice (main 8 + helper 20 = 28 min; twice would be 48)" "Time: Opus 28 min" "$o"
+cat > "$T/split.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"go"}}
+{"type":"assistant","message":{"id":"sp1","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":500},"content":[{"type":"thinking","thinking":"hmm"}]}}
+{"type":"assistant","message":{"id":"sp1","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":500},"content":[{"type":"tool_use","id":"x1","name":"Edit","input":{"file_path":"a"}}]}}
+{"type":"assistant","message":{"id":"sp2","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":500},"content":[{"type":"text","text":"Done.\n\nConfidence: High · Status: Checked"}]}}
+J
+o=$(echo "{\"transcript_path\":\"$T/split.jsonl\",\"session_id\":\"sp\"}" | python3 $H/stats.py | sm)
+check "a step written as several records counts by its tool call, not as talking" "^Activity: coding 50% · talking 50%" "$o"
+# --- v3.1.26b: plans right the first time; one session carries the whole plan
+o=$(echo '{}' | python3 $H/session-start.py); check "session start gives the plan shape that passes" "Plans: write the first version in this shape" "$o"
+cat > "$T/p_first.md" <<'P'
+# Plan v1 — Sunday money
+
+| Summary |
+|---|
+| Moves pocket money into the planner |
+| First version |
+| Approve it |
+
+The kids page shows the week's money and the Sunday steps.
+
+Stages to finish
+3 stages: 2 build steps by Claude, then 1 check
+1. Build the money page · Claude · Build
+2. Run every test · Claude · Build
+3. Try it on the iPad · You · Check
+
+Technical details: js/money.js, saveWeek(), commit 8b56fdb.
+P
+o=$(pg "$T/p_first.md"); check "a first version in the given shape passes the first time" "Plan size: about" "$o"
+cat > "$T/p_mention.md" <<'P'
+# Plan v2 — Sunday money
+
+| Summary |
+|---|
+| Moves pocket money into the planner |
+| Adds the cash account, as you asked in Rev 2 |
+| Approve it |
+
+Changes in this version:
+```diff
++ 🟩 Rev 2 — cash shows as its own account
+```
+
+🟩 Rev 2 — The kids page shows cash as its own account (see the Rev 2 note above).
+
+Stages to finish
+3 stages: 2 build steps by Claude, then 1 check
+1. Build the money page · Claude · Build
+2. Run every test · Claude · Build
+3. Try it on the iPad · You · Check
+P
+o=$(pg "$T/p_mention.md"); check "a Rev mentioned inside a sentence needs no square" "Plan size: about" "$o"
+sed 's/^🟩 Rev 2 — The kids page/Rev 2 — The kids page/' "$T/p_mention.md" > "$T/p_nosq.md"
+o=$(pg "$T/p_nosq.md"); check "a Rev label at the start of a line still needs its square" "Missing on: Rev 2" "$o"
+printf '# Plan v2 — X\n\nRev 2 — something changed in how the weekly money page shows the cash, the savings and the fines, with more words so the check reads it as a real plan and not a stray line of text, which is what this test needs to see.\n' > "$T/p_many.md"
+o=$(pg "$T/p_many.md"); check "a sent-back plan gets every problem at once (summary, squares, changes block, stages)" "Rev N.*Summary.*Changes in this version.*Stages to finish" "$o"
+check "the send-back shows the shape that passes" "The shape that passes" "$o"
+o=$(echo '{"prompt":"merged, go on","session_id":"m26"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
+check "the hand-off never asks me to open a new session" "Do not ask the user to open a new session" "$o"
+printf '{"long26": 2000000}' > "$HA/.claude/state/session-tokens.json"
+o=$(echo '{"prompt":"next","session_id":"long26"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
+check "a long session keeps going and stays lean instead of stopping" "Keep going without stopping, but keep this main session lean" "$o"
+# --- v3.1.26c: find all, fix all, check once
+o=$(echo '{}' | python3 $H/session-start.py); check "session start asks to find all problems, fix all, check once" "Find all, fix all, check once" "$o"
+check "workers are told the same and report their test runs" "how many full test runs you used" "$(cat $H/../agents/opus-worker-instructions.md)"
+o=$(echo "{\"transcript_path\":\"$T/act.jsonl\",\"session_id\":\"tr1\"}" | python3 $H/stats.py | sm)
+check "the summary counts the test runs" "Test runs: 3" "$o"
+# --- v3.1.26d: the everyday part of a plan is at most about 2 pages
+python3 - "$T/p_long.md" "$T/p_long_ok.md" <<'PY'
+import sys
+head = "# Plan v1 — Sunday money\n\n| Summary |\n|---|\n| Moves pocket money into the planner |\n| First version |\n| Approve it |\n\n"
+stages = "\nStages to finish\n2 stages: 1 build step by Claude, then 1 check\n1. Build the money page · Claude · Build\n2. Try it on the iPad · You · Check\n"
+body = "The kids page shows the week's money and the Sunday steps in everyday words. " * 90
+open(sys.argv[1], "w", encoding="utf-8").write(head + body + stages)
+open(sys.argv[2], "w", encoding="utf-8").write(head + "The kids page shows the week's money.\n" + stages + "\nTechnical details:\n" + body)
+PY
+o=$(pg "$T/p_long.md"); check "an everyday part over about 2 pages is sent back" "keep it under about 6,000" "$o"
+check "the send-back says to move detail, not delete it" "do not delete it" "$o"
+o=$(pg "$T/p_long_ok.md"); check "long detail under Technical details is fine" "Plan size: about" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "the plan shape at session start mentions the 2-page limit" "at most about 2 pages" "$o"
+# --- v3.1.26d: fewer re-reads and send-backs
+# 1 rules read by shell -> refused with the Read path; setup allows Read on the rules copy
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"v=$(cat ~/.cache/hz-rules/current); cat ~/.cache/hz-rules/$v/skills/hz-plan-regression-guard/SKILL.md"}}' | python3 $H/dispatch.py)
+check "a shell command reading the rules is refused before the Allow prompt" "Read the central rules with the Read tool" "$o"
+check "  ...with the exact skill file to read" "hz-plan-regression-guard/SKILL.md" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | python3 $H/rules-read-guard.py)
+check "other shell commands are untouched" "^$" "$o"
+check "the setup allows the Read tool on the rules copy" "Read(~/.cache/hz-rules/\*\*)" "$(cat $H/../../stub/settings.json)"
+check "the setup counts reads for the worker step limit" "Read|Glob|Grep|Edit" "$(cat $H/../../stub/settings.json)"
+# 3 which check sent a reply back
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sb26\"}" | python3 $H/stats.py >/dev/null; python3 -c "
+import sys;sys.path.insert(0,'$H');import os;os.environ['CLAUDE_PROJECT_DIR']='$PROJ'
+from _common import bump_stat
+bump_stat('sb26','sendbacks');bump_stat('sb26','sendback:validation-line');bump_stat('sb26','sendbacks');bump_stat('sb26','sendback:completion-guard')"; rm -f "$PROJ/.claude/state/version-shown.json"; echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sb26\"}" | python3 $H/stats.py | sm)
+check "the summary says which check sent a reply back" "Send-backs: 2 (completion 1 · format 1)" "$o"
+# 4 worker step limit
+rm -f "$PROJ/.claude/state/worker-steps.json"
+wb(){ echo "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"session_id\":\"main1\",\"agent_id\":\"$1\",\"tool_input\":{}}" | python3 $H/worker-budget.py; }
+for i in $(seq 1 119); do wb w1 >/dev/null; done
+o=$(wb w1); check "at step 120 a worker is told to wrap up" "finish the fix you are on" "$o"
+o=$(wb w1); check "step 121 runs normally" "^$" "$o"
+for i in $(seq 122 150); do wb w1 >/dev/null; done
+o=$(wb w1); check "after step 150 the worker must report" "Step limit reached (150)" "$o"
+o=$(wb w2); check "another worker has its own count" "^$" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"main1","tool_input":{}}' | python3 $H/worker-budget.py)
+check "the main session is never step-limited" "^$" "$o"
+# 5 workers keep memory small
+check "workers read big files in parts and full screenshots only for visual comparisons" "Read large files in parts" "$(cat $H/../agents/opus-worker-instructions.md)"
+# 6 evidence when a row is ticked
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"D:/x/WORKING_RECORD.md","old_string":"a","new_string":"| Plan · Stage 2 of 3 — page | COMPLETE |  |"}}' | python3 $H/record-edit-guard.py)
+check "a row ticked COMPLETE without evidence is refused at the edit" "needs its Evidence in the same edit" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"D:/x/WORKING_RECORD.md","old_string":"a","new_string":"| Plan · Stage 2 of 3 — page | COMPLETE | 42/42 tests |"}}' | python3 $H/record-edit-guard.py)
+check "with evidence the edit goes through" "^$" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"D:/x/js/app.js","old_string":"a","new_string":"| x | COMPLETE |  |"}}' | python3 $H/record-edit-guard.py)
+check "other files are not checked" "^$" "$o"
+# 7 wrong count -> notice, not send-back
+printf '%s' "$(msg 'Done.
+Completion: Build 2 of 4 done (50%) · Check 0 of 3
+Confidence: High · Status: Checked')" > "$HC/t.jsonl"
+( cd "$HCA" && git checkout -q WORKING_RECORD.md 2>/dev/null; true )
+printf '{"session":"wc1","n":1}' > "$HCA/.claude/state/prompt-number.json"; rm -f "$HCA/.claude/state/completion-rounds.json"
+( cd "$HCA" && sed -i 's/^- start$/- start\n- Restart: Continue Sunday recovery on branch claude\/recovery; next: Stage 5 of 7 — merge both (Check)./' WORKING_RECORD.md && sed -i 's/| Sunday recovery · Stage 4 of 7 — draft pull requests | NOT STARTED | |/| Sunday recovery · Stage 4 of 7 — draft pull requests | COMPLETE | PR 12, PR 13 |/; s/| Sunday recovery · Stage 5 of 7 — merge both | WAITING ON YOU/| Sunday recovery · Stage 5 of 7 — merge both (Check) | WAITING ON YOU/' WORKING_RECORD.md )
+o=$(echo "{\"transcript_path\":\"$HC/t.jsonl\",\"session_id\":\"wc1\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$HCA" python3 $H/completion-guard.py)
+check "a wrong Completion count alone is shown in the notice, not sent back" "Completion (from the record): Completion: Build 4 of 4" "$o"
+check "  ...and it is not a send-back" "clean" "$(echo "$o" | grep -c decision | sed 's/^0$/clean/')"
+# 8 short chat reply without tools is not sent back
+cat > "$T/hi.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi! What would you like to work on?"}]}}
+J
+o=$(HZ_CHAT_REPLY_MAX_CHARS= vl "$T/hi.jsonl"); check "a short chat reply that used no tools is not sent back" "^$" "$o"
+cat > "$T/hi_tools.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"check it"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"z1","name":"Read","input":{}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"z1","content":"x"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Checked it, all fine."}]}}
+J
+o=$(HZ_CHAT_REPLY_MAX_CHARS= vl "$T/hi_tools.jsonl"); check "a reply after work (tools used) is still checked" "has no closing line" "$o"
+# 2 plan size shown
+o=$(pg "$T/p_first.md"); check "the plan size is shown in the notice, no send-back" "Plan size: about 1 page above Technical details" "$o"
+cat > "$T/bgnote.jsonl" <<'J'
+{"type":"user","message":{"role":"user","content":"build it"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Agent","input":{"subagent_type":"opus-worker","run_in_background":true,"prompt":"x"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"started"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The worker is building Stage 4 in the background; I'll report when it's done."}]}}
+J
+o=$(HZ_CHAT_REPLY_MAX_CHARS= vl "$T/bgnote.jsonl"); check "a short note while background work runs is a status, not sent back" "^$" "$o"
+# --- v3.1.26e: build state first; no building while deciding; ask before building
+o=$(echo '{}' | python3 $H/session-start.py); check "session start: the Result line starts with the build state" "starts with where the work stands" "$o"
+check "session start: no building while I'm still deciding; ask first" "ask me first and build only after my yes" "$o"
+check "the rules carry the same three rules" "Build state first; no building while I'm still deciding" "$(cat $H/../rules/CLAUDE-rules.md)"
+P2="$H/../../docs/claude-ai-preferences.txt"
+check "claude.ai preferences: build state in the Result line" "Start the 📌 Result line with where the build stands" "$(cat $P2)"
+check "claude.ai preferences: no files while I'm deciding" "don't make files" "$(cat $P2)"
+check "claude.ai preferences: ask before making the file" "make the file only after my yes" "$(cat $P2)"
+check "claude.ai preferences still keep the step-writing and hz-designer lines" "ASD-STE100-lite" "$(cat $P2)"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

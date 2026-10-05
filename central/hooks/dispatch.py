@@ -55,6 +55,7 @@ for e in entries:
         notes.append(obj.pop("systemMessage"))   # shown to the user by Claude Code; costs no AI turn
     if JOIN_BLOCKS and obj.get("decision") == "block":
         reasons.append(obj.get("reason", "").strip())
+        bump_stat(sid, "sendback:" + e["script"].replace(".py", ""))   # v3.1.26: which check sent it back
         continue
     if obj.get("decision") == "block" or hso.get("permissionDecision") in ("deny", "ask"):
         bump_stat(sid, "refused:" + e["script"].replace(".py", ""))

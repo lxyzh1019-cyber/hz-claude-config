@@ -89,8 +89,7 @@ if open_items:
                    "This is the only send-back for this request.")
 elif not stated:
     reasons.append("Implementation happened this turn: add the completion lines before the validation line.")
-elif wrong_count:
-    reasons.append("The stated Completion line does not match this branch's ledger rows; fix the ledger or the line.")
+# v3.1.26: a wrong count alone is not worth a whole extra turn — the notice shows me the line from the record
 if comp.get("build_done") and comp.get("check_open") and comp.get("plan"):
     # v3.1.24: the hand-off is due in the report where Build reaches 100% — once per plan: the restart line then
     # stands in '## Where we are' (pushed), which every later session reads
@@ -106,7 +105,12 @@ if comp.get("untagged_checks"):   # v3.1.24: the label keeps a check a check aft
 if comp["no_evidence"]:
     reasons.append("COMPLETE without evidence in the deliverable ledger: " + ", ".join(comp["no_evidence"]) +
                    ". Fill the Evidence cell (what ran and its result) or set the state back to PARTIAL.")
+if not reasons and wrong_count:
+    print(json.dumps({"systemMessage": "Completion (from the record): " + comp["line"]}))
+    sys.exit(0)
 if reasons:
+    if wrong_count:
+        reasons.append("The stated Completion line does not match the ledger; use the lines below.")
     bump()
     log("completion-guard", {"send_back": used + 1, "open": open_items})
     block(" ".join(reasons) + "\nPut these lines just before the validation line (the three closing lines stay last):\n" + comp["display"])
