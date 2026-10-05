@@ -26,6 +26,11 @@ note = os.environ.get("HZ_LOADER_NOTE", "")
 facts = [f"[session-start] Rules v{version} loaded · branch: {branch}" + (f" · {note}" if note else "")
          if loaded else "[session-start] Central rules NOT loaded (rules file missing in cache). Stop and report."]
 facts.append(f"Worker instructions: {WORKER_PATH} — include this path in every opus-worker or sonnet-worker delegation.")
+_agents = os.path.dirname(WORKER_PATH)   # v3.1.28: the explorer and the reviewer on call
+facts.append(f"Explorer instructions: {os.path.join(_agents, 'explorer-instructions.md')} — send Explore before a Complex "
+             "stage and put its map in the worker's hand-over ('Map: …'). Reviewer instructions: "
+             f"{os.path.join(_agents, 'reviewer-instructions.md')} — the reviewer starts before a big plan, when a worker "
+             "reports 'Stuck:', and before done; name the moment in its assignment.")
 facts.append(f"Central skills folder: {SKILLS_DIR} — when a skill is named, read its SKILL.md there.")
 missing = [p for p in (cfg["features_file"], cfg["record_file"]) if not os.path.exists(os.path.join(PROJECT_DIR, p))]
 facts.append("Missing per-repo files: " + (", ".join(missing) if missing else "none"))
@@ -91,7 +96,8 @@ facts.append("The version line is shown to me in the notice after your reply: do
              "Above the --- line, in this order: the technical detail, the Completion lines if required, the "
              "validation line, then a '❓ Decisions' list (one line each with your recommendation). A change from what I "
              "approved (plan, prototype, design: a colour, a size, a layout, a feature) is a question in that list, "
-             "never news in the details; no colour codes or sizes in the closing lines. If the stub is "
+             "never news in the details, with a link to a page showing prototype and build side by side for each "
+             "difference; no colour codes or sizes in the closing lines. If the stub is "
              "outdated, say so in the 'I need from you' line. No running commentary between tool calls and no progress "
              "reports: dispatch workers in the foreground and wait; if asked for status, one line '⏳ Working on: …'. "
              "Present every Plan vN in plan mode (plan file + Approve); the plan file is written into plans/ in this "

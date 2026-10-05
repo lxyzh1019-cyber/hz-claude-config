@@ -16,6 +16,25 @@ cfg_ = load_config()
 data = read_hook_input()
 inp = data.get("tool_input") or {}
 
+# v3.1.28: a big or risky plan (the plan gate's strong signals) is checked by the reviewer before I see it
+try:
+    from _common import STATE_DIR, prompt_number, last_turn
+    _st = json.load(open(os.path.join(STATE_DIR, "plan-review.json"), encoding="utf-8"))
+    _sid = str(data.get("session_id") or "")
+    if _st.get("session") == _sid and _st.get("n") == prompt_number(_sid):
+        _turn = last_turn(read_transcript(data.get("transcript_path")))
+        _reviewed = any(isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task")
+                        and str((b.get("input") or {}).get("subagent_type") or "") == "reviewer"
+                        for r in _turn if r.get("type") == "assistant"
+                        for b in (((r.get("message") or {}).get("content")) or [])
+                        if isinstance(((r.get("message") or {}).get("content")), list))
+        if not _reviewed:
+            deny_tool("This is a big or risky plan (" + str(_st.get("why") or "strong signals") + "). Before I see "
+                      "it, send the reviewer (subagent 'reviewer', moment: Before a plan) with the draft plan and the "
+                      "area's ledger and hotspot rows; fix what it finds, then present the plan again.")
+except (OSError, ValueError, ImportError):
+    pass
+
 
 def plan_text():
     for v in inp.values():

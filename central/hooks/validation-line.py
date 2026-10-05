@@ -84,6 +84,17 @@ if re.search(cfg["validation_line_pattern"], text):
                             ", ".join(jargon[:4]) + "). Say what I will see — for example 'a slightly darker "
                             "orange-red' or 'finger-sized buttons'. A change from what I approved is a question in "
                             "the '❓ Decisions' list, not news.")
+        # v3.1.28: a difference from the prototype is asked with pictures — prototype and build side by side
+        dev_lines = [l for l in re.sub(r"```.*?```", " ", text, flags=re.S).splitlines()
+                     if re.search(cfg.get("deviation_subject", r"(?i)\b(prototype|reference|mock-?ups?|approved design)\b"), l)
+                     and re.search(cfg.get("deviation_words", r"(?i)\b(differ\w*|deviat\w*|doesn't have|does not have|"
+                                                                 r"instead of|not in the|unlike|changes? from|departs?)\b"), l)]
+        has_pictures = re.search(r"https?://\S+|!\[[^\]]*\]\(|\.(png|jpe?g|webp|gif|html)\b", text, re.I)
+        if dev_lines and "❓" in text and not has_pictures:
+            problems.append("A difference from the prototype is a question with pictures: show the prototype and the "
+                            "build side by side for each difference, numbered like the '❓ Decisions' list — one "
+                            "published comparison page (made by a worker, once per batch) — and put its link in this "
+                            "reply. Words alone are not enough for me to decide.")
         need = re.sub(r"^.*?I need from you:\s*", "", tail[1].replace("*", ""), flags=re.I)
         if len(need.split()) > int(cfg["need_line_max_words"]):
             problems.append(f"The 'I need from you' line is one action in at most {cfg['need_line_max_words']} words. "

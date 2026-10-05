@@ -102,7 +102,7 @@ def update(cfg, project_dir):
 
     changed, skipped = [], []
     known = _known_hashes()
-    for name in ("opus-worker.md", "sonnet-worker.md"):
+    for name in ("opus-worker.md", "sonnet-worker.md", "reviewer.md", "explore.md"):
         dst = os.path.join(project_dir, ".claude", "agents", name)
         new = _read(os.path.join(STUB, name))
         old = _read(dst)

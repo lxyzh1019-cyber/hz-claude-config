@@ -58,8 +58,10 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.26",
-        "files": {".claude/agents/sonnet-worker.md": "Sonnet worker"},
+        "version": "3.1.28",
+        "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
+                  ".claude/agents/reviewer.md": "reviewer on call (v3.1.28)",
+                  ".claude/agents/explore.md": "explorer on Sonnet (v3.1.28)"},
         "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"]},
         # keys the stub must NOT set, so the account's own default applies
         "settings_absent": {"model": "account default model (the stub must not set a session model)",
@@ -67,7 +69,9 @@ DEFAULT_CONFIG = {
         # text each stub file must contain
         "file_text": {".claude/agents/opus-worker.md": ["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"],
                       ".claude/hz-loader.py": ["incomplete on GitHub", "loader that reports an incomplete rules repository"],
-                      ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"]},
+                      ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"],
+                      ".claude/agents/reviewer.md": ["tools: Read, Grep, Glob", "reviewer that only reads"],
+                      ".claude/agents/explore.md": ["model: claude-sonnet-5-5", "explorer pinned to Sonnet 5.5"]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
                    "Stop": "report checks (completion, top lines)",
 },
@@ -682,7 +686,7 @@ PLAN_TEMPLATE = """# Plan vN — <short plan name>
 
 | Summary |
 |---|
-| What this plan does, in everyday words |
+| What changes for you: what you will see or what will be different, in everyday words |
 | What changed from the last version and why (first version: "First version") |
 | What I need to do |
 

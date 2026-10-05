@@ -7,7 +7,7 @@ root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "central")
 stub_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "stub")
 stub_dst = os.path.join(root, "stub-files")
 os.makedirs(stub_dst, exist_ok=True)
-for n in ("settings.json", "opus-worker.md", "sonnet-worker.md", "hz-loader.py", "CLAUDE-pointer.md",
+for n in ("settings.json", "opus-worker.md", "sonnet-worker.md", "reviewer.md", "explore.md", "hz-loader.py", "CLAUDE-pointer.md",
           "merge_settings.py", "v2-known-files.txt"):
     shutil.copyfile(os.path.join(stub_src, n), os.path.join(stub_dst, n))
 version = sys.argv[1] if len(sys.argv) > 1 else sys.exit("usage: build_manifest.py <version>")

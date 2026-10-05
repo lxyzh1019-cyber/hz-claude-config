@@ -109,24 +109,86 @@ TEST_CMD = re.compile(r"\b(npm\s+(run\s+)?test|npx\s+(playwright|jest|vitest)|pl
 READ_CMD = re.compile(r"^(cat|head|tail|sed\s+-n|grep|rg|find|ls|dir|wc|type|more|less|tree|stat|file|diff|"
                       r"Get-Content|Select-String|Get-ChildItem|git\s+(log|show|diff|status|blame|grep|ls-files))\b", re.I)
 GIT_CMD = re.compile(r"^(git|gh)\b", re.I)
+
+
+RUNNER = re.compile(r"^(node|npm|npx|pnpm|yarn|python3?|py|pytest|bash|sh|playwright|jest|vitest|\./\S+|\S+\.(sh|cmd|bat))\b", re.I)
+
+
+def is_test_run(cmd):
+    """v3.1.28: a command counts as a test run only when one of its parts starts a program (node, npm, python, a
+    script …) that runs something test-like. Reading a test file or log (cat, grep, tail, ls, sed …), waiting for a
+    log line, or naming a test in a message is not a test run — the Weekly-Planner Sunday v15 session showed 730
+    'test runs', about two thirds of them reads of test files and logs."""
+    cmd = str(cmd or "")
+    for part in re.split(r"&&|\|\||;|\||\n", cmd):
+        part = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+", "", part.strip())   # VAR=value before the program
+        if not RUNNER.match(part) or re.match(r"^node\s+--check\b", part):
+            continue
+        if TEST_CMD.search(part) or ("<<" in part and TEST_CMD.search(cmd)):   # a script written inline
+            return True
+    return False
+
+
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 PLAN_TOOLS = {"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "ExitPlanMode", "EnterPlanMode", "TodoWrite"}
 CODE_HELPERS = {"opus-worker", "sonnet-worker"}
 PLAN_HELPERS = {"explore", "plan"}
 
 
+# v3.1.28: more read-only shell commands (cut, awk, sed without -i, sort …) count as reading; setting a variable,
+# cd and loop keywords are skipped; waiting commands get their own group
+READ_MORE = re.compile(r"^(cut|awk|sort|uniq|nl|tr|sed(?!.*\s-i)|echo|printf|jq|basename|dirname|realpath|test|\[|"
+                       r"Select-Object|Measure-Object|Format-\w+|Out-String)\b", re.I)
+SKIP_PART = re.compile(r"^(cd\s|export\s|set\s|do$|done$|then$|fi$|else$|esac$|\}$|\{$|"
+                       r"[A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|\S*)\s*$)", re.I)
+WAIT_CMD = re.compile(r"^(sleep|timeout|wait|until|while\b.*\bsleep|tail\s+(-\S+\s+)*-f|Start-Sleep)\b", re.I)
+WAIT_TOOLS = {"Monitor", "BashOutput", "TaskOutput"}
+
+
+def shell_parts(cmd):
+    """Split a shell command into its programs; drop cd, variable settings and loop keywords. Quoted text and
+    inline scripts are blanked first, so their lines are not taken for commands."""
+    c = re.sub(r"<<-?\s*'?(\w+)'?.*?^\s*\1\s*$", "<<SCRIPT", str(cmd or ""), flags=re.S | re.M)
+    c = re.sub(r'"(?:\\.|[^"\\])*"|\'[^\']*\'', "Q", c, flags=re.S)
+    out = []
+    for p in re.split(r"&&|\|\||;|\||\n", c):
+        p = re.sub(r"^(do|then|else)\s+", "", p.strip())
+        p = re.sub(r"^for\s+\S+\s+in\s+.*$", "", p)
+        p = re.sub(r"^(timeout\s+\S+\s+|[A-Za-z_][A-Za-z0-9_]*=\S+\s+)+", "", p)
+        if p and not SKIP_PART.match(p):
+            out.append(p)
+    return out
+
+
+INLINE_SCRIPT = re.compile(r"^(python3?|py|node)\s+(-c|-e|-)\b|<<SCRIPT", re.I)
+WRITES = re.compile(r"\bopen\([^)]*['\"][wa]b?['\"]|\.write\(|writeFile|write_text|appendFile|>\s*\S", re.I)
+CHANGE_CMD = re.compile(r"^(sed\s+(-\S+\s+)*-i|mkdir|cp|mv|touch|rm|tee|Set-Content|Out-File)\b", re.I)
+
+
+_read = READ_CMD
+READ_CMD = type("R", (), {"match": staticmethod(lambda p: _read.match(p) or READ_MORE.match(p))})
+
+
 def activity_of(rec, content):
     """testing > coding > planning > other: the first that applies to the step's tools."""
     uses = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
     names = {b.get("name") for b in uses}
-    if any(b.get("name") == "Bash" and TEST_CMD.search(str((b.get("input") or {}).get("command") or "")) for b in uses):
+    if any(b.get("name") == "Bash" and is_test_run((b.get("input") or {}).get("command")) for b in uses):
         return "testing"
     helpers = {str((b.get("input") or {}).get("subagent_type") or "").lower() for b in uses
                if b.get("name") in ("Agent", "Task")}
-    if names & EDIT_TOOLS or helpers & CODE_HELPERS:
-        return "coding"
     cmds = [str((b.get("input") or {}).get("command") or "") for b in uses if b.get("name") == "Bash"]
-    parts = [p.strip() for c in cmds for p in re.split(r"&&|\|\||;|\|", c) if p.strip() and not p.strip().startswith("cd ")]
+    parts = [p for c in cmds for p in shell_parts(c)]
+    # v3.1.28: shell commands that change files, and inline scripts that write files, are coding
+    if names & EDIT_TOOLS or helpers & CODE_HELPERS or any(CHANGE_CMD.match(p) for p in parts) or any(
+            INLINE_SCRIPT.search(p) for p in parts) and any(WRITES.search(c) for c in cmds):
+        return "coding"
+    if parts and all(INLINE_SCRIPT.search(p) or READ_CMD.match(p) for p in parts):
+        return "planning"            # an inline script that only reads and prints
+    # v3.1.28: a step that only waits (sleep, a loop until a log line appears, following a log) is 'waiting'
+    if names & WAIT_TOOLS or (parts and any(WAIT_CMD.match(p) for p in parts)
+                              and all(WAIT_CMD.match(p) or READ_CMD.match(p) for p in parts)):
+        return "waiting"
     if names & PLAN_TOOLS or helpers & PLAN_HELPERS or rec.get("permissionMode") == "plan" or (
             parts and all(READ_CMD.match(p) for p in parts)):
         return "planning"
@@ -136,11 +198,13 @@ def activity_of(rec, content):
         return "talking"
     return "other"
 
+
 reread = [0]   # tokens that re-read context already sent before (cache reads)
 CAP = 60 * 60
 
 
 by_source = {"main": 0, "helpers": 0}
+helper_steps = {"tool": 0, "one": 0}   # v3.1.28: worker steps that used a tool, and those with only one tool call
 
 
 def add_file(recs, source="main"):
@@ -171,9 +235,15 @@ def add_file(recs, source="main"):
                 by_source[source] += sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
                 act = activity_of(rec, blocks_by_id.get(msg.get("id"), content))
+                if source == "helpers":
+                    n_calls = sum(1 for b in blocks_by_id.get(msg.get("id"), content)
+                                  if isinstance(b, dict) and b.get("type") == "tool_use")
+                    if n_calls:
+                        helper_steps["tool"] += 1
+                        helper_steps["one"] += n_calls == 1
                 test_runs[0] += sum(1 for b in blocks_by_id.get(msg.get("id"), content)
                                     if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash"
-                                    and TEST_CMD.search(str((b.get("input") or {}).get("command") or "")))
+                                    and is_test_run((b.get("input") or {}).get("command")))
                 activity[act] = activity.get(act, 0) + sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
             if t is not None and last_t is not None:
@@ -279,7 +349,8 @@ act_total = sum(activity.values())
 if act_total:
     pct_ = lambda v: f"{round(100 * v / act_total)}%" if 100 * v / act_total >= 0.5 else "<1%"
     lines.append("Activity: " + " · ".join(f"{k} {pct_(activity[k])}"
-                                           for k in ("planning", "coding", "testing", "git & pull requests", "talking", "other")
+                                           for k in ("planning", "coding", "testing", "waiting", "git & pull requests",
+                                                     "talking", "other")
                                            if activity.get(k))
                  + " (an estimate: a step that does several things counts once — testing before coding before planning)")
 if seconds:
@@ -289,6 +360,9 @@ ho = " · ".join(f"{names.get(k, k)} {v}" for k, v in sorted(handovers.items()))
 lines.append(f"Hand-overs: {ho}" + (f" · escalated {escalated}" if escalated else ""))
 lines.append(f"In-between messages: {between} (written between tool steps; the rules ask for none)")
 lines.append(f"Test runs: {test_runs[0]} (find all, fix all, check once — fewer is better)")
+if helper_steps["tool"]:
+    lines.append(f"Worker steps: {helper_steps['tool']} · one tool call per step: "
+                 f"{round(100 * helper_steps['one'] / helper_steps['tool'])}% (several reads in one step re-read less)")
 st = read_stats(sid)
 lines.append(f"Refused: planner edits {st.get('refused:routing-guard', 0)} · hand-overs {st.get('refused:worker-guard', 0)}"
              f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}"

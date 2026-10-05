@@ -6,9 +6,12 @@
 4. Routine goes to sonnet-worker; Complex goes to opus-worker. Opus may take a Routine task only when the hand-over
    says "Escalated from sonnet-worker: <reason>".
 5. Sonnet never gets a hand-over that mentions complex work (diagnosis, design, data model, shared data, sync, ...).
-6. At most two Sonnet tries per task for each request of mine; the third goes to Opus as an escalation."""
+6. At most two Sonnet tries per task for each request of mine; the third goes to Opus as an escalation.
+7. (v3.1.28) A Complex hand-over carries the explorer's map ("Map: ...") or "Map: not needed - <reason>": in the
+   Weekly-Planner Sunday v15 session, Opus workers spent 18-120 steps looking around before their first change.
+8. (v3.1.28) After a worker reports "Stuck:", the reviewer goes first: no worker hand-over until a reviewer ran."""
 import json, os, re
-from _common import read_hook_input, load_config, deny_tool, prompt_number, STATE_DIR, log
+from _common import read_hook_input, load_config, deny_tool, prompt_number, STATE_DIR, log, read_transcript
 
 data = read_hook_input()
 cfg = load_config()
@@ -34,6 +37,36 @@ if not task or not level:
               "layout, docs, a test for an understood change). Complex = finding an unknown cause, design, anything "
               "touching shared data, settings, sync or the data model. When unsure: Complex.")
 lvl = level.group(1).lower()
+# v3.1.28: a worker that reported "Stuck:" is followed by the reviewer, not by another try
+stuck_since_review = False
+uses = {}
+for rec in read_transcript(data.get("transcript_path")):
+    if rec.get("isSidechain"):
+        continue
+    content = (rec.get("message") or {}).get("content")
+    if not isinstance(content, list):
+        continue
+    for b in content:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task"):
+            st = str((b.get("input") or {}).get("subagent_type") or "")
+            uses[b.get("id")] = st
+            if st == "reviewer":
+                stuck_since_review = False
+        elif b.get("type") == "tool_result" and uses.get(b.get("tool_use_id")) in workers:
+            res = b.get("content")
+            res = res if isinstance(res, str) else json.dumps(res, ensure_ascii=False)
+            if re.search(r'(^|\n|\\n|")\s*\**Stuck:', res):
+                stuck_since_review = True
+if stuck_since_review:
+    deny_tool("A worker reported 'Stuck:'. Send the reviewer first (subagent 'reviewer', moment: Stuck - with the "
+              "error, the check and the changed files), then give the next worker its advice as 'Reviewer advice: ...'. "
+              "Another try without it repeats the same failing test runs.")
+if lvl == "complex" and sub == "opus-worker" and not re.search(r"^\s*\**Map:\**\s*\S", text, re.M | re.I):
+    deny_tool("A Complex hand-over carries a map. Send Explore first (it returns which files and lines the change "
+              "touches and how they connect), then add its answer as 'Map: ...'. If the worker truly needs no map, add "
+              "'Map: not needed - <reason>'. Without a map, workers spent up to 120 steps looking around.")
 escalated = re.search(r"Escalated from sonnet-worker:\s*\S", text, re.I)
 if lvl == "routine" and sub == "opus-worker" and not escalated:
     deny_tool("Level: Routine goes to sonnet-worker. Opus takes a Routine task only after Sonnet has escalated it: then "
