@@ -1190,5 +1190,62 @@ check "claude.ai preferences: build state in the Result line" "Start the 📌 Re
 check "claude.ai preferences: no files while I'm deciding" "don't make files" "$(cat $P2)"
 check "claude.ai preferences: ask before making the file" "make the file only after my yes" "$(cat $P2)"
 check "claude.ai preferences still keep the step-writing and hz-designer lines" "ASD-STE100-lite" "$(cat $P2)"
+# --- v3.1.27: queued for approval, Rev = plan version, design decisions covered, push always fine
+QP="$T/q27"; rm -rf "$QP"; mkdir -p "$QP"; ( cd "$QP" && git init -q . && git config user.email t@t && git config user.name t
+cat > WORKING_RECORD.md <<'R'
+# WORKING RECORD
+
+## Design decisions
+- [agreed] No cash account — search: no cash account
+- [agreed] Money between Sundays waits — search: Waiting for Sunday
+- [open] Colour of the jar
+
+## Deliverable ledger
+| Deliverable | State | Evidence |
+|---|---|---|
+| Sunday v15 · Stage 1 of 4 — kids page | COMPLETE | tests |
+| Sunday v15 · Stage 2 of 4 — redesigns | BLOCKED — awaiting plan approval | |
+| Sunday v15 · Stage 3 of 4 — looks | WAITING ON YOU — approve Plan v9 first | |
+| Sunday v15 · Stage 4 of 4 — merge (Check) | WAITING ON YOU — merge | |
+R
+git add -A && git commit -qm b ) >/dev/null 2>&1
+o=$(cd "$H" && CLAUDE_PROJECT_DIR="$QP" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
+check "a stage waiting for plan approval is queued, not blocked" "Stage 2 of 4 — redesigns (queued)" "$o"
+check "a stage 'waiting on you' only for approval is queued, not a check" "Stage 3 of 4 — looks (queued)" "$o"
+check "  ...so Build counts them as work still to come" "Completion: Build 1 of 3 done (33%) · Check 0 of 1" "$o"
+cat > "$T/p27.md" <<'P'
+# Plan v9 — Sunday v15
+
+| Summary |
+|---|
+| Pocket money without a cash account |
+| Drops cash as an account, as you asked |
+| Approve it |
+
+Changes in this version:
+```diff
++ 🟦 Rev 9 — no cash account; money between Sundays shows as Waiting for Sunday
+```
+
+🟦 Rev 9 — Everything I have shows savings, locked, companies and the loan; no cash account. Waiting for Sunday holds money that arrives between meetings.
+
+Stages to finish
+3 stages: 2 build steps by Claude, then 1 check
+1. Build the redesigns · Claude · Build
+2. Run every test · Claude · Build
+3. Try it on the iPad · You · Check
+P
+pg27(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','tool_input':{'plan':open(sys.argv[1],encoding='utf-8').read()}}))" "$1" | CLAUDE_PROJECT_DIR="$QP" python3 $H/dispatch.py; }
+o=$(pg27 "$T/p27.md"); check "a plan with Rev = version and every agreed decision passes" "Plan size: about" "$o"
+sed 's/🟦 Rev 9/🟪 Rev 8/g' "$T/p27.md" > "$T/p27_rev.md"
+o=$(pg27 "$T/p27_rev.md"); check "a Rev number different from the plan version is sent back" "this is Plan v9, so its changes are marked Rev 9" "$o"
+sed 's/Waiting for Sunday/Holding line/g' "$T/p27.md" > "$T/p27_miss.md"
+o=$(pg27 "$T/p27_miss.md"); check "an agreed design decision missing from the plan is sent back by name" "Money between Sundays waits (search: Waiting for Sunday)" "$o"
+check "  ...open points are not required" "clean" "$(echo "$o" | grep -c 'Colour of the jar' | sed 's/^0$/clean/')"
+o=$(echo '{}' | python3 $H/session-start.py)
+check "session start: pushing the work branch is always fine, merging stays mine" "Pushing the work branch (never main) to GitHub is always fine without asking" "$o"
+check "session start: shape first, then one plan version" "the plan version does not move" "$o"
+check "the rules: queued for approval, never blocked" "QUEUED — after approval" "$(cat $H/../rules/CLAUDE-rules.md)"
+check "the plan shape says Rev = version" "the Rev number is the plan version" "$o"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

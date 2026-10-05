@@ -51,6 +51,35 @@ for m in re.finditer(r"(?m)^[ \t]*(?:[-*•+]|\d+[.)]|\|)?[ \t]*(?:\*\*|__)?[ \t
     n = int(m.group(2))
     if SQUARES[n % 4] not in (m.group(1) or ""):
         bad.append(f"Rev {n}")
+# v3.1.27: coverage — every agreed design decision in the working record must appear in the plan
+try:
+    _rec = open(os.path.join(PROJECT_DIR, "WORKING_RECORD.md"), encoding="utf-8", errors="replace").read()
+except OSError:
+    _rec = ""
+_sec = re.search(r"(?ms)^##\s*Design decisions\b.*?(?=^##\s|\Z)", _rec)
+if _sec:
+    _norm = lambda s: re.sub(r"\s+", " ", s).strip().lower()
+    _plan_n = _norm(text)
+    _missing = []
+    for _line in _sec.group(0).splitlines():
+        _m = re.match(r"^\s*[-*]\s*\[agreed\]\s*(.+?)\s*(?:—|-{1,2})\s*search:\s*(.+?)\s*$", _line, re.I)
+        if _m and _norm(_m.group(2).strip("`\"'")) not in _plan_n:
+            _missing.append(_m.group(1)[:60] + " (search: " + _m.group(2).strip("`\"'") + ")")
+    if _missing:
+        problems.append("These agreed design decisions are missing from the plan — add each one (its search phrase must "
+                        "appear), or mark it open in the record if it is not agreed after all: " + "; ".join(_missing[:8])
+                        + (f" (+{len(_missing) - 8} more)" if len(_missing) > 8 else "") + ".")
+# v3.1.27: the Rev number is the plan version (Plan v9 marks its changes Rev 9; earlier changes are unmarked)
+_ver = re.search(r"\bPlan v(\d+)\b", text)
+if _ver:
+    _labels = {int(m.group(2)) for m in re.finditer(
+        r"(?m)^[ \t]*(?:[-*•+]|\d+[.)]|\|)?[ \t]*(?:\*\*|__)?[ \t]*([^\sA-Za-z0-9*_<]{0,2})?[ \t]*(?:\*\*|__)?[ \t]*"
+        r"(?:<[^>]+>)?[ \t]*Rev\s*(\d+)\b", text)}
+    _wrong = sorted(n for n in _labels if n != int(_ver.group(1)))
+    if _wrong:
+        problems.append(f"The Rev number is the plan version: this is Plan v{_ver.group(1)}, so its changes are marked "
+                        f"Rev {_ver.group(1)} with its square; earlier changes are unmarked. Found: "
+                        + ", ".join(f"Rev {n}" for n in _wrong) + ".")
 if bad:
     problems.append("Each 'Rev N' label needs its colour square right in front of it: 🟦 Rev 1 · 🟩 Rev 2 · 🟧 Rev 3 · "
                     "🟪 Rev 4, then repeat (Rev 5 = 🟦). Missing on: " + ", ".join(sorted(set(bad))[:6]) + ".")

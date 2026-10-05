@@ -453,16 +453,19 @@ def deliverable_ledger(cfg, text=None):
             continue  # empty or the seed's placeholder row
         state = (r[si] if si < len(r) else "").strip()
         low = state.lower()
+        # v3.1.27: a stage that only waits for the user's approval of the plan is queued — not blocked, not a check
+        for_approval = bool(re.search(r"\bapprov", low)) and not any(w in low for w in COMPLETE_WORDS)
         out.append({"name": name, "state": state,
                     "complete": any(w in low for w in COMPLETE_WORDS) and not any(w in low for w in ("incomplete", "not complete")),
-                    "waiting": any(w in low for w in WAITING_WORDS),
-                    "queued": any(w in low for w in QUEUED_WORDS),
+                    "waiting": any(w in low for w in WAITING_WORDS) and not for_approval,
+                    "queued": any(w in low for w in QUEUED_WORDS) or for_approval,
                     "plan": (PLAN_ROW.match(name).group("plan").strip() if PLAN_ROW.match(name) else None),
-                    "blocked": any(w in low for w in BLOCKED_WORDS) and not any(w in low for w in WAITING_WORDS),
+                    "blocked": (any(w in low for w in BLOCKED_WORDS) and not any(w in low for w in WAITING_WORDS)
+                                and not for_approval),
                     "superseded": "superseded" in low and not any(w in low for w in COMPLETE_WORDS if w != "✅"),
                     # v3.1.24: a Check stage (confirming the work: merges, live check, device check) — labelled
                     # "(Check)" in its name, or a stage waiting on the user
-                    "check": bool(CHECK_TAG.search(name)) or any(w in low for w in WAITING_WORDS),
+                    "check": bool(CHECK_TAG.search(name)) or (any(w in low for w in WAITING_WORDS) and not for_approval),
                     "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip(),
                     "row": " | ".join(c.strip() for c in r)})
     return out
@@ -683,7 +686,8 @@ PLAN_TEMPLATE = """# Plan vN — <short plan name>
 | What changed from the last version and why (first version: "First version") |
 | What I need to do |
 
-Changes in this version (from the second version on; squares cycle 🟦 Rev 1 · 🟩 Rev 2 · 🟧 Rev 3 · 🟪 Rev 4):
+Changes in this version (from the second version on; the Rev number is the plan version — Plan v2 marks its changes
+"🟩 Rev 2", Plan v9 marks "🟦 Rev 9"; squares cycle 🟦 1 · 🟩 2 · 🟧 3 · 🟪 4, then repeat; earlier changes are unmarked):
 ```diff
 + 🟩 Rev 2 — <line added or changed>
 - 🟩 Rev 2 — <line removed>
