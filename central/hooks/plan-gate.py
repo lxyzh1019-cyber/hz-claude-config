@@ -107,8 +107,10 @@ else:
     except OSError:
         already = False
     if sid and used >= int(cfg.get("fresh_session_hint_tokens", 1500000)) and comp["total"] and not already:
-        handoff_why = (f"This session is long ({round(used / 1e6, 1)} M tokens): every step re-reads all of it. Finish "
-                       "the current stage (or, if it is finished, stop here), then in that reply ")
+        handoff_why = (f"This session is long ({round(used / 1e6, 1)} M tokens): every step re-reads all of it. Keep "
+                       "going without stopping, but keep this main session lean from now on: hand each remaining stage "
+                       "to a fresh worker, read only its short report, and do not read screenshots or large files here. "
+                       "At the next stage break, ")
         try:
             os.makedirs(STATE_DIR, exist_ok=True)
             with open(warned, "a", encoding="utf-8") as f:

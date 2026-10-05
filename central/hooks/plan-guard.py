@@ -10,7 +10,8 @@ Opus after approval costs less.
 The plan text is taken from the tool input, or from a plan file the input names, or from the newest plan file."""
 import glob, os, re, time
 import json
-from _common import read_hook_input, deny_tool, log, read_transcript, PROJECT_DIR
+from _common import read_hook_input, deny_tool, log, read_transcript, PROJECT_DIR, PLAN_TEMPLATE, load_config
+cfg_ = load_config()
 
 data = read_hook_input()
 inp = data.get("tool_input") or {}
@@ -43,10 +44,12 @@ if re.search(r"<\s*(span|font|div|mark|b|i|u|p)\b[^>]*>|style\s*=\s*[\"']", text
     problems.append("It contains colour code (HTML such as <span style=…>); the plan window shows that as raw text. "
                     "Remove all HTML.")
 bad = []
-for m in re.finditer(r"\bRev\s*(\d+)\b", text):
-    n = int(m.group(1))
-    before = text[max(0, m.start() - 4):m.start()]
-    if SQUARES[n % 4] not in before:
+# v3.1.26: squares are needed on Rev labels (a line, bullet, bold label or diff line that starts with "Rev N"), not
+# on every mention of "Rev 2" inside a sentence — that strictness made sessions run scripts to patch plans
+for m in re.finditer(r"(?m)^[ \t]*(?:[-*•+]|\d+[.)]|\|)?[ \t]*(?:\*\*|__)?[ \t]*([^\sA-Za-z0-9*_<]{0,2})?[ \t]*"
+                     r"(?:\*\*|__)?[ \t]*(?:<[^>]+>)?[ \t]*Rev\s*(\d+)\b", text):
+    n = int(m.group(2))
+    if SQUARES[n % 4] not in (m.group(1) or ""):
         bad.append(f"Rev {n}")
 if bad:
     problems.append("Each 'Rev N' label needs its colour square right in front of it: 🟦 Rev 1 · 🟩 Rev 2 · 🟧 Rev 3 · "
@@ -58,7 +61,7 @@ if not any(re.match(r"^\|\s*\**summary\**\s*\|", l, re.I) for l in raw_lines[:15
                     "frame: a header row '| Summary |', a '|---|' row, then one row each for what this plan does, what "
                     "changed from the last version and why, and what I need to do — everyday words, no file names, "
                     "codes or commands.")
-if bad == [] and re.search(r"\bRev\s*\d+\b", text) and "```diff" not in text:
+if re.search(r"\bRev\s*\d+\b", text) and "```diff" not in text:   # v3.1.26: reported together with the rest
     problems.append("This plan has Rev labels, so put a 'Changes in this version' block right under the Summary, "
                     "written as a ```diff code block listing every changed line ('+ ' added or changed, '- ' removed), "
                     "each with its square and Rev label.")
@@ -77,6 +80,13 @@ jargon += re.findall(r"\b[\w./-]*\w\.(?:js|jsx|ts|tsx|css|html|py|json|sh|sql|ym
 jargon += re.findall(r"\blines?\s+\d+(?:\s*[-–]\s*\d+)?\b", body, re.I)
 jargon += [h for h in re.findall(r"\b[0-9a-f]{7,40}\b", body) if re.search(r"\d", h) and re.search(r"[a-f]", h)]
 jargon += re.findall(r"\b[A-Za-z_][\w.]*\(\)", body)
+# v3.1.26: the everyday part (above Technical details) is at most about 2 pages; detail moves, it is not deleted
+cap = int(cfg_.get("plan_everyday_max_chars", 6000))
+everyday = text[:cut.start()] if cut else text
+if len(everyday) > cap:
+    problems.append(f"The everyday part of the plan (everything above 'Technical details') is {len(everyday):,} "
+                    f"characters; keep it under about {cap:,} (about 2 pages). Move the detail — lists of screens, "
+                    "fields, cases, tests — under 'Technical details' at the end; do not delete it.")
 if jargon:
     problems.append("Write the plan in everyday words; file names, line numbers, commit codes and code go under "
                     "'Technical details' at the end. Found above it: " + ", ".join(dict.fromkeys(jargon))[:200] + ".")
@@ -100,12 +110,17 @@ if any(l.startswith("stages to finish") for l in lines):
                         f"{len(unmarked)} stage(s) have neither.")
 if problems:
     log("plan-guard", {"sent_back": len(problems)})
-    deny_tool("Plan sent back before approval: " + " ".join(problems) + " Fix it and present the plan again.")
+    deny_tool("Plan sent back before approval: " + " ".join(problems) + " Fix all of it in one go and present the plan "
+              "again. The shape that passes:\n" + PLAN_TEMPLATE)
 model = ""
 for rec in reversed(read_transcript(data.get("transcript_path"))):
     if rec.get("type") == "assistant" and not rec.get("isSidechain"):
         model = str((rec.get("message") or {}).get("model") or "")
         break
+# v3.1.26: the plan's size is shown to me (no send-back): the everyday part keeps everything I must see
+pages = max(1, round(len(body) / 3000))
+size_note = f"Plan size: about {pages} page{'s' if pages != 1 else ''} above Technical details."
 if "fable" in model.lower():
-    print(json.dumps({"systemMessage": "Tip: this plan was written on Fable. After you approve it, type /model opus — "
-                                       "Opus does the checking just as well while the work runs, and costs less."}))
+    size_note += (" Tip: this plan was written on Fable. After you approve it, type /model opus — Opus does the checking "
+                  "just as well while the work runs, and costs less.")
+print(json.dumps({"systemMessage": size_note}))

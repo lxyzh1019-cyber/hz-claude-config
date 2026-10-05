@@ -2,7 +2,7 @@
 """SessionStart hook (run by the repo's .claude/hz-loader.py): inject the central rules, the version, branch,
 where the worker instructions and skills are, per-repo file status, and hotspot alerts."""
 import json, os, subprocess
-from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, RULES_PATH, SKILLS_DIR,
+from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, RULES_PATH, SKILLS_DIR, PLAN_TEMPLATE,
                      WORKER_PATH, hotspot_alerts, central_version, completion_summary)
 from stubcheck import stub_status
 
@@ -70,6 +70,12 @@ try:
                  "finished answer that shows a UTC time is sent back.")
 except Exception:
     pass
+facts.append("The 📌 Result line starts with where the work stands (Ready to merge / Waiting on your decision / Still "
+             "being worked on). While I'm still discussing or deciding, make no code changes, files or pull requests; "
+             "when you think I'm ready, ask me first and build only after my yes.")
+facts.append("Find all, fix all, check once: when tests, checks or a review find problems, first run the whole test suite or check and list every problem; then fix them together in one pass (or hand the whole list to one worker); then run everything again once. Never find one, fix one, re-run, find the next — each round re-reads everything. Fix one by one only when one fix clearly changes the cause of the others, and say so.")
+facts.append("Plans: write the first version in this shape, so the plan check passes it the first time "
+             "(squares only on Rev labels; no 'Changes in this version' block in a first version):\n" + PLAN_TEMPLATE)
 facts.append("The version line is shown to me in the notice after your reply: do not write a 'Rules v…' line. "
              "Every final answer ends with a "
              "quote block of three lines in everyday words, after a line with just ---, and nothing after it:\n"

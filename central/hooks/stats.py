@@ -99,9 +99,16 @@ def is_prompt(rec):
 
 
 tokens, seconds, seen = {}, {}, set()
+NAMES = {"validation-line": "format", "completion-guard": "completion", "handoff-guard": "hand-off",
+         "record-guard": "record", "setup-guard": "setup", "qc-guard": "QC"}
+test_runs = [0]   # v3.1.26: full or partial test runs, main session and helpers
 activity = {}   # v3.1.25: tokens by what the step was doing (an estimate, one group per step)
 TEST_CMD = re.compile(r"\b(npm\s+(run\s+)?test|npx\s+(playwright|jest|vitest)|playwright|pytest|jest|vitest|unittest|"
-                      r"smoke|replay-hooks|node\s+\S*tests?[/\\]|run[-_]?tests?)\b", re.I)
+                      r"smoke|replay-hooks|node\s+\S*tests?[/\\]|run[-_]?tests?)\b|screenshot|capture", re.I)
+# v3.1.26: shell commands that only read count as planning; git and gh get their own group
+READ_CMD = re.compile(r"^(cat|head|tail|sed\s+-n|grep|rg|find|ls|dir|wc|type|more|less|tree|stat|file|diff|"
+                      r"Get-Content|Select-String|Get-ChildItem|git\s+(log|show|diff|status|blame|grep|ls-files))\b", re.I)
+GIT_CMD = re.compile(r"^(git|gh)\b", re.I)
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 PLAN_TOOLS = {"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "ExitPlanMode", "EnterPlanMode", "TodoWrite"}
 CODE_HELPERS = {"opus-worker", "sonnet-worker"}
@@ -118,16 +125,34 @@ def activity_of(rec, content):
                if b.get("name") in ("Agent", "Task")}
     if names & EDIT_TOOLS or helpers & CODE_HELPERS:
         return "coding"
-    if names & PLAN_TOOLS or helpers & PLAN_HELPERS or rec.get("permissionMode") == "plan":
+    cmds = [str((b.get("input") or {}).get("command") or "") for b in uses if b.get("name") == "Bash"]
+    parts = [p.strip() for c in cmds for p in re.split(r"&&|\|\||;|\|", c) if p.strip() and not p.strip().startswith("cd ")]
+    if names & PLAN_TOOLS or helpers & PLAN_HELPERS or rec.get("permissionMode") == "plan" or (
+            parts and all(READ_CMD.match(p) for p in parts)):
         return "planning"
+    if parts and all(GIT_CMD.match(p) or READ_CMD.match(p) for p in parts):
+        return "git & pull requests"
+    if not uses:
+        return "talking"
     return "other"
 
 reread = [0]   # tokens that re-read context already sent before (cache reads)
 CAP = 60 * 60
 
 
-def add_file(recs):
+by_source = {"main": 0, "helpers": 0}
+
+
+def add_file(recs, source="main"):
     last_t, last_model, waiting_on_helper = None, None, False
+    # v3.1.26: Claude Code writes one step as several records (thinking, text, tool call) with the same message id;
+    # classify the step on all of its blocks, not on the first record
+    blocks_by_id = {}
+    for r in recs:
+        if r.get("type") == "assistant":
+            m = r.get("message") or {}
+            if isinstance(m.get("content"), list) and m.get("id"):
+                blocks_by_id.setdefault(m["id"], []).extend(m["content"])
     for rec in recs:
         t = ts(rec)
         if rec.get("type") == "assistant":
@@ -143,7 +168,12 @@ def add_file(recs):
                 tokens[lab] = tokens.get(lab, 0) + sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
                 reread[0] += int(u.get("cache_read_input_tokens") or 0)
-                act = activity_of(rec, content)
+                by_source[source] += sum(int(u.get(k) or 0) for k in (
+                    "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+                act = activity_of(rec, blocks_by_id.get(msg.get("id"), content))
+                test_runs[0] += sum(1 for b in blocks_by_id.get(msg.get("id"), content)
+                                    if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash"
+                                    and TEST_CMD.search(str((b.get("input") or {}).get("command") or "")))
                 activity[act] = activity.get(act, 0) + sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
             if t is not None and last_t is not None:
@@ -162,11 +192,16 @@ side = [r for r in records if r.get("isSidechain")]
 add_file(main)
 helper_found = bool(side)
 if side:
-    add_file(side)
+    add_file(side, "helpers")
+done_files = set()   # v3.1.26: the two search patterns can name the same folder; count each helper file once
 for pattern in (os.path.splitext(tp)[0] + "/subagents/*.jsonl", os.path.join(os.path.dirname(tp), sid, "subagents", "*.jsonl")):
     for f in sorted(glob.glob(pattern)):
+        key = os.path.normcase(os.path.realpath(f))
+        if key in done_files:
+            continue
+        done_files.add(key)
         helper_found = True
-        add_file(read_transcript(f))
+        add_file(read_transcript(f), "helpers")
 
 # hand-overs, from the main transcript
 handovers, escalated, results = {}, 0, {}
@@ -190,6 +225,7 @@ for rec in main:
             tot = tur.get("totalTokens") or sum(int((tur.get("usage") or {}).get(k) or 0) for k in (
                 "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
             tokens[lab] = tokens.get(lab, 0) + int(tot or 0)
+            by_source["helpers"] += int(tot or 0)
             act = ("coding" if st in CODE_HELPERS else "planning" if st.lower() in PLAN_HELPERS else "other")
             activity[act] = activity.get(act, 0) + int(tot or 0)
             reread[0] += int((tur.get("usage") or {}).get("cache_read_input_tokens") or 0)
@@ -223,6 +259,8 @@ def big(n):
 order = sorted(tokens, key=lambda k: -tokens[k])
 lines = [version_line(), "Session summary",
          "Tokens: " + " · ".join(f"{k} {round(100 * tokens[k] / total)}%" for k in order) + f" ({big(total)})"
+         + (f" — main {round(100 * by_source['main'] / total)}% · helpers {round(100 * by_source['helpers'] / total)}%"
+            if by_source["helpers"] else "")
          + (f" — {big(reread[0])} of it re-reading what was already sent" if reread[0] else "")]
 # v3.1.25: messages written between tool steps (the rules ask for none); the last text of each request is the answer
 between, cur_texts = 0, []
@@ -239,8 +277,10 @@ for rec in main + [{"type": "user", "message": {"role": "user", "content": "end"
                 cur_texts.append((msg.get("id") or id(rec), b["text"]))
 act_total = sum(activity.values())
 if act_total:
-    lines.append("Activity: " + " · ".join(f"{k} {round(100 * activity[k] / act_total)}%"
-                                           for k in ("planning", "coding", "testing", "other") if activity.get(k))
+    pct_ = lambda v: f"{round(100 * v / act_total)}%" if 100 * v / act_total >= 0.5 else "<1%"
+    lines.append("Activity: " + " · ".join(f"{k} {pct_(activity[k])}"
+                                           for k in ("planning", "coding", "testing", "git & pull requests", "talking", "other")
+                                           if activity.get(k))
                  + " (an estimate: a step that does several things counts once — testing before coding before planning)")
 if seconds:
     lines.append("Time: " + " · ".join(f"{k} {max(1, round(seconds[k] / 60))} min" for k in order if k in seconds))
@@ -248,11 +288,15 @@ names = {"opus-worker": "Opus", "sonnet-worker": "Sonnet"}
 ho = " · ".join(f"{names.get(k, k)} {v}" for k, v in sorted(handovers.items())) or "none"
 lines.append(f"Hand-overs: {ho}" + (f" · escalated {escalated}" if escalated else ""))
 lines.append(f"In-between messages: {between} (written between tool steps; the rules ask for none)")
+lines.append(f"Test runs: {test_runs[0]} (find all, fix all, check once — fewer is better)")
 st = read_stats(sid)
 lines.append(f"Refused: planner edits {st.get('refused:routing-guard', 0)} · hand-overs {st.get('refused:worker-guard', 0)}"
-             f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}")
+             f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}"
+             + (" (" + " · ".join(f"{NAMES.get(k[9:], k[9:])} {v}" for k, v in sorted(st.items())
+                                  if k.startswith("sendback:") and v) + ")"
+                if any(k.startswith("sendback:") and v for k, v in st.items()) else ""))
 if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
-    lines.append("This session is long: at the next stage break the session hands off and gives you a restart line.")
+    lines.append("This session is long: it carries on, hands stages to fresh workers, and keeps a restart line in the record in case you close it.")
 mark_shown()
 log("stats", {"shown": "summary", "tokens": total, "reread": reread[0], "activity": activity})
 print(json.dumps({"systemMessage": "\n".join(lines)}))
