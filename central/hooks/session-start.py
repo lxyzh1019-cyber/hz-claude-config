@@ -73,6 +73,11 @@ except Exception:
 facts.append("The 📌 Result line starts with where the work stands (Ready to merge / Waiting on your decision / Still "
              "being worked on). While I'm still discussing or deciding, make no code changes, files or pull requests; "
              "when you think I'm ready, ask me first and build only after my yes.")
+facts.append("Pushing the work branch (never main) to GitHub is always fine without asking — merging stays mine. "
+             "While a design is still being shaped, the plan version does not move: keep agreed points in a '## Design "
+             "decisions' section of the working record ('- [agreed] <point> — search: <phrase>'), answer with short "
+             "change notes, and when it seems settled ask me first, then write one new plan version with every agreed "
+             "point. The Rev number is the plan version.")
 facts.append("Find all, fix all, check once: when tests, checks or a review find problems, first run the whole test suite or check and list every problem; then fix them together in one pass (or hand the whole list to one worker); then run everything again once. Never find one, fix one, re-run, find the next — each round re-reads everything. Fix one by one only when one fix clearly changes the cause of the others, and say so.")
 facts.append("Plans: write the first version in this shape, so the plan check passes it the first time "
              "(squares only on Rev labels; no 'Changes in this version' block in a first version):\n" + PLAN_TEMPLATE)
