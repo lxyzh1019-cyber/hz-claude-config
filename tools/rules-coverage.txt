@@ -1,0 +1,181 @@
+# Rule coverage (v3.1.28): every rule of the rules text before condensing (v3.1.27, 47,001 characters) with the
+# phrase that proves it is still there. Format: <rule> | <file> | <phrase>. Files: R = central/rules/CLAUDE-rules.md,
+# C = CLAUDE.md (this repository's own rules), D = docs/model-guidance-sources.md, T = central/hooks/_common.py (the
+# plan shape given at session start). The replay suite fails if any phrase is missing. Add a line for every new rule.
+Rules cannot be waived without my authorization | R | only my explicit authorization can
+No invented exceptions | R | No exceptions for speed, size or low risk
+Rules override chat preferences in a repository | R | they override my claude.ai chat preferences
+Enforcement grades Native/Hook/Prose | R | **Prose** (yours
+Prose rules are never called guaranteed | R | never call a prose rule guaranteed
+Environment: desktop app, cloud and local sessions, no terminal | R | I never use a terminal
+Local sessions start on main or a branch from current main | R | Start a local session only on `main`
+Changes reach GitHub through a pull request; clones Pull origin | R | **Pull origin**
+Single source in hz-claude-config | R | live only in `hz-claude-config` and reach every repository
+Stub files listed | R | `.claude/hz-loader.py`
+Never copy central files or edit the stub | R | Never copy central files in or edit the stub
+Report missing per-repo files; stop without rules | R | Report missing per-repo files first
+Session start injects facts; version line in the notice | R | so replies never write a version line
+Setup update: own branch, ready PR, ask to merge, never two | R | Never two setup pull requests at once
+Setup never updated by hand | R | never update the setup by hand
+Sessions without hooks read rules as text | R | read by hand — hooks inactive
+QC1 dry-run | R | **QC1 Dry-run first.**
+QC2 no destructive steps | R | **QC2 No destructive steps (Hook).**
+QC3 one way only | R | **QC3 One way only.**
+QC4 expected result and stop sign | R | if you see anything else, stop and tell me
+QC5 check after | R | **QC5 Check after.**
+QC6 QA read-through | R | **QC6 QA read-through.**
+Full packages for hz-claude-config | C | **Full packages.**
+Check work against artifacts; own proposal too | R | your own proposal included
+Re-verify when challenged | R | When challenged, re-verify
+Read the history first | R | **Read the history first.**
+Whole-artifact check | R | **Whole-artifact check.**
+Environment first | R | **Environment first.**
+Walk-through check | R | **Walk-through check:**
+No unverified UI steps | R | **No unverified UI steps:**
+Corrections fix the class | R | **Corrections fix the class:**
+Approved scope order | R | latest approved decision → unchanged approved items
+Reconcile the record before revising | R | Reconcile the record
+Reopen settled decisions only for reasons | R | Reopen a settled decision only when I ask
+Conflicts, duplication, obsolete mechanisms | R | Remove conflicts, duplication and obsolete mechanisms
+Stable acceptance criteria; new requirements named | R | Keep acceptance criteria stable
+Problems come with a fix | R | **Problems come with a fix:**
+Find all, fix all, check once | R | **Find all, fix all, check once.**
+Changing hz-claude-config: test first, one batch, build in chat, deploy before next design | C | **Changing `hz-claude-config`.**
+Modes Routine/Diagnostic/Redesign | R | System Design/Redesign
+Analysis is not approval; smallest diff bias | R | the smallest diff must not bias architecture
+Request ledger | R | **Request ledger.**
+Hotspot counter thresholds | R | At 3 fix rounds, 2 recurrences, 1 regression or 3 workarounds
+Hotspot block until reviewed | R | "rewrite-vs-repair reviewed?"
+Plan mode default | R | Plan mode is the default (Native)
+Two tiers | R | **Two tiers (Hook says which).**
+Skip the plan only on my words | R | "skip the plan", "no plan" or "run it directly"
+Keep going after approval | R | **Keep going.**
+Discussion is not approval | R | Discussion is not approval.
+Build state first; no building while deciding | R | Build state first; no building while I'm still deciding
+Changes from approval are questions | R | **Changes from what I approved are questions, not news.**
+Prototype and build side by side (new v3.1.28) | R | prototype and build side by side
+Plan numbering continues; plan file holds latest | R | Plan numbers continue across sessions
+Rev number is the plan version | R | The Rev number is the plan version
+R-numbers vs plan versions | R | R-numbers count work rounds and never restart
+Plan files in plan mode, plans/ folder, commit approved, delete drafts | R | delete never-approved ones
+First plan contents | R | "Plan vN — Title — Awaiting approval"
+Shape first, then one plan version | R | **Shape first, then one plan version (Hook).**
+Design decisions lines and coverage | R | `- [agreed] <point> — search: <phrase>`
+Mark agreed lines [in vN] | R | `[in vN]`
+Plan shape given at session start | R | Write plans in the shape the session start gives
+Summary table in every version | T | | Summary |
+Changes in this version block | R | "Changes in this version"
+Everyday words above Technical details | R | Above Technical details: no file names
+Everyday part at most about 6,000 characters | R | at most about 6,000 characters
+Must-see parts stay above Technical details | R | everything I must see (Summary, decisions, deviations, stages) stays above
+Check lines | R | `Removes/consolidates:` (or "none")
+Checked against line | R | `Checked against:`
+Stages to finish | R | **Stages to finish.**
+Ledger rows by plan name only | R | plan name only
+Queued for approval, never blocked | R | QUEUED — after approval
+Build vs Check stages | R | **Build** = what Claude changes and proves
+Check label sent back | R | named with `(Check)`
+Failed check adds a Fix row | R | `Fix — <problem>`
+Multi-app plans in the first app's record | R | Multi-app plans keep their stages in the first app's record
+Revisions: full consolidated plan, no appended amendments | R | no appended amendments
+Update approved baseline | R | update the record's baseline, keeping unchanged commitments
+No HTML | R | No HTML anywhere
+Rev squares and cycle | R | 🟦 **Rev 1** · 🟩 **Rev 2** · 🟧 **Rev 3** · 🟪 **Rev 4**
+Squares on Rev labels only | R | not on a Rev inside a sentence
+Marker retention | R | keep the current and previous round's markers
+Marker is a round, never approval | R | A marker is a round, never an approval
+Session on account default; no model or advisor key | R | the stub sets no `model` and no `advisorModel`
+Fable only by my switch; planner suggestion signals | R | the plan-gate `[planner]` line suggests it only on strong signals
+Plan names its model; switch back after Fable plan | R | `/model opus`
+Worker model pins and effort | R | `effort: medium`
+Never loosen the Sonnet ID | R | never loosen it
+Confirm worker models; effort configured not verified | R | "configured: medium", never verified
+Safeguard fallback named | R | Name any safeguard fallback to an older model
+Main session plans; workers build | R | **The main session plans, checks and delegates; workers build.**
+Main session edits only planning documents | R | edits only planning documents
+Routing guard refuses main-session source edits | R | The routing guard refuses its source edits
+Hand-over rule 1 helpers | R | the read-only `Explore` and `reviewer` may run
+Hand-over rule 2 Task and Level lines | R | `Task: <stage name from the plan>`
+Hand-over rule 3 routing by level | R | `Escalated from sonnet-worker: <reason>`
+Hand-over rule 4 Sonnet complex words | R | `sonnet-worker` never gets root cause
+Hand-over rule 5 two tries | R | two tries per task per request of mine
+Hand-over rule 6 Sonnet file limits | R | `Escalate to opus-worker: <reason>`
+Hand-over rule 7 foreground only | R | Workers run in the foreground only
+Fallback without Opus | R | Without Opus, Routine work may still go to `sonnet-worker`
+Hand-over content; check evidence | R | A worker's "done" is not completion
+Parallel workers; summarize | R | never forward raw reports
+Worker builds directly, never redelegates | R | never redelegates
+Small worker memory; step limit 80/100 (new) | R | wrap up at step 80
+Several reads per step, no waiting loops (new) | R | several files per step
+Rules read refusal; Read allowed | R | A shell read of the central rules is refused
+Scope discipline | R | no unrequested features
+Structural over disciplinary | R | **Structural over disciplinary.**
+Failing test first | R | **Failing test first.**
+Feature manifest and regression table | R | kept / added / intentionally removed / missing
+Template manifest blocks | R | central `seed` folder
+Deliverable ledger states | R | WAITING ON YOU — <action>, QUEUED — after <stage>, BLOCKED — <reason>, SUPERSEDED
+Read the file, not the scrollback | R | read the file, not the scrollback
+Evidence at the edit | R | COMPLETE without Evidence in the same edit is refused at the edit
+No inflated progress | R | Never change granularity to inflate progress
+Completion line counting | R | **Completion line and auto-fix (Hook).**
+Completion line format | R | `Build n of m done (p%) · Check c of d`
+Open item listing | R | `+N more open in the record`
+Wrong count is a notice | R | A wrong count alone is not sent back
+Auto-fix one round per prompt | R | one auto-fix round per prompt of mine
+Auto-fix limit text | R | "Auto-fix limit reached"
+Stop here / pause here | R | "stop here"/"pause here"
+One session carries the whole plan | R | **One session carries the whole plan; hand-off for safety (Hook).**
+Long session keeps main lean | R | from 1.5 M tokens
+Hand-off contents | R | never keys or passwords
+Restart line | R | `Continue <plan> on branch <branch>; next: <stage>.`
+Never ask for a new session | R | never ask me to open a new session
+Resume from a restart line | R | A session opened with one reads the record and newest plan
+New-session suggestion answer (new) | R | Restart: yes — use the restart line
+Blocker after a different retry | R | never repeat failed approaches
+Define success first | R | Define success before building
+Report passed, failed, untested | R | report passed, failed, untested
+Review pass before merge | R | **Review pass before merge.**
+Reopen the final artifact | R | Reopen the final artifact
+Distinguish stages of proof | R | proven over time
+Deploy stamp | R | **Deploy stamp.**
+Complete only with evidence or blocked | R | Complete only when every ledger row is COMPLETE with evidence
+Handoff contents | R | A handoff names the authoritative artifact
+Health check Step F | C | **Health check (Step F).**
+No progress reports; status line | R | `⏳ Working on: <names> · <n> of <m> done`
+Few in-between messages | R | Between tool calls say nothing
+Everyday words; Technical details at the end | R | go only in `Technical details` at the end
+Order of a final answer | R | **Order of a final answer (Hook).**
+Closing lines | R | 👉 **I need from you:** one action
+Request line at most 30 words | R | at most 30 words
+No codes or sizes in closing lines | R | colour codes or sizes
+Send-back asks only for what is missing | R | A send-back asks only for what is missing
+Short chat replies exempt | R | Short chat replies that used no tools are exempt
+Validation line | R | **Validation line (Hook).**
+Validated needs what ran | R | `Validated — npm test 42/42`
+Edmonton time | R | **Times in Edmonton time (Hook).**
+End-of-task summary | R | **End-of-task summary (Hook, no AI turn).**
+Status and diff; preserve work | R | Preserve my work
+Delete files only when approved | R | Delete files only when the approved plan says so
+Pushing the work branch is always fine | R | **Pushing the work branch is always fine**
+Merging stays mine; main protected | R | blocks commits on and pushes to `main`
+Ready for review, never draft | R | **ready for review, never as drafts**
+Deploy only when asked | R | Deploy only when I asked for it
+Model guidance sources | D | Prompting Claude Opus 5.5
+Model guidance pointer | R | docs/model-guidance-sources.md
+Session model stated once at session start | R | Say the session model once at session start
+Writing for me in ASD-STE100-lite (new, user test 2026-10-05) | R | **Writing for me (ASD-STE100-lite).**
+STE: result first, how it works only on request | R | Start with the result: what I will see, or what changes for me.
+STE: one word for one thing | R | Use one word for one thing.
+STE: fixed verbs | R | check, make sure, start, stop, use, show, find, change, remove, need
+STE: technical words explained once | R | explain it one time in plain words
+STE: active voice, simple tenses, commands | R | Write steps as commands
+STE: sentence length 20/25 | R | at most 20 words in a step and 25 words in an explanation
+STE: noun clusters | R | Do not use more than 3 nouns in a row.
+STE: no padding | R | Do not add an introduction
+STE: accuracy over style | R | Accuracy is more important than style.
+Plan summary starts with what changes for me | T | What changes for you
+Explorer before Complex stages (new) | R | **Explorer first (Hook).**
+Map line in Complex hand-overs (new) | R | `Map: not needed — <reason>`
+Reviewer on call at three moments (new) | R | **Reviewer on call (Hook).**
+Reviewer when stuck (new) | R | `Reviewer advice: …`
+Reviewer before done (new) | R | `Reviewer before done (<plan name>): <verdict>`

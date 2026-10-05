@@ -1,5 +1,7 @@
-version: 3.1.27
+version: 3.1.28
+agents/explorer-instructions.md
 agents/opus-worker-instructions.md
+agents/reviewer-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
 hooks/completion-guard.py
@@ -34,9 +36,11 @@ skills/hz-guarantee-audit/references/handoffs.md
 skills/hz-plan-regression-guard/SKILL.md
 skills/hz-plan-regression-guard/references/manifest-formats.md
 stub-files/CLAUDE-pointer.md
+stub-files/explore.md
 stub-files/hz-loader.py
 stub-files/merge_settings.py
 stub-files/opus-worker.md
+stub-files/reviewer.md
 stub-files/settings.json
 stub-files/sonnet-worker.md
 stub-files/v2-known-files.txt

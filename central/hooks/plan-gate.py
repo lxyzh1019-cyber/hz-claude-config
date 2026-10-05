@@ -4,7 +4,7 @@
 import json, sys
 import os, re
 from _common import (read_hook_input, load_config, count_bullets, log, hotspot_alerts, FIX_WORDS,
-                     completion_summary, bump_prompt_number, handoff_text, STATE_DIR)
+                     completion_summary, bump_prompt_number, handoff_text, STATE_DIR, prompt_number)
 
 data = read_hook_input()
 prompt = data.get("prompt") or ""
@@ -63,6 +63,14 @@ if msgs and not skip and (bullets >= 3 or triggers):
         why.append("investigation wording: " + ", ".join(signals[:3]))
     if why:
         log("plan-gate", {"planner": "fable suggested", "why": why})
+        try:   # v3.1.28: the plan check asks for the reviewer before this plan goes out
+            os.makedirs(STATE_DIR, exist_ok=True)
+            json.dump({"session": str(data.get("session_id") or ""), "n": prompt_number(data.get("session_id")),
+                       "why": "; ".join(why)}, open(os.path.join(STATE_DIR, "plan-review.json"), "w", encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            pass
+        msgs.append("[reviewer] Big or risky plan: before presenting it, send the reviewer (moment: Before a plan) "
+                    "with the draft plan and the area's ledger and hotspot rows, and fix what it finds.")
         msgs.append("[planner] Suggest /model fable before writing this plan (session-only; the next session is back on "
                     "the account default): " + "; ".join(why) + ". Otherwise plan on the session's own model. State which one applied at the top of the plan.")
     else:
@@ -93,7 +101,7 @@ if resume:
 handoff_why = ""
 if re.search(r"\bmerged\b", low) and not comp["total"]:
     msgs.append("[hand-off] I merged. After confirming it, update '## Where we are' in the working record and commit "
-                "and push it; if more work follows, suggest a fresh session for it.")
+                "and push it; if more work follows, carry on in this session (v3.1.28: never suggest a new one).")
 elif re.search(r"\bmerged\b", low):
     handoff_why = "I merged a stage. After confirming the merge, "
 else:

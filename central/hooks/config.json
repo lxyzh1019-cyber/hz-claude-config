@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.27 changes no app setup files: nothing to merge in the apps. claude.ai preferences: unchanged.",
+  "update_notice": "v3.1.28 changes the app setup (adds the reviewer and the explorer): each app opens one setup pull request at its next session — merge each. claude.ai preferences: changed (STE-lite writing) — recopy docs/claude-ai-preferences.txt.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -54,7 +54,8 @@
     ]
   },
   "read_only_helpers": [
-    "Explore"
+    "Explore",
+    "reviewer"
   ],
   "sonnet_max_tries": 2,
   "complex_words": [
@@ -100,6 +101,11 @@
   ],
   "fresh_session_hint_tokens": 1500000,
   "plan_everyday_max_chars": 6000,
-  "worker_step_warn": 120,
-  "worker_step_stop": 150
+  "worker_step_warn": 80,
+  "worker_step_stop": 100,
+  "worker_never_refuse": [
+    "SubagentHandback",
+    "TaskStop",
+    "TodoWrite"
+  ]
 }
