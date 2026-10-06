@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.30: app setup change — each app opens one setup pull request (two planner helpers: planner on Fable 5.1, planner-opus on Opus 5.5 as fallback). Full plans come from the planner helper; the session runs on Opus 5.5 (one notice if not). A pull request opens last (after the reviewer), goes back to draft while a worker fixes it, and is marked ready at the end; a ready-to-merge answer sends a notice to your account. No waiting timers: workers run in the background and their notice continues the work; notices get no plan text; background commands stop after 30 minutes. Screens and figures are compared with their references in code; by-screen feature lists need a proof in the Kept row. claude.ai preferences: unchanged.",
+  "update_notice": "v3.1.31: app setup change — each app opens one setup pull request (a PostToolUse hook for the notice). No answer is shown twice: format, wording and record problems are no longer sent back; they are saved, you see one short note, and the next step fixes them first. Only work that must continue is still sent back (open items, setup first, a draft pull request, a destructive step). The notice to your account is asked for right after a pull request turns ready, before the answer. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -57,10 +57,15 @@
       "completion-guard.py",
       "handoff-guard.py",
       "pr-ready-guard.py",
-      "ready-notice-guard.py",
       "validation-line.py",
       "qc-guard.py",
       "stats.py"
+    ],
+    "PostToolUse": [
+      {
+        "script": "notice-reminder.py",
+        "tools": "Bash|mcp__.*pull_request.*"
+      }
     ]
   },
   "read_only_helpers": [

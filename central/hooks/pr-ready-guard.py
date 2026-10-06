@@ -24,4 +24,4 @@ if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
 block(f"The pull request on {', '.join(drafts)} is still a draft, so GitHub will not let the owner merge it. Mark it ready for review "
       "(gh pr ready <number>, or the GitHub tool's update_pull_request with draft false), then send only one line: "
-      "'#<number> is ready for review.' Do not repeat the report.")
+      "'#<number> is ready for review.' Do not repeat the report.", kind="work")

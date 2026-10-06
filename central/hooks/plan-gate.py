@@ -4,17 +4,25 @@
 import json, sys
 import os, re
 from _common import (read_hook_input, load_config, count_bullets, log, hotspot_alerts, FIX_WORDS,
-                     completion_summary, bump_prompt_number, handoff_text, STATE_DIR, prompt_number)
+                     completion_summary, bump_prompt_number, handoff_text, STATE_DIR, prompt_number,
+                     take_fixes)
 
 data = read_hook_input()
 prompt = data.get("prompt") or ""
 cfg = load_config()
 bump_prompt_number(data.get("session_id"))
+# v3.1.31: format, wording and record problems from the last answer were saved, not sent back — fix them now
+_fixes = take_fixes(data.get("session_id"))
+FIX_TEXT = ("[fix first] Your last answer had these problems. Fix any file or record item now, silently; do not "
+            "write about the fixes; follow the format rules in your next answer:\n" +
+            "\n".join(f"- {f}" for f in _fixes)) if _fixes else ""
 # v3.1.30: a worker or background-command notice is not a request of mine. In the Weekly-Planner money session 79 of
 # 106 plan-gate texts went to such notices ("Full Plan vN is required (90 bullets)"), 128,000 characters re-read on
 # every later step.
 if prompt.lstrip().startswith("<task-notification>"):
-    log("plan-gate", {"skipped": "task notification"})
+    log("plan-gate", {"skipped": "task notification", "fixes": len(_fixes)})
+    if FIX_TEXT:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": FIX_TEXT}}))
     sys.exit(0)
 bullets = count_bullets(prompt)
 low = prompt.lower()
@@ -143,6 +151,8 @@ if comp["total"] and comp["open"]:
                 "these lines (just before the validation line) and may claim done only when nothing is open." +
                 ("" if comp["scoped"] else " The base branch could not be read, so nothing is blocked on this count."))
 
+if FIX_TEXT:
+    msgs.insert(0, FIX_TEXT)
 if msgs:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                              "additionalContext": "\n".join(msgs)}}))

@@ -13,7 +13,7 @@ import json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from _common import load_config, bump_stat, log  # noqa: E402
+from _common import save_fixes, load_config, bump_stat, log  # noqa: E402
 
 raw = sys.stdin.buffer.read()
 try:
@@ -26,7 +26,7 @@ cfg = load_config()
 entries = (cfg.get("dispatch") or {}).get(event, [])
 
 JOIN_BLOCKS = event in ("Stop", "SubagentStop")   # every check runs; all reasons go back in one message
-contexts, passthrough, reasons, notes = [], None, [], []
+contexts, passthrough, reasons, notes, kinds = [], None, [], [], []
 sid = data.get("session_id")
 for e in entries:
     if isinstance(e, str):
@@ -55,7 +55,8 @@ for e in entries:
         notes.append(obj.pop("systemMessage"))   # shown to the user by Claude Code; costs no AI turn
     if JOIN_BLOCKS and obj.get("decision") == "block":
         reasons.append(obj.get("reason", "").strip())
-        bump_stat(sid, "sendback:" + e["script"].replace(".py", ""))   # v3.1.26: which check sent it back
+        kinds.append(obj.get("hz_kind") or "fix")
+        bump_stat(sid, ("sendback:" if obj.get("hz_kind") == "work" else "savedfix:") + e["script"].replace(".py", ""))
         continue
     if obj.get("decision") == "block" or hso.get("permissionDecision") in ("deny", "ask"):
         bump_stat(sid, "refused:" + e["script"].replace(".py", ""))
@@ -68,6 +69,18 @@ for e in entries:
     elif passthrough is None:
         passthrough = obj
 
+# v3.1.31: only "work" problems send the answer back (the work must continue); format, wording and record problems
+# are saved for the next step, so the answer is never shown twice. With a work problem, everything goes back together.
+if reasons and "work" not in kinds:
+    # the re-send instructions in a reason make no sense for a saved fix: keep only the problem itself
+    save_fixes(sid, [re.split(r"\s+(?:Send only|Your re-send|Do not repeat|Send the |Then send)", r_, maxsplit=1)[0]
+                     for r_ in reasons])
+    bump_stat(sid, "savedfixes")
+    notes.append("Noted for the next step: " + str(len(reasons)) + " format or record fix(es) — no repeat of this answer.")
+    log("dispatch", {"event": event, "sent_back": 0, "saved_fixes": len(reasons), "notices": len(notes)})
+    out = {"systemMessage": "\n".join(notes)}
+    print(json.dumps(out))
+    sys.exit(0)
 if reasons:
     body = reasons[0] if len(reasons) == 1 else "Fix all of these in one reply:\n" + "\n".join(
         f"{i}. {r}" for i, r in enumerate(reasons, 1))

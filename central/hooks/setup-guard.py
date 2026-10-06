@@ -40,4 +40,4 @@ if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
 block(f"Do the setup update before anything else, as the session start instructed: put the updated setup files on "
       f"the branch {branch} from origin/main, push it, open the pull request ready for review, switch back, and ask me "
-      "in the 'I need from you' line to merge it. Send only that.")
+      "in the 'I need from you' line to merge it. Send only that.", kind="work")
