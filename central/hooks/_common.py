@@ -60,8 +60,10 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.28",
+        "version": "3.1.30",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
+                  ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
+                  ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
                   ".claude/agents/reviewer.md": "reviewer on call (v3.1.28)",
                   ".claude/agents/explore.md": "explorer on Sonnet (v3.1.28)"},
         "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"]},
@@ -73,7 +75,9 @@ DEFAULT_CONFIG = {
                       ".claude/hz-loader.py": ["incomplete on GitHub", "loader that reports an incomplete rules repository"],
                       ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"],
                       ".claude/agents/reviewer.md": ["tools: Read, Grep, Glob", "reviewer that only reads"],
-                      ".claude/agents/explore.md": ["model: claude-sonnet-5-5", "explorer pinned to Sonnet 5.5"]},
+                      ".claude/agents/explore.md": ["model: claude-sonnet-5-5", "explorer pinned to Sonnet 5.5"],
+                      ".claude/agents/planner.md": ["model: claude-fable-5-1", "planner pinned to Fable 5.1"],
+                      ".claude/agents/planner-opus.md": ["model: claude-opus-5-5", "planner fallback pinned to Opus 5.5"]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
                    "Stop": "report checks (completion, top lines)",
 },
@@ -354,6 +358,88 @@ def hotspot_alerts(cfg):
 def worker_dispatched(records):
     """True if the session has dispatched a subagent at any point (background workers may still be running)."""
     return bool(tool_uses(records, {"Agent", "Task"}))
+
+
+BUILD_WORKERS = ("opus-worker", "sonnet-worker")
+_PR_CREATE = re.compile(r"(^|[;&|\n]\s*)gh\s+pr\s+create\b")
+_PR_UNDO = re.compile(r"(^|[;&|\n]\s*)gh\s+pr\s+ready\b[^;&|\n]*--undo")
+_PR_READY = re.compile(r"(^|[;&|\n]\s*)gh\s+pr\s+ready\b(?![^;&|\n]*--undo)")
+
+
+def pr_timeline(records):
+    """v3.1.30: the main session's pull-request and worker events in order, for the "pull request last" and "back to
+    draft" checks. Each event: (kind, detail) with kind in worker, reviewer, pr_create, pr_draft, pr_ready.
+    Also returns the ids of workers or reviewers started but not yet finished (still running)."""
+    events, started, finished = [], {}, set()
+    for rec in records:
+        if rec.get("isSidechain"):
+            continue
+        raw = json.dumps(rec, ensure_ascii=False) if "task-notification" in str(rec)[:200000] else ""
+        if raw:   # v3.1.30: Claude Code runs workers in the background and reports their end in a task notification
+            for tid, status in re.findall(r"<tool-use-id>([^<]+)</tool-use-id>.*?<status>(\w+)</status>", raw, re.S):
+                if status.lower() in ("completed", "failed", "killed", "stopped", "error", "cancelled"):
+                    finished.add(tid)
+        for b in _content_blocks(rec):
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_result":
+                res = b.get("content")
+                res = res if isinstance(res, str) else json.dumps(res, ensure_ascii=False)
+                if "Async agent launched" not in res[:300]:   # a background start is not an end
+                    finished.add(b.get("tool_use_id"))
+                continue
+            if b.get("type") != "tool_use":
+                continue
+            name, inp = b.get("name") or "", b.get("input") or {}
+            if name in ("Agent", "Task"):
+                st = str(inp.get("subagent_type") or "")
+                if st in BUILD_WORKERS:
+                    events.append(("worker", st)); started[b.get("id")] = st
+                elif st == "reviewer":
+                    events.append(("reviewer", st)); started[b.get("id")] = st
+            elif name == "Bash":
+                cmd = str(inp.get("command") or "")
+                if _PR_CREATE.search(cmd):
+                    events.append(("pr_create", cmd[:80]))
+                if _PR_UNDO.search(cmd):
+                    events.append(("pr_draft", cmd[:80]))
+                elif _PR_READY.search(cmd):
+                    events.append(("pr_ready", cmd[:80]))
+            elif re.match(r"^mcp__.*create_pull_request$", name):
+                events.append(("pr_create", name))
+            elif re.match(r"^mcp__.*update_pull_request$", name) and "draft" in inp:
+                events.append(("pr_draft" if inp.get("draft") is True else "pr_ready", name))
+    running = [st for i, st in started.items() if i not in finished]
+    return events, running
+
+
+def pr_is_open_ready(events):
+    """True when the session opened a pull request and has not switched it back to draft since (last PR event is a
+    create or ready). A hand-over may still pass with a 'PR: #n merged/closed/back to draft' line."""
+    last = [k for k, _ in events if k in ("pr_create", "pr_draft", "pr_ready")]
+    return bool(last) and last[-1] in ("pr_create", "pr_ready")
+
+
+def pr_branch_state(session_id, branch=None, state=None):
+    """v3.1.30: which branches of this session have an open pull request, and whether it is "ready" or "draft".
+    git-guard writes it when a pull request is opened, switched back to draft or marked ready; worker-guard and
+    pr-ready-guard read it. Keyed by branch, so a merged pull request on an old branch never blocks the next stage."""
+    path = os.path.join(STATE_DIR, "pr-branches.json")
+    try:
+        data = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    mine = data.get(str(session_id or ""), {})
+    if branch is not None and state is not None:
+        mine[branch] = state
+        data = {str(session_id or ""): mine}          # keep only this session
+        try:
+            os.makedirs(STATE_DIR, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        except OSError:
+            pass
+    return mine
 
 
 def is_progress_report(text, records, cfg):

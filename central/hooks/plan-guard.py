@@ -5,12 +5,12 @@
 - does not open with a framed Summary (a one-column table headed "Summary") in everyday words;
 - has Rev labels but no "Changes in this version" diff block listing every changed line;
 - has no "Stages to finish" list with an owner (Claude or You) on each stage, and a count line ("14 stages: …").
-When the plan passes and the session plans on Fable, the user is reminded (systemMessage) that switching back to
-Opus after approval costs less.
+v3.1.30: a full plan must come from the planner helper; when the plan passes and the session does not run on the main
+session model, the user is reminded (systemMessage) to switch.
 The plan text is taken from the tool input, or from a plan file the input names, or from the newest plan file."""
 import glob, os, re, time
 import json
-from _common import read_hook_input, deny_tool, log, read_transcript, PROJECT_DIR, PLAN_TEMPLATE, load_config
+from _common import read_hook_input, deny_tool, log, read_transcript, PROJECT_DIR, PLAN_TEMPLATE, load_config, last_turn
 cfg_ = load_config()
 
 data = read_hook_input()
@@ -156,6 +156,20 @@ if any(l.startswith("stages to finish") for l in lines):
         problems.append("Mark every stage under 'Stages to finish' as Build (the work Claude changes and proves) or "
                         "Check (merges, live-site check, device check), next to Claude or You — "
                         f"{len(unmarked)} stage(s) have neither.")
+# v3.1.30: a full plan (Plan vN) is written by the planner helper, not by the main session: in the Weekly-Planner money
+# session the main session planned in 66 steps inside its 300-500 k context (21 M tokens) on Fable
+if re.search(r"(?m)^#*\s*Plan v\d+", text) and not os.environ.get("HZ_PLANNER_CHECK_OFF"):   # test switch only
+    _planners = cfg_.get("planner_helpers") or ["planner", "planner-opus"]
+    _turn = last_turn(read_transcript(data.get("transcript_path")))
+    _planned = any(isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task")
+                   and str((b.get("input") or {}).get("subagent_type") or "") in _planners
+                   for r in _turn if r.get("type") == "assistant"
+                   for b in ((r.get("message") or {}).get("content") or [])
+                   if isinstance((r.get("message") or {}).get("content"), list))
+    if not _planned:
+        problems.append(f"A full plan is written by the planner helper: send '{_planners[0]}' (planner instructions, the "
+                        "plan shape, the agreed points) and save the plan it returns in one step. Only if it fails "
+                        f"because its model is not available, send '{_planners[-1]}' with 'Fallback: <the error>'.")
 if problems:
     log("plan-guard", {"sent_back": len(problems)})
     deny_tool("Plan sent back before approval: " + " ".join(problems) + " Fix all of it in one go and present the plan "
@@ -168,7 +182,8 @@ for rec in reversed(read_transcript(data.get("transcript_path"))):
 # v3.1.26: the plan's size is shown to me (no send-back): the everyday part keeps everything I must see
 pages = max(1, round(len(body) / 3000))
 size_note = f"Plan size: about {pages} page{'s' if pages != 1 else ''} above Technical details."
-if "fable" in model.lower():
-    size_note += (" Tip: this plan was written on Fable. After you approve it, type /model opus — Opus does the checking "
-                  "just as well while the work runs, and costs less.")
+_main = cfg_.get("main_session_model") or {}
+if model and _main.get("id") and _main["id"] not in model:   # v3.1.30: the planner helper plans; the session runs on Opus
+    size_note += (f" This session runs on {model}; the work after approval needs only {_main.get('name')}: type "
+                  f"{_main.get('switch')} — the planner helper still plans on the first-choice model.")
 print(json.dumps({"systemMessage": size_note}))

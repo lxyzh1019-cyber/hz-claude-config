@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.29: no app setup change (no setup pull request). The rules are read from their file at session start (Claude Code cut the long start text); the format check accepts a short note after any Status and a send-back repeats only the part that failed. claude.ai preferences: unchanged.",
+  "update_notice": "v3.1.30: app setup change — each app opens one setup pull request (two planner helpers: planner on Fable 5.1, planner-opus on Opus 5.5 as fallback). Full plans come from the planner helper; the session runs on Opus 5.5 (one notice if not). A pull request opens last (after the reviewer), goes back to draft while a worker fixes it, and is marked ready at the end; a ready-to-merge answer sends a notice to your account. No waiting timers: workers run in the background and their notice continues the work; notices get no plan text; background commands stop after 30 minutes. Screens and figures are compared with their references in code; by-screen feature lists need a proof in the Kept row. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -43,6 +43,10 @@
         "tools": "Edit|Write|MultiEdit"
       },
       {
+        "script": "wait-guard.py",
+        "tools": "Bash"
+      },
+      {
         "script": "rules-read-guard.py",
         "tools": "Bash"
       }
@@ -52,6 +56,8 @@
       "record-guard.py",
       "completion-guard.py",
       "handoff-guard.py",
+      "pr-ready-guard.py",
+      "ready-notice-guard.py",
       "validation-line.py",
       "qc-guard.py",
       "stats.py"
@@ -59,7 +65,9 @@
   },
   "read_only_helpers": [
     "Explore",
-    "reviewer"
+    "reviewer",
+    "planner",
+    "planner-opus"
   ],
   "sonnet_max_tries": 2,
   "complex_words": [
@@ -111,5 +119,14 @@
     "SubagentHandback",
     "TaskStop",
     "TodoWrite"
-  ]
+  ],
+  "planner_helpers": [
+    "planner",
+    "planner-opus"
+  ],
+  "main_session_model": {
+    "id": "claude-opus-5-5",
+    "name": "Opus 5.5",
+    "switch": "/model opus"
+  }
 }

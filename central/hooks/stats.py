@@ -23,7 +23,7 @@ m = re.search(cfg["validation_line_pattern"], text or "")
 final = bool(m) and m.group(2).split()[0] in ("Checked", "Validated")
 
 
-def version_line():
+def version_line(first=False):
     try:
         branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_DIR, capture_output=True,
                                 text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip() or "unknown"
@@ -46,7 +46,18 @@ def version_line():
         stub = "waiting" if refs else stub
     word = ("current" if stub.startswith("current") else "waiting for your merge" if stub.startswith("waiting")
             else "needs attention" if stub else "unknown")
-    return f"Rules v{central_version()} · {branch} · setup {word}"
+    line = f"Rules v{central_version()} · {branch} · setup {word}"
+    # v3.1.30: the main session runs on the main-session model; the planner helper plans on the first-choice model
+    main = (cfg.get("main_session_model") or {}) if isinstance(cfg, dict) else {}
+    used = ""
+    for rec in reversed(records):
+        if rec.get("type") == "assistant" and not rec.get("isSidechain") and (rec.get("message") or {}).get("model"):
+            used = str(rec["message"]["model"])
+            break
+    if first and used and main.get("id") and main["id"] not in used and not used.startswith("<"):
+        line += (f" · this session runs on {used}: type {main.get('switch')} ({main.get('name')} does the session's "
+                 "work; the planner helper plans)")
+    return line
 
 
 shown_path = os.path.join(STATE_DIR, "version-shown.json")
@@ -54,6 +65,7 @@ try:
     shown = json.load(open(shown_path, encoding="utf-8"))
 except (OSError, ValueError):
     shown = {}
+FIRST = not shown.get(sid)   # v3.1.30: the model notice goes only into the session's first notice
 
 
 def mark_shown():
@@ -70,7 +82,7 @@ if not final:
     if sid and not shown.get(sid):
         mark_shown()
         log("stats", {"shown": "version only", "why": "first reply, not a finished answer"})
-        print(json.dumps({"systemMessage": version_line()}))
+        print(json.dumps({"systemMessage": version_line(first=True)}))
     else:
         log("stats", {"shown": "nothing", "why": "not a finished answer (Status Checked or Validated)"})
     sys.exit(0)
@@ -318,7 +330,7 @@ except OSError:
 if not total:
     mark_shown()
     log("stats", {"shown": "version only", "why": "no token counts in the transcript"})
-    print(json.dumps({"systemMessage": version_line()}))
+    print(json.dumps({"systemMessage": version_line(first=FIRST)}))
     sys.exit(0)
 
 
@@ -327,7 +339,7 @@ def big(n):
 
 
 order = sorted(tokens, key=lambda k: -tokens[k])
-lines = [version_line(), "Session summary",
+lines = [version_line(first=FIRST), "Session summary",
          "Tokens: " + " · ".join(f"{k} {round(100 * tokens[k] / total)}%" for k in order) + f" ({big(total)})"
          + (f" — main {round(100 * by_source['main'] / total)}% · helpers {round(100 * by_source['helpers'] / total)}%"
             if by_source["helpers"] else "")

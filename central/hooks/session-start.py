@@ -30,6 +30,11 @@ facts = [f"[session-start] Rules v{version} loaded · branch: {branch}" + (f" ·
          if loaded else "[session-start] Central rules NOT loaded (rules file missing in cache). Stop and report."]
 facts.append(f"Worker instructions: {WORKER_PATH} — include this path in every opus-worker or sonnet-worker delegation.")
 _agents = os.path.dirname(WORKER_PATH)   # v3.1.28: the explorer and the reviewer on call
+facts.append(f"Planner instructions: {os.path.join(_agents, 'planner-instructions.md')} — name this path when you send "
+             "'planner' (or 'planner-opus' on 'Fallback:') to write or revise a full plan.")
+facts.append(f"Compare instructions: {os.path.join(_agents, 'compare-instructions.md')} — name this path in every "
+             "hand-over whose task changes screens or figures. Feature list conversion (once per app, when the owner "
+             f"asks): {os.path.join(_agents, 'conversion-instructions.md')}.")
 facts.append(f"Explorer instructions: {os.path.join(_agents, 'explorer-instructions.md')} — send Explore before a Complex "
              "stage and put its map in the worker's hand-over ('Map: …'). Reviewer instructions: "
              f"{os.path.join(_agents, 'reviewer-instructions.md')} — the reviewer starts before a big plan, when a worker "

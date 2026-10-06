@@ -86,7 +86,7 @@ Squares on Rev labels only | R | not on a Rev inside a sentence
 Marker retention | R | keep the current and previous round's markers
 Marker is a round, never approval | R | A marker is a round, never an approval
 Session on account default; no model or advisor key | R | the stub sets no `model` and no `advisorModel`
-Fable only by my switch; planner suggestion signals | R | the plan-gate `[planner]` line suggests it only on strong signals
+Full plans by the planner helper (v3.1.30; was: Fable suggested on strong signals) | R | A full plan comes from the `planner` helper
 Plan names its model; switch back after Fable plan | R | `/model opus`
 Worker model pins and effort | R | `effort: medium`
 Never loosen the Sonnet ID | R | never loosen it
@@ -101,7 +101,7 @@ Hand-over rule 3 routing by level | R | `Escalated from sonnet-worker: <reason>`
 Hand-over rule 4 Sonnet complex words | R | `sonnet-worker` never gets root cause
 Hand-over rule 5 two tries | R | two tries per task per request of mine
 Hand-over rule 6 Sonnet file limits | R | `Escalate to opus-worker: <reason>`
-Hand-over rule 7 foreground only | R | Workers run in the foreground only
+Hand-over rule 7 background workers, end the turn, notice continues (v3.1.30; was foreground only) | R | the worker's notice continues the work
 Fallback without Opus | R | Without Opus, Routine work may still go to `sonnet-worker`
 Hand-over content; check evidence | R | A worker's "done" is not completion
 Parallel workers; summarize | R | never forward raw reports
@@ -160,11 +160,11 @@ Status and diff; preserve work | R | Preserve my work
 Delete files only when approved | R | Delete files only when the approved plan says so
 Pushing the work branch is always fine | R | **Pushing the work branch is always fine**
 Merging stays mine; main protected | R | blocks commits on and pushes to `main`
-Ready for review, never draft | R | **ready for review, never as drafts**
+Ready for review, never draft | R | never as drafts (`gh pr create --draft`
 Deploy only when asked | R | Deploy only when I asked for it
 Model guidance sources | D | Prompting Claude Opus 5.5
 Model guidance pointer | R | docs/model-guidance-sources.md
-Session model stated once at session start | R | Say the session model once at session start
+Session model shown once at the start when not Opus (v3.1.30) | R | on another model the first notice says `/model opus`
 Writing for me in ASD-STE100-lite (new, user test 2026-10-05) | R | **Writing for me (ASD-STE100-lite).**
 STE: result first, how it works only on request | R | Start with the result: what I will see, or what changes for me.
 STE: one word for one thing | R | Use one word for one thing.
@@ -181,3 +181,14 @@ Map line in Complex hand-overs (new) | R | `Map: not needed — <reason>`
 Reviewer on call at three moments (new) | R | **Reviewer on call (Hook).**
 Reviewer when stuck (new) | R | `Reviewer advice: …`
 Reviewer before done (new) | R | `Reviewer before done (<plan name>): <verdict>`
+Pull request opens last (v3.1.30) | R | only after every worker and the reviewer finished
+Open ready pull request back to draft while fixed (v3.1.30) | R | first switch it back to draft (`gh pr ready <n> --undo`)
+Final report marks the pull request ready (v3.1.30) | R | the final report marks it ready (Hook)
+Reviewer before every pull request (v3.1.30) | R | before every pull request (its check refuses one without it)
+No waiting commands in the main session too (v3.1.30) | R | no waiting loops or `tail -f`, in the main session too
+Background commands have a 30-minute limit (v3.1.30) | R | a background command starts with `timeout 1800` (Hook)
+Compare with references and Proof line (v3.1.30) | R | follows the compare instructions and reports a `Proof:` line
+By-screen feature list with proof per line (v3.1.30) | R | gives each line a proof, and the Kept row names it (Hook)
+
+Planner fallback on Opus only with Fallback line (v3.1.30) | R | `planner-opus` with `Fallback: <error>`
+Ready-to-merge notice to my account (v3.1.30) | R | first sends me a notice (PushNotification, Hook)
