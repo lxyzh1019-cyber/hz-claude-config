@@ -119,5 +119,7 @@ if reasons:
         reasons.append("The stated Completion line does not match the ledger; use the lines below.")
     bump()
     log("completion-guard", {"send_back": used + 1, "open": open_items})
-    block(" ".join(reasons) + "\nPut these lines just before the validation line (the three closing lines stay last):\n" + comp["display"])
+    work = bool(open_items) or any(r.startswith("Before done: send the reviewer") for r in reasons)
+    block(" ".join(reasons) + "\nPut these lines just before the validation line (the three closing lines stay last):\n"
+          + comp["display"], kind="work" if work else None)
 sys.exit(0)

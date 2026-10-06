@@ -149,7 +149,7 @@ Order of a final answer | R | **Order of a final answer (Hook).**
 Closing lines | R | 👉 **I need from you:** one action
 Request line at most 30 words | R | at most 30 words
 No codes or sizes in closing lines | R | colour codes or sizes
-Send-back asks only for what is missing | R | A send-back asks only for what is missing
+Send-back asks only for what is missing | R | Format, wording and record problems are never sent back
 Short chat replies exempt | R | Short chat replies that used no tools are exempt
 Validation line | R | **Validation line (Hook).**
 Status note allowed for any status (v3.1.29) | R | a short note after ` — ` is allowed for any status
@@ -191,4 +191,4 @@ Compare with references and Proof line (v3.1.30) | R | follows the compare instr
 By-screen feature list with proof per line (v3.1.30) | R | gives each line a proof, and the Kept row names it (Hook)
 
 Planner fallback on Opus only with Fallback line (v3.1.30) | R | `planner-opus` with `Fallback: <error>`
-Ready-to-merge notice to my account (v3.1.30) | R | first sends me a notice (PushNotification, Hook)
+Ready-to-merge notice to my account (v3.1.30) | R | send me a notice before the answer (PushNotification, Hook)

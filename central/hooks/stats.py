@@ -144,7 +144,7 @@ def is_test_run(cmd):
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 PLAN_TOOLS = {"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "ExitPlanMode", "EnterPlanMode", "TodoWrite"}
 CODE_HELPERS = {"opus-worker", "sonnet-worker"}
-PLAN_HELPERS = {"explore", "plan"}
+PLAN_HELPERS = {"explore", "plan", "planner", "planner-opus"}
 
 
 # v3.1.28: more read-only shell commands (cut, awk, sed without -i, sort …) count as reading; setting a variable,
@@ -154,7 +154,7 @@ READ_MORE = re.compile(r"^(cut|awk|sort|uniq|nl|tr|sed(?!.*\s-i)|echo|printf|jq|
 SKIP_PART = re.compile(r"^(cd\s|export\s|set\s|do$|done$|then$|fi$|else$|esac$|\}$|\{$|"
                        r"[A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|\S*)\s*$)", re.I)
 WAIT_CMD = re.compile(r"^(sleep|timeout|wait|until|while\b.*\bsleep|tail\s+(-\S+\s+)*-f|Start-Sleep)\b", re.I)
-WAIT_TOOLS = {"Monitor", "BashOutput", "TaskOutput"}
+WAIT_TOOLS = {"Monitor", "BashOutput", "TaskOutput", "ReadNotifications"}   # v3.1.31: 14 steps, 4.8 M in the money session
 
 
 def shell_parts(cmd):
@@ -380,7 +380,8 @@ lines.append(f"Refused: planner edits {st.get('refused:routing-guard', 0)} · ha
              f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}"
              + (" (" + " · ".join(f"{NAMES.get(k[9:], k[9:])} {v}" for k, v in sorted(st.items())
                                   if k.startswith("sendback:") and v) + ")"
-                if any(k.startswith("sendback:") and v for k, v in st.items()) else ""))
+                if any(k.startswith("sendback:") and v for k, v in st.items()) else "")
+             + f" · Saved fixes: {st.get('savedfixes', 0)} (v3.1.31: format and record problems, fixed next step)")
 if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
     lines.append("This session is long: it carries on, hands stages to fresh workers, and keeps a restart line in the record in case you close it.")
 mark_shown()

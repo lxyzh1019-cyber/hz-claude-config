@@ -420,7 +420,7 @@ dp(){ rm -f "$PROJ/.claude/state/format-rounds.json" "$PROJ/.claude/state/record
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push origin main"}}' | dp); check "switchboard passes on a git-guard deny" '"deny"' "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | dp); check "switchboard quiet on a harmless command" "^$" "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"x"}}' | dp); check "switchboard skips checks for other tools" "^$" "$o"
-o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard passes on a Stop block" '"decision": "block"' "$o"
+o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard saves a format problem instead of sending the answer back (v3.1.31)" "Noted for the next step" "$o"
 o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/second_top.jsonl\",\"stop_hook_active\":false}" | dp); check "switchboard sends nothing back when every Stop check passes (only the version notice)" "clean" "$(echo "$o" | grep -c decision | sed 's/^0$/clean/')"
 o=$(echo '{"hook_event_name":"UserPromptSubmit","prompt":"the sync layer keeps breaking"}' | dp); check "switchboard joins prompt contexts" "Executor: opus-worker" "$o"
 check "switchboard answers once for the prompt event" "1" "$(echo "$o" | grep -c hookSpecificOutput)"
@@ -457,9 +457,9 @@ check "hook input with Chinese text survives a gbk console" "intact" "$o"
 check "installer smoke test reads UTF-8" "PYTHONIOENCODING=utf-8" "$(cat "$H/../../stub/install-stub.sh")"
 # Stop checks together
 o=$(echo "{\"hook_event_name\":\"Stop\",\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | dp)
-check "switchboard sends all Stop reasons in one message" "Fix all of these in one reply" "$o"
-check "joined message carries the record reason" "record is incomplete" "$o"
-check "joined message carries the format reason" "quote block" "$o"
+check "switchboard saves all format and record problems together, no send-back (v3.1.31)" "Noted for the next step: 2" "$o"
+check "the saved fixes carry the record problem" "record is incomplete" "$(cat $PROJ/.claude/state/pending-fixes.json)"
+check "the saved fixes carry the format problem" "quote block" "$(cat $PROJ/.claude/state/pending-fixes.json)"
 # per-prompt cap for the format check, not stop_hook_active
 rm -f "$PROJ/.claude/state/format-rounds.json"
 echo '{"prompt":"- one small thing","session_id":"cap1"}' | python3 $H/plan-gate.py >/dev/null
@@ -493,7 +493,7 @@ printf '{"advisorModel":"fable","model":"opus","hooks":{"PostToolUse":[{"matcher
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$M/old.json" "hz-loader.py"
 o=$(python3 -c "import json;s=json.load(open('$M/old.json'));print('advisor' if 'advisorModel' in s else 'no-advisor', 'model' if 'model' in s else 'no-model', sorted(s['hooks']))")
 check "installer removes the old Fable advisor" "no-advisor" "$o"
-check "installer removes the idle hook events" "\['PreToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit'\]" "$o"
+check "installer removes the idle hook events (v3.1.31: PostToolUse added for the notice)" "'PostToolUse', 'PreToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit'" "$o"
 printf '{"advisorModel":"opus"}' > "$M/own.json"; python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$M/own.json" "hz-loader.py"
 check "installer keeps an advisor the repository chose itself" "opus" "$(cat "$M/own.json")"
 S2="$T/stubadv"; rm -rf "$S2"; mkdir -p "$S2/.claude/agents"
@@ -682,7 +682,7 @@ check "helper totals are taken from the finished hand-over when no helper record
 echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"st1","tool_input":{"command":"git push origin main"}}' | python3 $H/dispatch.py >/dev/null
 echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"st1\",\"transcript_path\":\"$T/noline.jsonl\",\"stop_hook_active\":false}" | python3 $H/dispatch.py >/dev/null
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"st1\"}" | python3 $H/stats.py | sm)
-check "the summary counts send-backs" "Send-backs: 1" "$o"
+check "the summary counts saved fixes (v3.1.31: a format problem is no longer a send-back)" "Saved fixes: 1" "$o"
 o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"st1\",\"transcript_path\":\"$T/stats.jsonl\",\"stop_hook_active\":false}" | python3 $H/dispatch.py)
 check "the switchboard passes the summary to me" 'Session summary' "$o"
 # counted by plan; queued and waiting stages
@@ -746,8 +746,8 @@ check "the summary shows how much was re-reading" "63 k of it re-reading what wa
 check "the stats log says what was shown" '"shown": "summary"' "$(cat "$PROJ/.claude/state/stats.jsonl")"
 o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"v23\",\"transcript_path\":\"$T/top_old.jsonl\",\"stop_hook_active\":false}" | dp)
 check "a send-back keeps the notice beside it" '"systemMessage": "Rules v' "$o"
-check "a send-back still sends back" '"decision": "block"' "$o"
-check "the switchboard logs every Stop" '"sent_back": 1' "$(cat "$PROJ/.claude/state/dispatch.jsonl")"
+check "a format problem is saved, not sent back (v3.1.31)" "Noted for the next step" "$o"
+check "the switchboard logs every Stop" '"saved_fixes": 1' "$(cat "$PROJ/.claude/state/dispatch.jsonl")"
 SP="$T/setupwait"; rm -rf "$SP"; mkdir -p "$SP/.claude"; ( cd "$SP" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git branch -q hz-setup-update-3.1.23 )
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23b\"}" | CLAUDE_PROJECT_DIR="$SP" python3 $H/stats.py | sm)
 check "an outdated setup with its update branch waiting reads 'waiting for your merge'" "setup waiting for your merge" "$o"
@@ -768,7 +768,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.30)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.31)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "written into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Every final answer ends with a" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -1631,10 +1631,84 @@ open(out,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYEOF
 }
 rn(){ echo "{\"transcript_path\":\"$1\",\"session_id\":\"$2\"}" | python3 $H/ready-notice-guard.py; }
-mkn "$T/n1.jsonl" "Merge pull request #120 on GitHub." no; o=$(rn "$T/n1.jsonl" rn1); check "v3.1.30: a ready-to-merge answer without a notice is sent back" "PushNotification" "$o"
+mkn "$T/n1.jsonl" "Merge pull request #120 on GitHub." no; o=$(rn "$T/n1.jsonl" rn1); check "v3.1.31: the ready-notice send-back is retired (it showed the answer twice)" "^$" "$o"
 mkn "$T/n2.jsonl" "Merge pull request #120 on GitHub." yes; o=$(rn "$T/n2.jsonl" rn2); check "v3.1.30: with the notice sent it passes" "^$" "$o"
 mkn "$T/n3.jsonl" "Answer decision 1." no; o=$(rn "$T/n3.jsonl" rn3); check "v3.1.30: an answer that asks for no merge needs no notice" "^$" "$o"
-mkn "$T/n4.jsonl" "合并 #120。" no; o=$(rn "$T/n4.jsonl" rn4); check "v3.1.30: a Chinese merge request also needs the notice" "PushNotification" "$o"
-check "v3.1.30: the switchboard runs the notice check" "ready-notice-guard.py" "$(cat $H/config.json)"
+check "v3.1.31: the switchboard no longer runs the retired notice send-back" "clean" "$(python3 -c "import json;print('clean' if 'ready-notice-guard.py' not in json.load(open('$H/config.json'))['dispatch']['Stop'] else 'still')")"
+# --- v3.1.31: no answer shown twice — format, wording and record problems are saved fixes; only work is sent back
+dps(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'Stop','session_id':sys.argv[2],'transcript_path':sys.argv[1],'stop_hook_active':False}))" "$1" "$2" | python3 $H/dispatch.py; }
+rm -f "$PROJ/.claude/state/pending-fixes.json"
+# real case 1 (Weekly-Planner money session, 18:03 MDT): the 'I need from you' line was too long
+python3 - "$T/r1.jsonl" <<'PYEOF'
+import json,sys
+need="Merge pull request #119 on GitHub after you check the Sunday sheet on your phone and the iPad, then tell me whether the fines look right and whether the guess game should stay on the money page or move."
+txt="Done.\n\nCompletion: Build 7 of 7 done (100%) · Check 5 of 6\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** Ready to merge.\n> 👉 **I need from you:** "+need+"\n> ➡️ **Next:** last check."
+R=[{"type":"user","message":{"role":"user","content":"finish"}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"git status"}}]}},
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"ok"}]}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":txt}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYEOF
+o=$(dps "$T/r1.jsonl" r31a); check "v3.1.31 real case 1: a too-long 'I need from you' line is not sent back" "clean" "$(echo "$o" | grep -c '"decision": "block"' | sed 's/^0$/clean/')"
+check "v3.1.31 real case 1: you see one short note instead" "Noted for the next step" "$o"
+check "v3.1.31 real case 1: the problem is saved for the next step" "one action in at most 30 words" "$(cat $PROJ/.claude/state/pending-fixes.json)"
+check "v3.1.31: the saved fix has no re-send instruction" "clean" "$(grep -c 'Send only what is missing' $PROJ/.claude/state/pending-fixes.json | sed 's/^0$/clean/')"
+o=$(python3 -c "import json;print(json.dumps({'session_id':'r31a','prompt':'ok, what next'}))" | python3 $H/plan-gate.py)
+check "v3.1.31: the next step gets the saved fix first" "\[fix first\]" "$o"
+check "v3.1.31: ...and is told to fix it silently" "do not write about the fixes" "$o"
+o=$(python3 -c "import json;print(json.dumps({'session_id':'r31a','prompt':'and then?'}))" | python3 $H/plan-gate.py)
+check "v3.1.31: a saved fix is handed over only once" "clean" "$(echo "$o" | grep -c 'fix first' | sed 's/^0$/clean/')"
+# real case 3 (record not updated) and a format problem together: still no send-back
+o=$(dps "$T/norecord.jsonl" r31b); check "v3.1.31 real case 3: a missing record update is saved, not sent back" "clean" "$(echo "$o" | grep -c '"decision": "block"' | sed 's/^0$/clean/')"
+NOTE2=$'<task-notification>\n<tool-use-id>x</tool-use-id>\n<status>completed</status>\n</task-notification>'
+o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'r31b','prompt':sys.argv[1]}))" "$NOTE2" | python3 $H/plan-gate.py)
+check "v3.1.31: a worker notice also hands over the saved fixes (fixed sooner)" "record is incomplete" "$o"
+check "v3.1.31 real case 2: the (Check) label problem is a saved fix (no work kind)" "clean" "$(grep -c 'kind=\"work\" if work' $H/completion-guard.py | sed 's/^1$/clean/')"
+check "v3.1.31 real case 4: the hand-off list problem is a saved fix" "clean" "$(grep -c 'kind=' $H/handoff-guard.py | sed 's/^0$/clean/')"
+check "v3.1.31 real case 5: the notice send-back is retired" "Retired in v3.1.31" "$(cat $H/ready-notice-guard.py)"
+# work still goes back: a destructive step, open items, setup first, a draft pull request
+python3 - "$T/r6.jsonl" <<'PYEOF'
+import json,sys
+txt="Next: run git reset --hard origin/main to clean up.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** x\n> 👉 **I need from you:** run it.\n> ➡️ **Next:** y"
+R=[{"type":"user","message":{"role":"user","content":"clean"}},{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":txt}]}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYEOF
+o=$(dps "$T/r6.jsonl" r31c); check "v3.1.31: a destructive step is still sent back (safety)" '"decision": "block"' "$o"
+check "v3.1.31: an open Build stage is marked as work" "clean" "$(grep -c 'work = bool(open_items)' $H/completion-guard.py | sed 's/^1$/clean/')"
+check "v3.1.31: setup first is work" 'kind="work"' "$(cat $H/setup-guard.py)"
+check "v3.1.31: a draft pull request is work" 'kind="work"' "$(cat $H/pr-ready-guard.py)"
+# the notice comes before the answer
+nr(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PostToolUse','tool_name':sys.argv[1],'tool_input':json.loads(sys.argv[2]),'tool_response':json.loads(sys.argv[3])}))" "$1" "$2" "$3" | python3 $H/notice-reminder.py; }
+o=$(nr Bash '{"command":"git push -u origin claude/x && gh pr create --fill"}' '{"stdout":"https://github.com/a/b/pull/121"}'); check "v3.1.31: right after a pull request opens, the session is asked to send the notice" "PushNotification" "$o"
+o=$(nr Bash '{"command":"gh pr ready 121"}' '{"stdout":"ok"}'); check "v3.1.31: marking it ready also asks for the notice" "PushNotification" "$o"
+o=$(nr Bash '{"command":"gh pr ready 121 --undo"}' '{"stdout":"ok"}'); check "v3.1.31: back to draft asks for no notice" "^$" "$o"
+o=$(nr Bash '{"command":"gh pr create --fill"}' '{"stderr":"pull request create failed: GraphQL error","is_error":true}'); check "v3.1.31: a failed pull request asks for no notice" "^$" "$o"
+o=$(nr mcp__github__create_pull_request '{"title":"x"}' '{"number":121}'); check "v3.1.31: the GitHub tool's pull request also asks for the notice" "PushNotification" "$o"
+o=$(python3 -c "import json;print(json.dumps({'hook_event_name':'PostToolUse','tool_name':'Bash','agent_id':'w1','tool_input':{'command':'gh pr create --fill'},'tool_response':{'stdout':'ok'}}))" | python3 $H/notice-reminder.py); check "v3.1.31: a worker never gets the notice request" "^$" "$o"
+o=$(python3 -c "import json;print(json.dumps({'hook_event_name':'PostToolUse','tool_name':'Bash','tool_input':{'command':'gh pr create --fill'},'tool_response':{'stdout':'https://github.com/a/b/pull/121'}}))" | python3 $H/dispatch.py); check "v3.1.31: the switchboard runs the notice reminder after a tool" "PushNotification" "$o"
+check "v3.1.31: the app setup sends PostToolUse to the switchboard" '"PostToolUse"' "$(cat $H/../../stub/settings.json)"
+P4=$(mktemp -d); mkdir -p "$P4/.claude/agents"; cp "$ST/sonnet-worker.md" "$ST/opus-worker.md" "$ST/reviewer.md" "$ST/explore.md" "$ST/planner.md" "$ST/planner-opus.md" "$P4/.claude/agents/"; cp "$ST/hz-loader.py" "$P4/.claude/"; cp "$ST/CLAUDE-pointer.md" "$P4/CLAUDE.md"
+python3 -c "import json;d=json.load(open('$ST/settings.json'));d['hooks'].pop('PostToolUse');json.dump(d,open('$P4/.claude/settings.json','w'))"
+o=$(cd "$H" && python3 -c "import sys;from stubcheck import stub_status;from _common import load_config;print(stub_status(load_config(), sys.argv[1]))" "$P4")
+check "v3.1.31: an app on the 3.1.30 setup is told to update (one setup pull request)" "OUTDATED" "$o"
+# --- v3.1.31 review fixes: a background planner's notice continues the turn; saved fixes survive a new session
+python3 - "$T/bgplan.jsonl" <<'PYEOF'
+import json,sys
+R=[{"type":"user","message":{"role":"user","content":"plan the button"}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"Agent","input":{"subagent_type":"planner","prompt":"x"}}]}},
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"p1","content":[{"type":"text","text":"Async agent launched successfully."}]}]}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"⏳ Working on: plan (planner)"}]}},
+{"type":"user","message":{"role":"user","content":"<task-notification>\n<tool-use-id>p1</tool-use-id>\n<status>completed</status>\n</task-notification>"}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYEOF
+o=$(pgp "$T/bgplan.jsonl" "$PL"); check "v3.1.31 review: a plan from a background planner passes (its notice continues the turn)" "clean" "$(echo "$o" | grep -c 'written by the planner helper' | sed 's/^0$/clean/')"
+rm -f "$PROJ/.claude/state/pending-fixes.json"
+( cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import save_fixes;save_fixes('oldsess',['update WORKING_RECORD.md (request ledger)'])" )
+o=$(python3 -c "import json;print(json.dumps({'session_id':'newsess','prompt':'start the next task'}))" | python3 $H/plan-gate.py)
+check "v3.1.31 review: a new session gets the fixes an earlier session left" "update WORKING_RECORD.md" "$o"
+( cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import save_fixes;save_fixes('s1',['a']);save_fixes('s2',['b'])" )
+o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import take_fixes;print(take_fixes('s1'))")
+check "v3.1.31 review: two sessions' fixes are both kept" "'b', 'a'" "$o"
+check "v3.1.31 review: notice-reading steps count as waiting in the summary" "ReadNotifications" "$(grep -n '^WAIT_TOOLS' $H/stats.py)"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

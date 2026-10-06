@@ -60,7 +60,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.30",
+        "version": "3.1.31",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -80,6 +80,7 @@ DEFAULT_CONFIG = {
                       ".claude/agents/planner-opus.md": ["model: claude-opus-5-5", "planner fallback pinned to Opus 5.5"]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
                    "Stop": "report checks (completion, top lines)",
+                   "PostToolUse": "notice after a pull request opens (v3.1.31)",
 },
         # which tools an event's matcher must cover ("<needle in the matcher>", "<plain name>")
         "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"],
@@ -222,7 +223,7 @@ def plain_lines(text):
 
 
 def last_turn(records):
-    """Records from the last real user prompt (not a tool_result) to the end."""
+    """Records from the last real user prompt (not a tool_result, not a worker notice) to the end."""
     start = 0
     for i, rec in enumerate(records):
         if rec.get("type") != "user":
@@ -230,6 +231,8 @@ def last_turn(records):
         blocks = _content_blocks(rec)
         if any(b.get("type") == "tool_result" for b in blocks):
             continue
+        if any(str(b.get("text") or "").lstrip().startswith("<task-notification>") for b in blocks):
+            continue   # a worker's notice continues the same turn
         start = i
     return records[start:]
 
@@ -268,9 +271,50 @@ def is_governance_path(path, cfg):
     return False
 
 
-def block(reason):
-    print(json.dumps({"decision": "block", "reason": reason}))
+def block(reason, kind=None):
+    """kind "work" (v3.1.31): the work must continue (open items, setup first, a draft pull request, a destructive
+    step) — a real send-back. Anything else from a Stop check is a format, wording or record problem: the switchboard
+    saves it as a fix for the next step instead of sending the answer back (a send-back shows the answer twice)."""
+    out = {"decision": "block", "reason": reason}
+    if kind:
+        out["hz_kind"] = kind
+    print(json.dumps(out))
     sys.exit(0)
+
+
+def save_fixes(session_id, reasons):
+    """v3.1.31: format, wording and record problems from a finished answer, kept for the next step."""
+    path = os.path.join(STATE_DIR, "pending-fixes.json")
+    try:
+        data = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    mine = data.get(str(session_id or ""), []) + [r for r in reasons if r]
+    data[str(session_id or "")] = mine[-8:]
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def take_fixes(session_id):
+    """v3.1.31: the saved fixes for this session, removed once handed to the next step."""
+    path = os.path.join(STATE_DIR, "pending-fixes.json")
+    try:
+        data = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    mine = data.pop(str(session_id or ""), [])
+    for other in list(data):            # an earlier session's leftovers (it ended before its next step) come along
+        mine = data.pop(other, []) + mine
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except OSError:
+        pass
+    return mine
 
 
 def add_context(event, text):
