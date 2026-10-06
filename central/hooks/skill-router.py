@@ -7,6 +7,8 @@ RULES = os.path.join(HOOK_DIR, "skill-router.json")
 data = read_hook_input()
 prompt = (data.get("prompt") or "")
 low = prompt.lower()
+if prompt.lstrip().startswith("<task-notification>"):   # v3.1.30: a notice, not a request
+    sys.exit(0)
 try:
     rules = json.load(open(RULES, encoding="utf-8"))
 except (OSError, ValueError):

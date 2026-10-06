@@ -1,18 +1,24 @@
+<!-- feature-list: by-screen -->
 # FEATURES — <app or plan name> — manifest v1 — confirmed <date>
 
-Locked features of the current version. Every edit is checked against this list and ends with a regression table. Update this file in the same change that alters a feature. Over-list rather than under-list.
+Locked features of the current version, one section per screen. Each line says what you see or what it does, then its proof: a test name or a reference picture (`tests/reference/<screen>-<phone|ipad|pc>.png`). Every edit is checked against this list and ends with a regression table whose Kept row names its proof. Update this file in the same change that alters a feature. History stays in git and `docs/archive/`, not here.
 
-## <Group, e.g. Data / sync>
-- <feature or rule — one line, observable>
-- …
+## <Screen, e.g. Today>
+- <what you see or what it does — one line> — Proof: <test name | picture tests/reference/today-phone.png>
 
-## <Group, e.g. Screens / UI>
-- …
+## <Screen, e.g. Settings>
+- … — Proof: …
 
-## <Group, e.g. Rules / special cases>
-- …
+## Data and rules
+- <rule — one line> — Proof: <test name>
 
-## Regression table format (paste at the end of every edit)
-| Feature | v<old> → v<new> | Note |
-|---|---|---|
-| <feature> | kept / added / intentionally removed / missing | <why, if not kept> |
+## References
+- <figure or rule document the comparisons and tests must cover — one line each>
+
+## Regression table (paste at the end of every edit)
+| Regression table | Result |
+|---|---|
+| Kept | <n> features · Proof: pictures <n> screens × 3 sizes, <k> changed (all planned) · tests <passed>/<total> |
+| Added | … |
+| Intentionally removed | … |
+| Missing | … |

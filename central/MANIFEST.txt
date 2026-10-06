@@ -1,6 +1,9 @@
-version: 3.1.29
+version: 3.1.30
+agents/compare-instructions.md
+agents/conversion-instructions.md
 agents/explorer-instructions.md
 agents/opus-worker-instructions.md
+agents/planner-instructions.md
 agents/reviewer-instructions.md
 hooks/ROUTING-TEST.md
 hooks/_common.py
@@ -11,7 +14,9 @@ hooks/git-guard.py
 hooks/handoff-guard.py
 hooks/plan-gate.py
 hooks/plan-guard.py
+hooks/pr-ready-guard.py
 hooks/qc-guard.py
+hooks/ready-notice-guard.py
 hooks/record-edit-guard.py
 hooks/record-guard.py
 hooks/replay-hooks.sh
@@ -26,6 +31,7 @@ hooks/stats.py
 hooks/stubcheck.py
 hooks/stubupdate.py
 hooks/validation-line.py
+hooks/wait-guard.py
 hooks/worker-budget.py
 hooks/worker-guard.py
 rules/CLAUDE-rules.md
@@ -41,6 +47,8 @@ stub-files/explore.md
 stub-files/hz-loader.py
 stub-files/merge_settings.py
 stub-files/opus-worker.md
+stub-files/planner-opus.md
+stub-files/planner.md
 stub-files/reviewer.md
 stub-files/settings.json
 stub-files/sonnet-worker.md

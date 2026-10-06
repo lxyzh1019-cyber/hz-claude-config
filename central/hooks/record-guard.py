@@ -107,6 +107,18 @@ if not progress and not re.search(cfg["regression_table_pattern"], text):
     problems.append(f"include the regression table against {cfg['features_file']} in exactly this shape (four rows, "
                     "these first-column words):\n| Regression table | Result |\n|---|---|\n| Kept | … |\n| Added | … |\n"
                     "| Intentionally removed | … |\n| Missing | … |\nUpdate the manifest if features changed. It goes above the closing lines")
+# v3.1.30: a converted feature list (first line <!-- feature-list: by-screen -->) asks the Kept row for its proof
+if not progress and re.search(cfg["regression_table_pattern"], text):
+    try:
+        converted = "feature-list: by-screen" in open(os.path.join(PROJECT_DIR, cfg["features_file"]),
+                                                       encoding="utf-8").read(400)
+    except OSError:
+        converted = False
+    kept = re.search(r"(?im)^\|\s*\**kept\**\s*\|(.*)$", text)
+    if converted and not (kept and re.search(r"proof:\s*\S", kept.group(1), re.I)):
+        problems.append(f"{cfg['features_file']} is a by-screen list, so the regression table's Kept row names its "
+                        "proof: '| Kept | <n> features · Proof: pictures <n> screens × 3 sizes, <k> changed (all "
+                        "planned) · tests <passed>/<total> |' — from the compare instructions, not from memory")
 if problems:
     send_back("Implementation happened this turn but the record is incomplete. Before finishing: " + "; ".join(problems) + ".")
 sys.exit(0)

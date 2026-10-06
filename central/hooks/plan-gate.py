@@ -10,6 +10,12 @@ data = read_hook_input()
 prompt = data.get("prompt") or ""
 cfg = load_config()
 bump_prompt_number(data.get("session_id"))
+# v3.1.30: a worker or background-command notice is not a request of mine. In the Weekly-Planner money session 79 of
+# 106 plan-gate texts went to such notices ("Full Plan vN is required (90 bullets)"), 128,000 characters re-read on
+# every later step.
+if prompt.lstrip().startswith("<task-notification>"):
+    log("plan-gate", {"skipped": "task notification"})
+    sys.exit(0)
 bullets = count_bullets(prompt)
 low = prompt.lower()
 triggers = [t for t in cfg["design_triggers"] if t in low]
@@ -71,10 +77,10 @@ if msgs and not skip and (bullets >= 3 or triggers):
             pass
         msgs.append("[reviewer] Big or risky plan: before presenting it, send the reviewer (moment: Before a plan) "
                     "with the draft plan and the area's ledger and hotspot rows, and fix what it finds.")
-        msgs.append("[planner] Suggest /model fable before writing this plan (session-only; the next session is back on "
-                    "the account default): " + "; ".join(why) + ". Otherwise plan on the session's own model. State which one applied at the top of the plan.")
-    else:
-        msgs.append("[planner] The session's model plans (account default: Opus 5.5).")
+        msgs.append("[planner] Big or risky plan (" + "; ".join(why) + "): the planner helper writes it.")
+    # v3.1.30: every full plan comes from the planner helper (first-choice model; planner-opus only on 'Fallback:')
+    msgs.append("[planner] A full plan is written by the 'planner' helper (planner instructions, the plan shape, the "
+                "agreed points); save what it returns in one step and present it. A micro-plan stays with you.")
 
 # pause: the next final report may stand with open ledger items (completion-guard honours this once)
 if any(ph in low for ph in cfg["pause_phrases"]):

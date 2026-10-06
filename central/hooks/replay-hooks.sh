@@ -12,6 +12,7 @@ cd "$PROJ"
 git init -q . && git config user.email t@t && git config user.name t
 pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
+export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if the planner wrote the plan; the v3.1.30 tests switch it on
 export HZ_RULES_FIRST_OFF=1        # v3.1.29: older tests run as if the rules were read; the v3.1.29 tests switch it on
 check(){ # name expected_substring actual
   if grep -q -- "$2" <<<"$3"; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 -> ${3:0:200}"; fail=$((fail+1)); fi; }
@@ -199,7 +200,7 @@ check "GitHub tool draft pull request is blocked" '"deny"' "$(ggt mcp__github__c
 check "the block says to create it ready for review" "ready for review" "$(ggt mcp__github__create_pull_request '{"title":"x","draft":true}')"
 check "GitHub tool ready pull request passes" "^$" "$(ggt mcp__github__create_pull_request '{"title":"x","draft":false}')"
 check "GitHub tool without a draft field passes" "^$" "$(ggt mcp__github__create_pull_request '{"title":"x"}')"
-check "marking an open pull request draft is blocked" '"deny"' "$(ggt mcp__github__update_pull_request '{"pullNumber":1,"draft":true}')"
+check "marking an open pull request draft is allowed again (v3.1.30: back to draft while it is fixed)" '^$' "$(ggt mcp__github__update_pull_request '{"pullNumber":1,"draft":true}')"
 check "other GitHub tools pass" "^$" "$(ggt mcp__github__list_pull_requests '{"state":"open"}')"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"mcp__github__create_pull_request","tool_input":{"draft":true}}' | python3 $H/dispatch.py); check "switchboard routes the GitHub pull-request tool to git-guard" '"deny"' "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"mcp__github__search_code","tool_input":{}}' | python3 $H/dispatch.py); check "switchboard skips other GitHub tools" "^$" "$o"
@@ -298,8 +299,8 @@ import re
 p = "WORKING_RECORD.md"
 open(p, "w").write(re.sub(r"(?m)^\| open-\d.*\n", "", open(p).read()))
 PY
-o=$(echo '{"prompt":"why does the sync layer keep breaking across all apps? find the root cause and redesign it"}' | python3 $H/plan-gate.py); check "planner: fable suggested on strong signals" "Suggest /model fable" "$o"
-o=$(echo '{"prompt":"- add a button\n- fix colour\n- change the label"}' | python3 $H/plan-gate.py); check "planner: session model plans by default" "The session's model plans (account default: Opus 5.5)" "$o"
+o=$(echo '{"prompt":"why does the sync layer keep breaking across all apps? find the root cause and redesign it"}' | python3 $H/plan-gate.py); check "planner: a big plan goes to the planner helper (v3.1.30; was: Fable suggested)" "the planner helper writes it" "$o"
+o=$(echo '{"prompt":"- add a button\n- fix colour\n- change the label"}' | python3 $H/plan-gate.py); check "planner: a full plan is written by the planner helper (v3.1.30)" "A full plan is written by the 'planner' helper" "$o"
 o=$(echo '{"prompt":"- rename the label"}' | python3 $H/plan-gate.py); check "planner: silent on micro tier" "clean" "$(echo "$o" | grep -c '\[planner\]' | sed 's/^0$/clean/')"
 rm -f .claude/state/completion-rounds.json
 # --- v3.1.11: first-line version, plain top, stub check, pointer refresh
@@ -355,7 +356,7 @@ o=$(echo '{}' | python3 $H/session-start.py); check "stub outdated is reported i
 check "stub report names the missing pieces" "Sonnet worker" "$o"
 S="$T/stubrepo"; rm -rf "$S"; mkdir -p "$S/.claude/agents"
 cp "$H/../../stub/settings.json" "$S/.claude/settings.json"
-cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$S/.claude/agents/"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S/.claude/agents/"
 cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S/.claude/"
 o2=$(cd "$H" && python3 -c "
 import sys; sys.path.insert(0,'.')
@@ -385,7 +386,7 @@ check "the stub sets no model key" "yes" "$(python3 -c "import json;print('no' i
 check "opus-worker is pinned to Opus 5.5" "yes" "$(grep -qx 'model: claude-opus-5-5' "$H/../../stub/opus-worker.md" && echo yes)"
 check "sonnet-worker is pinned to the exact Sonnet 5.5 ID" "yes" "$(grep -qx 'model: claude-sonnet-5-5' "$H/../../stub/sonnet-worker.md" && echo yes)"
 M="$T/modelrepo"; rm -rf "$M"; mkdir -p "$M/.claude/agents"
-cp "$H/../../stub/settings.json" "$M/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$M/.claude/agents/"
+cp "$H/../../stub/settings.json" "$M/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$M/.claude/agents/"
 cp "$H/../../stub/CLAUDE-pointer.md" "$M/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$M/.claude/"
 check "a stub with the new model setup is current" "^current" "$(stub_says "$M")"
 python3 -c "
@@ -496,7 +497,7 @@ check "installer removes the idle hook events" "\['PreToolUse', 'SessionStart', 
 printf '{"advisorModel":"opus"}' > "$M/own.json"; python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$M/own.json" "hz-loader.py"
 check "installer keeps an advisor the repository chose itself" "opus" "$(cat "$M/own.json")"
 S2="$T/stubadv"; rm -rf "$S2"; mkdir -p "$S2/.claude/agents"
-cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$S2/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S2/CLAUDE.md"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S2/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S2/CLAUDE.md"
 python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['advisorModel']='fable';json.dump(s,open('$S2/.claude/settings.json','w'))"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S2'))")
 check "a repository still on the Fable advisor shows OUTDATED" "OUTDATED.*advisor off" "$o"
@@ -546,7 +547,7 @@ o=$(python3 -c "import json;print(json.dumps({'hook_event_name':'PreToolUse','to
 check "the plan check also reads a plan named by its file" "colour code" "$o"
 # foreground workers
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"subagent_type":"opus-worker","prompt":"Task: a\nLevel: Complex","run_in_background":true}}' | python3 $H/dispatch.py)
-check "a worker started in the background is refused" "foreground" "$o"
+check "a worker started in the background is no longer refused for that (v3.1.30: Claude Code runs workers in the background)" "clean" "$(echo "$o" | grep -c "Workers run in the foreground" | sed 's/^0$/clean/')"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"subagent_type":"opus-worker","prompt":"Task: Fix sync\nLevel: Complex\nMap: js/sync.js lines 10-80\nfind why"}}' | python3 $H/dispatch.py)
 check "a foreground worker with task and level passes" "^$" "$o"
 # --- v3.1.19: hard hand-over rules
@@ -581,14 +582,14 @@ check "a stage of mine is listed by name" "Waiting on you: Merge the changes" "$
 check "a stage of mine is not treated as the session's open work" "open= \[\]" "$o"
 # the stub expects the pinned Opus helper and the plan check
 S3="$T/stub18"; rm -rf "$S3"; mkdir -p "$S3/.claude/agents"
-cp "$H/../../stub/settings.json" "$S3/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$S3/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"
+cp "$H/../../stub/settings.json" "$S3/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S3/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "the new stub reads current" "^current" "$o"
 sed -i 's/^model: claude-opus-5-5$/model: inherit/' "$S3/.claude/agents/opus-worker.md"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "an unpinned Opus helper shows OUTDATED" "OUTDATED.*Opus helper pinned" "$o"
 # --- v3.1.20: app repositories update their own setup files
-for n in settings.json opus-worker.md sonnet-worker.md reviewer.md explore.md hz-loader.py CLAUDE-pointer.md merge_settings.py v2-known-files.txt; do
+for n in settings.json opus-worker.md sonnet-worker.md reviewer.md explore.md planner.md planner-opus.md hz-loader.py CLAUDE-pointer.md merge_settings.py v2-known-files.txt; do
   cmp -s "$H/../../stub/$n" "$H/../stub-files/$n" || echo "stub-files out of step: $n"
 done > "$T/stubsync.txt"
 check "the central copies of the setup files match stub/" "^$" "$(cat "$T/stubsync.txt")"
@@ -598,7 +599,7 @@ U="$T/selfupd"; rm -rf "$U" "$T/selfupd.git"; mkdir -p "$U/.claude/agents"; git 
   && printf '# Repository rules\n\nold pointer hz-loader.py\n\nRepository-specific files: `FEATURES.md` and `WORKING_RECORD.md`.\n\n## Project Architecture\nkeep me\n' > CLAUDE.md \
   && python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['permissions']['allow'].append('Bash(npm test)');[g.__setitem__('matcher',g['matcher'].replace('ExitPlanMode|','')) for g in s['hooks']['PreToolUse']];json.dump(s,open('.claude/settings.json','w'),indent=2)" \
   && sed 's/^model: claude-opus-5-5$/model: inherit/; s/Always runs on Opus 5.5, whichever model the main session plans on. //' "$H/../../stub/opus-worker.md" > .claude/agents/opus-worker.md \
-  && cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" .claude/agents/ && cp "$H/../../stub/hz-loader.py" .claude/ \
+  && cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" .claude/agents/ && cp "$H/../../stub/hz-loader.py" .claude/ \
   && printf '# WR\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|\n| Quiz | 1 | 0 | swaps | no |\n' > WORKING_RECORD.md \
   && git add -A && git commit -qm base && git remote add origin "$T/selfupd.git" && git push -q origin main )
 su(){ ( cd "$H" && CLAUDE_PROJECT_DIR="$U" python3 -c "
@@ -761,13 +762,13 @@ check "a new request gets its own record send-back" "record is incomplete" "$o"
 rm -f "$PROJ/.claude/state/prompt-number.json" "$PROJ/.claude/state/record-rounds.json"; touch WORKING_RECORD.md
 check "the stub writes plan files into the repository" '"plansDirectory": "./plans"' "$(cat "$H/../../stub/settings.json")"
 S3="$T/stubplans"; rm -rf "$S3"; mkdir -p "$S3/.claude/agents"
-cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$S3/.claude/agents/"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S3/.claude/agents/"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"
 python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s.pop('plansDirectory');json.dump(s,open('$S3/.claude/settings.json','w'))"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.28)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.1.30)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "written into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Every final answer ends with a" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -1438,5 +1439,202 @@ check "v3.1.29: over the limit, the facts move to a file instead of being cut ($
 check "v3.1.29: ...and the session is told to read that file" "session-facts.md" "$o"
 check "v3.1.29: ...and the facts file holds the closing block format" "I need from you" "$(cat "$PROJ/.claude/state/session-facts.md")"
 cp "$T/config.bak" "$H/config.json"
+# --- v3.1.30 batch 1 (safety): pull request last, back to draft, ready at the end, no waiting, background time limit
+mk130(){ python3 - "$@" <<'PYEOF'
+import json, sys
+out, spec = sys.argv[1], sys.argv[2:]
+recs, n = [{"type":"user","message":{"role":"user","content":"go"}}], 0
+def tu(name, inp, done=True):
+    global n; n += 1; i = f"t{n}"
+    recs.append({"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":i,"name":name,"input":inp}]}})
+    if done: recs.append({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":i,"content":"ok"}]}})
+for s in spec:
+    k, _, v = s.partition(":")
+    if k in ("worker","reviewer"): tu("Agent", {"subagent_type": "opus-worker" if k=="worker" else "reviewer", "prompt": "x"})
+    elif k == "running": tu("Agent", {"subagent_type": "opus-worker", "prompt": "x"}, done=False)
+    elif k == "bash": tu("Bash", {"command": v})
+    elif k == "text": recs.append({"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":v}]}})
+open(out,"w").write("\n".join(json.dumps(r) for r in recs)+"\n")
+PYEOF
+}
+gpr(){ python3 -c "import json,sys;print(json.dumps({'tool_name':'Bash','transcript_path':sys.argv[1],'tool_input':{'command':sys.argv[2]}}))" "$1" "$2" | python3 $H/git-guard.py; }
+gmcp(){ python3 -c "import json,sys;print(json.dumps({'tool_name':sys.argv[2],'transcript_path':sys.argv[1],'tool_input':json.loads(sys.argv[3])}))" "$1" "$2" "$3" | python3 $H/git-guard.py; }
+mk130 "$T/b1a.jsonl" worker:; o=$(gpr "$T/b1a.jsonl" "gh pr create --title x --body y"); check "v3.1.30: no pull request after a worker without the reviewer" "open the pull request last" "$o"
+mk130 "$T/b1b.jsonl" worker: reviewer:; o=$(gpr "$T/b1b.jsonl" "gh pr create --title x --body y"); check "v3.1.30: pull request allowed after worker then reviewer" "^$" "$o"
+mk130 "$T/b1c.jsonl" worker: reviewer: running:; o=$(gpr "$T/b1c.jsonl" "git push -u origin claude/x && gh pr create --fill"); check "v3.1.30: no pull request while a worker runs (real PR 118 order)" "still running" "$o"
+mk130 "$T/b1d.jsonl" bash:"git status"; o=$(gpr "$T/b1d.jsonl" "gh pr create --fill"); check "v3.1.30: a setup pull request with no workers passes" "^$" "$o"
+o=$(gmcp "$T/b1a.jsonl" mcp__github__create_pull_request '{"title":"x"}'); check "v3.1.30: the GitHub tool follows pull request last too" "open the pull request last" "$o"
+o=$(gmcp "$T/b1b.jsonl" mcp__github__update_pull_request '{"pullNumber":118,"draft":true}'); check "v3.1.30: switching an open pull request back to draft is allowed" "^$" "$o"
+o=$(gmcp "$T/b1b.jsonl" mcp__github__create_pull_request '{"title":"x","draft":true}'); check "v3.1.30: opening a new pull request as a draft is still refused" "not as drafts" "$o"
+wpr(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'b1','transcript_path':sys.argv[1],'tool_input':{'subagent_type':'opus-worker','prompt':sys.argv[2]}}))" "$1" "$2" | python3 $H/worker-guard.py; }
+HO=$'Task: PR 4 fix pass\nLevel: Complex\nMap: js/21-money-data.js lines 1600-1700\nfix the gaps'
+# v3.1.30: open pull requests are tracked by branch (git-guard marks them); a merged one on an old branch never blocks
+git switch -q -c claude/pr118 2>/dev/null || git checkout -q -b claude/pr118
+gs(){ python3 -c "import json,sys;print(json.dumps({'tool_name':'Bash','session_id':'b1','transcript_path':sys.argv[1],'tool_input':{'command':sys.argv[2]}}))" "$1" "$2" | python3 $H/git-guard.py; }
+mk130 "$T/b1e.jsonl" worker: reviewer:; gs "$T/b1e.jsonl" "gh pr create --fill" >/dev/null
+check "v3.1.30: opening a pull request marks its branch ready" '"claude/pr118": "ready"' "$(cat $PROJ/.claude/state/pr-branches.json)"
+o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.1.30: a fix worker on the branch of a ready pull request is refused (real PR 118 case)" "Switch it back to draft first" "$o"
+o=$(wpr "$T/b1e.jsonl" $'PR: #118 merged\n'"$HO"); check "v3.1.30: a merged pull request does not block the next worker" "^$" "$o"
+o=$(wpr "$T/b1e.jsonl" $'PR: #118 not touched\n'"$HO"); check "v3.1.30: a worker that leaves the branch alone may say so" "^$" "$o"
+gs "$T/b1e.jsonl" "gh pr ready 118 --undo" >/dev/null
+check "v3.1.30: back to draft is recorded" '"claude/pr118": "draft"' "$(cat $PROJ/.claude/state/pr-branches.json)"
+o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.1.30: after back to draft the fix worker may start" "^$" "$o"
+FINAL=$'Fixed.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** Ready to merge.\n> 👉 **I need from you:** Merge 118.\n> ➡️ **Next:** done.'
+mk130 "$T/b1g.jsonl" worker: reviewer: text:"$FINAL"
+o=$(echo "{\"transcript_path\":\"$T/b1g.jsonl\",\"session_id\":\"b1\"}" | python3 $H/pr-ready-guard.py); check "v3.1.30: a final answer with the pull request still in draft is sent back" "still a draft" "$o"
+gs "$T/b1e.jsonl" "gh pr ready 118" >/dev/null
+o=$(echo "{\"transcript_path\":\"$T/b1g.jsonl\",\"session_id\":\"b1\"}" | python3 $H/pr-ready-guard.py); check "v3.1.30: marked ready again -> the final answer passes" "^$" "$o"
+git switch -q -c claude/next-stage 2>/dev/null || git checkout -q -b claude/next-stage
+o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.1.30: the next stage on a new branch is not blocked by an earlier pull request (real session: 14 workers)" "^$" "$o"
+git checkout -q - ; git checkout -q - 2>/dev/null; git checkout -q master 2>/dev/null || git checkout -q main 2>/dev/null
+rm -f "$PROJ/.claude/state/pr-branches.json"
+wt(){ python3 -c "import json,sys;print(json.dumps({'tool_name':'Bash','tool_input':{'command':sys.argv[1],'run_in_background':sys.argv[2]=='bg'}}))" "$1" "$2" | python3 $H/wait-guard.py; }
+o=$(wt "sleep 30 && cat out.txt" fg); check "v3.1.30: sleep 30 is refused" "No waiting commands" "$o"
+o=$(wt "sleep 2 && npm test" fg); check "v3.1.30: a short sleep of 2 seconds passes" "^$" "$o"
+o=$(wt 'until grep -q "DONE" .claude/state/worker.log; do sleep 20; done' fg); check "v3.1.30: a wait-for-the-worker loop is refused" "No waiting commands" "$o"
+o=$(wt "tail -f .claude/state/worker.log" fg); check "v3.1.30: tail -f is refused" "No waiting commands" "$o"
+o=$(wt "npm test" bg); check "v3.1.30: a background command without a time limit is refused" "needs a time limit" "$o"
+o=$(wt "timeout 1800 npm test" bg); check "v3.1.30: a background command with timeout 1800 passes" "^$" "$o"
+o=$(wt "timeout 3h npm test" bg); check "v3.1.30: a time limit over 30 minutes is refused" "needs a time limit" "$o"
+REAL11=$'cd "/d/User/Heng Z/Documents/GitHub/Weekly-Planner" && python - <<\'EOF\' 2>/dev/null || python3 - <<\'EOF2\'\nimport re\np=\'js/21-money-data.js\'\nEOF\nimport re\nEOF2\nsed -n 1660,1695p js/21-money-data.js; git diff --stat | tail -1'
+o=$(wt "$REAL11" bg); check "v3.1.30: the real 11 h 49 m background script is refused without a limit" "needs a time limit" "$o"
+o=$(wt $'python3 - <<\'EOF\'\nimport time\n# sleep 60 here is text, not a command\nEOF' fg); check "v3.1.30: text inside a here-document is not a waiting command" "^$" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"sleep 60"}}' | python3 $H/dispatch.py PreToolUse); check "v3.1.30: the switchboard runs the waiting check" "No waiting commands" "$o"
+# --- v3.1.30 batch 2 (compare): compare and conversion instructions, Proof line, by-screen list, skill names
+A="$H/../agents"
+o=$(echo '{"session_id":"b2s"}' | python3 $H/session-start.py)
+check "v3.1.30: session start names the compare instructions" "compare-instructions.md" "$o"
+n=$(printf '%s' "$o" | python3 -c "import json,sys;print(len(json.load(sys.stdin)['hookSpecificOutput']['additionalContext']))")
+check "v3.1.30: session start still under 10,000 characters ($n)" "yes" "$([ "$n" -lt 10000 ] && echo yes || echo no)"
+C=$(cat "$A/compare-instructions.md")
+check "v3.1.30: compare: three screen sizes" "phone 390×844, iPad 820×1180, PC 1440×900" "$C"
+check "v3.1.30: compare: in code, unchanged screens not opened" "Do not open pictures of screens that did not change" "$C"
+check "v3.1.30: compare: figures the app names in its References" "the values the app shows for the same inputs before the change" "$C"
+check "v3.1.30: compare: unplanned change is a bug" "An unplanned change is a bug" "$C"
+check "v3.1.30: compare: unapproved difference becomes a picture pair" "mockup and build side by side, numbered" "$C"
+check "v3.1.30: compare: the Proof line" "Proof: pictures <n> screens × 3 sizes" "$C"
+V=$(cat "$A/conversion-instructions.md")
+check "v3.1.30: conversion: coverage list first" "features-coverage.txt" "$V"
+check "v3.1.30: conversion: history to docs/archive" "move to \`docs/archive/\`" "$V"
+check "v3.1.30: conversion: ARCHITECTURE rules marked" "checked by <script>" "$V"
+check "v3.1.30: conversion: rule documents to tests" "names the test that proves it" "$V"
+check "v3.1.30: conversion: database rules test only after the tool runs" "only after the test tool is shown to run" "$V"
+check "v3.1.30: conversion: the app names its own references" "Add \`## References\` to \`FEATURES.md\`" "$V"
+O=$(grep -n -i -E "money|allowance|family rules|weekly-planner|data-owner" "$H/../rules/CLAUDE-rules.md" "$A"/*.md "$H/../seed/FEATURES.md" | head -3)
+check "v3.1.30: central rules, instructions and seed stay general (no app-specific words)" "^$" "$O"
+check "v3.1.30: the seed list has a References section for app-specific checks" "## References" "$(cat $H/../seed/FEATURES.md)"
+check "v3.1.30: worker instructions point to the compare instructions" "follow \`compare-instructions.md\`" "$(cat $A/opus-worker-instructions.md)"
+check "v3.1.30: reviewer blocks a missing Proof line before the pull request" "a missing or partial Proof line blocks" "$(cat $A/reviewer-instructions.md)"
+check "v3.1.30: the seed list is by screen" "feature-list: by-screen" "$(cat $H/../seed/FEATURES.md)"
+check "v3.1.30: the seed list is still seen as the unfilled template" "<app or plan name>" "$(cat $H/../seed/FEATURES.md)"
+mkrg(){ python3 - "$1" "$2" "$PROJ" <<'PYEOF'
+import json,sys
+out,kept,proj=sys.argv[1:4]
+txt="Done.\n\n| Regression table | Result |\n|---|---|\n| Kept | "+kept+" |\n| Added | none |\n| Intentionally removed | none |\n| Missing | none |\n\nConfidence: High · Status: Checked"
+R=[{"type":"user","message":{"role":"user","content":"fix the bug"}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":proj+"/js/app.js"}}]}},
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"e2","name":"Edit","input":{"file_path":proj+"/WORKING_RECORD.md"}}]}},
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e2","content":"ok"}]}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":txt}]}}]
+open(out,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYEOF
+}
+rgx(){ echo "{\"transcript_path\":\"$1\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }; }
+cp FEATURES.md "$T/features.bak"
+printf '<!-- feature-list: by-screen -->\n# FEATURES — test app — manifest v2\n## Today\n- login — Proof: smoke login\n' > FEATURES.md
+mkrg "$T/rg1.jsonl" "41 features"; o=$(rgx "$T/rg1.jsonl"); check "v3.1.30: by-screen list: Kept without proof is sent back" "Kept row names its proof" "$o"
+mkrg "$T/rg2.jsonl" "41 features · Proof: pictures 9 screens × 3 sizes, 2 changed (all planned) · tests 120/120"; o=$(rgx "$T/rg2.jsonl"); check "v3.1.30: by-screen list: Kept with proof passes" "^$" "$o"
+cp "$T/features.bak" FEATURES.md
+o=$(rgx "$T/rg1.jsonl"); check "v3.1.30: a list not converted yet works as before" "^$" "$o"
+o=$(grep -rnE "hz-(outcome-audit|web-app-audit|task-planner|sql-excel-auditor)" "$H/../rules" "$H/../agents" "$H/../skills" "$H/skill-router.json" | grep -v "were merged into" | head -3)
+check "v3.1.30: no central file sends work to a retired skill" "^$" "$o"
+check "v3.1.30: the manifest lists the compare instructions" "agents/compare-instructions.md" "$(cat $H/../MANIFEST.txt)"
+check "v3.1.30: the manifest lists the conversion instructions" "agents/conversion-instructions.md" "$(cat $H/../MANIFEST.txt)"
+check "v3.1.30: the manifest lists the new checks" "hooks/wait-guard.py" "$(grep -E 'wait-guard|pr-ready-guard' $H/../MANIFEST.txt | tr '\n' ' ')"
+# --- v3.1.30 batch 3: from the real 3.1.29 Weekly-Planner money session (4b4ef8bd, 5 pull requests)
+o=$(wt "sleep 590; echo waited" bg); check "v3.1.30 real: the main session's 'Wait for the PR 4 fix-pass worker' timer is refused (62 such in the session)" "No waiting commands" "$o"
+o=$(wt "sleep 120; echo waited" bg); check "v3.1.30 real: 'Wait two minutes for the explorers' is refused" "No waiting commands" "$o"
+NOTE=$'<task-notification>\n<task-id>af2dce1f14543ecec</task-id>\n<tool-use-id>toolu_01EQ7gDRMLSiEyW1Vod1NAQE</tool-use-id>\n<status>completed</status>\n<summary>Agent "Verify copy, flow and old-screen claims" finished</summary>\n</task-notification>'
+o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'n1','prompt':sys.argv[1]}))" "$NOTE" | python3 $H/plan-gate.py); check "v3.1.30 real: a worker notice gets no plan-gate text (79 of 106 in the session)" "^$" "$o"
+o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'n1','prompt':sys.argv[1]}))" "$NOTE" | python3 $H/skill-router.py); check "v3.1.30 real: a worker notice gets no skill-router text" "^$" "$o"
+o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'n1','prompt':'Fix the money page layout and logic, all of it'}))" | python3 $H/plan-gate.py); check "v3.1.30: a real request still gets the plan-gate text" "plan-gate" "$o"
+python3 - "$T/async.jsonl" "$NOTE" <<'PYEOF'
+import json,sys
+out,note=sys.argv[1],sys.argv[2]
+R=[{"type":"user","message":{"role":"user","content":"go"}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01EQ7gDRMLSiEyW1Vod1NAQE","name":"Agent","input":{"subagent_type":"opus-worker","prompt":"x"}}]}},
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01EQ7gDRMLSiEyW1Vod1NAQE","content":[{"type":"text","text":"Async agent launched successfully. The agent is working in the background."}]}]}},
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"r1","name":"Agent","input":{"subagent_type":"reviewer","prompt":"x"}}]}},
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"Verdict: no blocking problems"}]}}]
+open(out,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+open(out.replace(".jsonl","-done.jsonl"),"w").write("\n".join(json.dumps(r) for r in R+[{"type":"user","message":{"role":"user","content":note}}])+"\n")
+PYEOF
+o=$(gpr "$T/async.jsonl" "gh pr create --fill"); check "v3.1.30 real: a background worker that only says 'launched' still counts as running" "still running" "$o"
+o=$(gpr "$T/async-done.jsonl" "gh pr create --fill"); check "v3.1.30 real: its 'completed' notice ends it" "^$" "$o"
+o=$(wt 'cd "/d/User/Heng Z/Documents/GitHub/Weekly-Planner" && SMOKE_CHROMIUM="C:/Program Files/Google/Chrome/Application/chrome.exe" npm run test:smoke > "$T/smoke.txt" 2>&1' bg); check "v3.1.30 real: the background smoke run without a limit is refused" "needs a time limit" "$o"
+o=$(wt 'cd "/d/User/Heng Z/Documents/GitHub/Weekly-Planner"; export SMOKE_CHROMIUM="C:/Program Files/Google/Chrome/Application/chrome.exe"; timeout 1500 npm run test:smoke > out.txt' bg); check "v3.1.30 real: a limit after cd and settings passes (a worker's real form)" "^$" "$o"
+# --- v3.1.30 batch 4: planner helper with fallback, main-session model notice, ready-to-merge notice
+ST="$H/../../stub"
+check "v3.1.30: planner is pinned to the first-choice model and only reads" "model: claude-fable-5-1" "$(cat $ST/planner.md)"
+check "v3.1.30: planner only reads" "tools: Read, Grep, Glob" "$(cat $ST/planner.md)"
+check "v3.1.30: planner-opus is the fallback on Opus 5.5" "model: claude-opus-5-5" "$(cat $ST/planner-opus.md)"
+check "v3.1.30: the setup update carries the planner files" "planner.md" "$(grep -o 'planner[-a-z]*\.md' $H/stubupdate.py | tr '\n' ' ')"
+check "v3.1.30: the planner files travel with the rules" "planner-opus.md" "$(ls $H/../stub-files)"
+P3=$(mktemp -d); mkdir -p "$P3/.claude/agents"; cp "$ST/settings.json" "$P3/.claude/"; cp "$ST/sonnet-worker.md" "$ST/opus-worker.md" "$ST/reviewer.md" "$ST/explore.md" "$P3/.claude/agents/"; cp "$ST/hz-loader.py" "$P3/.claude/"; cp "$ST/CLAUDE-pointer.md" "$P3/CLAUDE.md"
+o=$(cd "$H" && python3 -c "import sys;from stubcheck import stub_status;from _common import load_config;print(stub_status(load_config(), sys.argv[1]))" "$P3")
+check "v3.1.30: an app on the 3.1.28 setup is told to update (one setup pull request)" "planner" "$o"
+pw(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'p4','tool_input':{'subagent_type':sys.argv[1],'prompt':sys.argv[2]}}))" "$1" "$2" | python3 $H/worker-guard.py; }
+o=$(pw planner $'Planner instructions: x\nwrite Plan v1'); check "v3.1.30: the planner may start" "^$" "$o"
+o=$(pw planner-opus $'Planner instructions: x\nwrite Plan v1'); check "v3.1.30: planner-opus without a reason is refused (planner first)" "Send 'planner' first" "$o"
+o=$(pw planner-opus $'Fallback: model claude-fable-5-1 is not available\nPlanner instructions: x'); check "v3.1.30: planner-opus with 'Fallback:' may start" "^$" "$o"
+PL=$'# Plan v1 — Test — Awaiting approval\n\n| Summary |\n|---|\n| What changes for you: a new button on the Today screen that opens the week, so you reach the week in one tap. |\n\nStages to finish\n1. Claude — Build — add it\n2. You — Check — merge\n2 stages: one build, one check.\n'
+mkpl(){ python3 - "$1" "$2" <<'PYEOF'
+import json,sys
+out,with_planner=sys.argv[1],sys.argv[2]=='yes'
+R=[{"type":"user","message":{"role":"user","content":"plan it"}}]
+if with_planner:
+    R+=[{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"pl1","name":"Agent","input":{"subagent_type":"planner","prompt":"x"}}]}},
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pl1","content":"plan text"}]}}]
+open(out,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYEOF
+}
+mkpl "$T/pl_no.jsonl" no; mkpl "$T/pl_yes.jsonl" yes
+pgp(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','transcript_path':sys.argv[1],'tool_input':{'plan':sys.argv[2]}}))" "$1" "$2" | HZ_PLANNER_CHECK_OFF= python3 $H/plan-guard.py; }
+o=$(pgp "$T/pl_no.jsonl" "$PL"); check "v3.1.30: a full plan the main session wrote itself is sent back" "written by the planner helper" "$o"
+o=$(pgp "$T/pl_yes.jsonl" "$PL"); check "v3.1.30: a full plan from the planner helper is not sent back for that" "clean" "$(echo "$o" | grep -c 'written by the planner helper' | sed 's/^0$/clean/')"
+check "v3.1.30: planner instructions: agreed points and nothing dropped" "Agreed points: <n> of <n> in the plan" "$(cat $H/../agents/planner-instructions.md)"
+o=$(echo '{"session_id":"p4s"}' | python3 $H/session-start.py); check "v3.1.30: session start names the planner instructions" "planner-instructions.md" "$o"
+n=$(printf '%s' "$o" | python3 -c "import json,sys;print(len(json.load(sys.stdin)['hookSpecificOutput']['additionalContext']))")
+check "v3.1.30: session start still under 10,000 characters ($n)" "yes" "$([ "$n" -lt 10000 ] && echo yes || echo no)"
+mkm(){ python3 - "$1" "$2" "$3" <<'PYEOF'
+import json,sys
+out,model,extra=sys.argv[1:4]
+R=[{"type":"user","message":{"role":"user","content":"hi"}},
+{"type":"assistant","message":{"role":"assistant","model":model,"content":[{"type":"text","text":"⏳ Working on: x · 1 of 2"}]}}]
+open(out,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYEOF
+}
+mkm "$T/m_fable.jsonl" claude-fable-5-1 x; mkm "$T/m_opus.jsonl" claude-opus-5-5 x
+o=$(echo "{\"transcript_path\":\"$T/m_fable.jsonl\",\"session_id\":\"mf1\"}" | python3 $H/stats.py); check "v3.1.30: a session on Fable gets one notice to switch to Opus" "type /model opus" "$o"
+o=$(echo "{\"transcript_path\":\"$T/m_fable.jsonl\",\"session_id\":\"mf1\"}" | python3 $H/stats.py); check "v3.1.30: ...only once per session" "clean" "$(echo "$o" | grep -c '/model opus' | sed 's/^0$/clean/')"
+o=$(echo "{\"transcript_path\":\"$T/m_opus.jsonl\",\"session_id\":\"mo1\"}" | python3 $H/stats.py); check "v3.1.30: a session on Opus gets no switch notice" "clean" "$(echo "$o" | grep -c '/model opus' | sed 's/^0$/clean/')"
+mkn(){ python3 - "$1" "$2" "$3" <<'PYEOF'
+import json,sys
+out,need,push=sys.argv[1:4]
+R=[{"type":"user","message":{"role":"user","content":"finish"}}]
+if push=='yes':
+    R+=[{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"n1","name":"PushNotification","input":{"message":"Weekly-Planner: pull request #120 is ready to merge"}}]}},
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"n1","content":"sent"}]}}]
+R+=[{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** Ready to merge.\n> 👉 **I need from you:** "+need+"\n> ➡️ **Next:** next stage."}]}}]
+open(out,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYEOF
+}
+rn(){ echo "{\"transcript_path\":\"$1\",\"session_id\":\"$2\"}" | python3 $H/ready-notice-guard.py; }
+mkn "$T/n1.jsonl" "Merge pull request #120 on GitHub." no; o=$(rn "$T/n1.jsonl" rn1); check "v3.1.30: a ready-to-merge answer without a notice is sent back" "PushNotification" "$o"
+mkn "$T/n2.jsonl" "Merge pull request #120 on GitHub." yes; o=$(rn "$T/n2.jsonl" rn2); check "v3.1.30: with the notice sent it passes" "^$" "$o"
+mkn "$T/n3.jsonl" "Answer decision 1." no; o=$(rn "$T/n3.jsonl" rn3); check "v3.1.30: an answer that asks for no merge needs no notice" "^$" "$o"
+mkn "$T/n4.jsonl" "合并 #120。" no; o=$(rn "$T/n4.jsonl" rn4); check "v3.1.30: a Chinese merge request also needs the notice" "PushNotification" "$o"
+check "v3.1.30: the switchboard runs the notice check" "ready-notice-guard.py" "$(cat $H/config.json)"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

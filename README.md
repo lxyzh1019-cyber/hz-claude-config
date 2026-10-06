@@ -39,6 +39,13 @@ What you should see: in step 4, GitHub Desktop lists the number of added / chang
 
 Never use github.com's **Upload files** for these packages (it flattens folders and skips `.claude`).
 
+**Rollback (v3.1.30).** If a new version causes trouble in the apps:
+1. On github.com, open the merged pull request of that version in **hz-claude-config**.
+2. Click **Revert** (unverified button name on your screen), then create and merge the pull request it makes.
+3. Every app loads the previous version at its next session; nothing changes in the app repositories.
+
+What you should see: `central/MANIFEST.txt` on github.com shows the previous version. If you see anything else, stop and tell the chat.
+
 ## F. Health check (after Step B, once per repository)
 Start a **new** session on the repository (cloud or local; auto mode is fine) on your **account default model**, not the Sonnet session you used for Step B, and paste:
 
