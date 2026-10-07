@@ -1507,12 +1507,13 @@ check "v3.1.30: session start names the compare instructions" "compare-instructi
 n=$(printf '%s' "$o" | python3 -c "import json,sys;print(len(json.load(sys.stdin)['hookSpecificOutput']['additionalContext']))")
 check "v3.1.30: session start still under 10,000 characters ($n)" "yes" "$([ "$n" -lt 10000 ] && echo yes || echo no)"
 C=$(cat "$A/compare-instructions.md")
-check "v3.1.30: compare: three screen sizes" "phone 390×844, iPad 820×1180, PC 1440×900" "$C"
+check "v3.1.32: compare: the default sizes when the app names none" "Without them: phone 390×844, iPad 820×1180, PC 1440×900, one look" "$C"
+check "v3.1.32: compare: an app names its own sizes and looks in References" "a \`Sizes:\` line and, if the app has several looks or themes, a \`Looks:\` line" "$C"
 check "v3.1.30: compare: in code, unchanged screens not opened" "Do not open pictures of screens that did not change" "$C"
 check "v3.1.30: compare: figures the app names in its References" "the values the app shows for the same inputs before the change" "$C"
 check "v3.1.30: compare: unplanned change is a bug" "An unplanned change is a bug" "$C"
 check "v3.1.30: compare: unapproved difference becomes a picture pair" "mockup and build side by side, numbered" "$C"
-check "v3.1.30: compare: the Proof line" "Proof: pictures <n> screens × 3 sizes" "$C"
+check "v3.1.32: compare: the Proof line counts sizes and looks" "Proof: pictures <n> screens × <sizes> sizes × <looks> looks" "$C"
 V=$(cat "$A/conversion-instructions.md")
 check "v3.1.30: conversion: coverage list first" "features-coverage.txt" "$V"
 check "v3.1.30: conversion: history to docs/archive" "move to \`docs/archive/\`" "$V"
@@ -1710,5 +1711,11 @@ check "v3.1.31 review: a new session gets the fixes an earlier session left" "up
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import take_fixes;print(take_fixes('s1'))")
 check "v3.1.31 review: two sessions' fixes are both kept" "'b', 'a'" "$o"
 check "v3.1.31 review: notice-reading steps count as waiting in the summary" "ReadNotifications" "$(grep -n '^WAIT_TOOLS' $H/stats.py)"
+# --- v3.1.32: screen sizes and looks come from the app's References (Weekly-Planner: iPad 1194×834, phone 390×844, Pop and Calm)
+O=$(grep -rn -E "three (screen )?sizes|× 3 sizes" "$H/../agents" "$H/../seed" "$H/record-guard.py" | head -3)
+check "v3.1.32: no central text fixes the number of sizes" "^$" "$O"
+check "v3.1.32: the seed list asks for Sizes and Looks" "Sizes: <e.g. phone 390×844, iPad 1194×834> · Looks:" "$(cat $H/../seed/FEATURES.md)"
+check "v3.1.32: conversion puts sizes and looks into References" "the screen sizes and looks (\`Sizes:\`, \`Looks:\`)" "$(cat $H/../agents/conversion-instructions.md)"
+check "v3.1.32: the reviewer checks the app's sizes and looks" "pictures at the app's sizes and looks" "$(cat $H/../agents/reviewer-instructions.md)"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

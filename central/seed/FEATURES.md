@@ -13,12 +13,13 @@ Locked features of the current version, one section per screen. Each line says w
 - <rule — one line> — Proof: <test name>
 
 ## References
+- Sizes: <e.g. phone 390×844, iPad 1194×834> · Looks: <e.g. Pop, Calm — or one look>
 - <figure or rule document the comparisons and tests must cover — one line each>
 
 ## Regression table (paste at the end of every edit)
 | Regression table | Result |
 |---|---|
-| Kept | <n> features · Proof: pictures <n> screens × 3 sizes, <k> changed (all planned) · tests <passed>/<total> |
+| Kept | <n> features · Proof: pictures <n> screens × <sizes> sizes, <k> changed (all planned) · tests <passed>/<total> |
 | Added | … |
 | Intentionally removed | … |
 | Missing | … |

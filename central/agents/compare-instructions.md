@@ -6,11 +6,11 @@ Catch drift before the owner sees the build: compare the build with its referenc
 
 **References.**
 - Screens: the approved mockup or prototype for a planned change; for every other screen, the same screen before the change. Reference pictures live in the app's `tests/reference/` as `<screen>-<phone|ipad|pc>.png`.
-- Three sizes, always: phone 390×844, iPad 820×1180, PC 1440×900.
+- Sizes and looks: the ones the app names in `## References` (a `Sizes:` line and, if the app has several looks or themes, a `Looks:` line). Without them: phone 390×844, iPad 820×1180, PC 1440×900, one look.
 - Figures: the values the app shows for the same inputs before the change, as listed in the app's `## References`.
 
 **Steps.**
-1. Before you change anything, take the "before" pictures of every screen at the three sizes with the app's picture test, and save the figures named in `## References`.
+1. Before you change anything, take the "before" pictures of every screen at every size and look with the app's picture test, and save the figures named in `## References`.
 2. After the change, take the "after" pictures and figures the same way.
 3. Compare in code: a pixel compare with a small tolerance for pictures, an exact compare for figures. Do not open pictures of screens that did not change.
 4. Each changed screen or figure must be in the plan. An unplanned change is a bug: fix it. A planned change is compared with its approved mockup; every difference the owner has not approved becomes a picture pair (mockup and build side by side, numbered) for the main session to ask about.
@@ -18,4 +18,4 @@ Catch drift before the owner sees the build: compare the build with its referenc
 6. If the app has no picture test or no `## References` yet, say so in the report as a blocker; adding them is its own stage.
 
 **Report line** (the regression table's Kept row and the reviewer use it):
-`Proof: pictures <n> screens × 3 sizes, <k> changed (all planned) · figures <n> match, <m> changed by plan · tests <passed>/<total>`
+`Proof: pictures <n> screens × <sizes> sizes × <looks> looks, <k> changed (all planned) · figures <n> match, <m> changed by plan · tests <passed>/<total>`

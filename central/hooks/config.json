@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.31: app setup change — each app opens one setup pull request (a PostToolUse hook for the notice). No answer is shown twice: format, wording and record problems are no longer sent back; they are saved, you see one short note, and the next step fixes them first. Only work that must continue is still sent back (open items, setup first, a draft pull request, a destructive step). The notice to your account is asked for right after a pull request turns ready, before the answer. claude.ai preferences: unchanged.",
+  "update_notice": "v3.1.32: no app setup change (no setup pull request). Screen sizes and looks for picture comparisons come from each app's FEATURES.md `## References` (Sizes:, Looks:); without them the defaults stay phone, iPad and PC in one look. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

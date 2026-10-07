@@ -117,7 +117,7 @@ if not progress and re.search(cfg["regression_table_pattern"], text):
     kept = re.search(r"(?im)^\|\s*\**kept\**\s*\|(.*)$", text)
     if converted and not (kept and re.search(r"proof:\s*\S", kept.group(1), re.I)):
         problems.append(f"{cfg['features_file']} is a by-screen list, so the regression table's Kept row names its "
-                        "proof: '| Kept | <n> features · Proof: pictures <n> screens × 3 sizes, <k> changed (all "
+                        "proof: '| Kept | <n> features · Proof: pictures <n> screens × <sizes> sizes, <k> changed (all "
                         "planned) · tests <passed>/<total> |' — from the compare instructions, not from memory")
 if problems:
     send_back("Implementation happened this turn but the record is incomplete. Before finishing: " + "; ".join(problems) + ".")
