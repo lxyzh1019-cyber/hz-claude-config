@@ -26,7 +26,7 @@ These instructions live only here; chat replies point here. This repository must
 | `central/hooks/replay-hooks.sh` | the replay test of every check (run before each package) |
 
 ## B. App repositories update their own setup files (automatic)
-A few setup files live inside each app repository (which helper runs on which model, which checks switch on). They cannot be downloaded at session start like the rules, so the session start **updates them itself**: the first session after a change rewrites them, puts them on a branch named `hz-setup-update-<version>`, opens a pull request, and asks you to merge it. Merge it; the next session there shows `[stub] current`. While that pull request waits, later sessions only remind you — they never open a second one.
+A few setup files live inside each app repository (which helper runs on which model, which checks switch on). They cannot be downloaded at session start like the rules. So the session start **updates them itself**. The first session after a change commits them on a branch named `hz-setup-update-<version>`, in a temporary folder. It pushes that branch, opens a pull request, and asks you to merge it. Your own folder is not touched. If the push fails, the session does the commit itself. Auto mode can refuse that and ask for your "yes". Merge it; the next session there shows `[stub] current`. While that pull request waits, later sessions only remind you — they never open a second one.
 
 Fallback, only if a session reports that it could not update automatically (for example a helper file someone edited by hand): ask the chat for a package for that repository and add it with GitHub Desktop as in Step E.
 
@@ -81,6 +81,7 @@ Pass = every test passed or not applicable. The three closing lines at the end o
 | No notice starting `Rules v… · setup …` after the first reply | the checks did not run in this session | tell the chat |
 | The notice says `vX is on GitHub: start a new session to load it` | the session started before the newer rules were merged. A session keeps its rules; reopening it does not load new ones | start a new session (the "+" next to the repository). Continue from the restart line in the record |
 | `setup waiting for your merge`, but no open pull request on GitHub | before v3.2.4, an empty setup branch counted as waiting. A helper file in an older published version was skipped. | update to v3.2.4. The next session opens a real setup pull request; merge it |
+| The session says the safety check refused the setup commit | the push from the session start failed, so the session had to commit | answer "yes, commit and push the setup update" in that session. Tell the chat if it refuses again |
 | `offline: using cached vX` | GitHub could not be reached, earlier copy used | usually temporary; start a new session later |
 | `hz-claude-config is incomplete on GitHub … using cached vX` | files are missing in this repository on GitHub | tell the chat; it sends a full package (Step E) |
 | Old version still loaded after an update | raw-file cache | wait a few minutes; start a new session |
