@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.3: the workers' copy of the change guard has the account skill's name, hz-change-guard (was hz-plan-regression-guard), and neutral examples. The unused hz-guarantee-audit copy is removed. The skill router also names hz-designer for design and critique prompts. No setup pull request. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.4: the setup update of an app now works when its helper files are an older published version. In Weekly-Planner the reviewer file was skipped as 'local edits', so the high-effort reviewer never arrived. A setup branch counts as waiting only when it holds changes main lacks: an empty or merged branch no longer shows 'waiting for your merge' and no longer releases the session. Every published helper version now stays known automatically. Weekly-Planner opens one setup pull request at its next session: merge it. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Stop hook: when session start updated this repository's setup files, no other answer may go out until the
-setup-update branch exists (pushed for the pull request). A micro-plan for it (Status: Proposed) may go out."""
+setup-update branch holds the update commit (v3.2.4; pushed for the pull request). A micro-plan for it (Status: Proposed) may go out."""
 import json, os, re, subprocess, sys
 from _common import read_hook_input, load_config, read_transcript, last_assistant_text, block, use_round, PROJECT_DIR
 
@@ -13,15 +13,10 @@ except (OSError, ValueError):
 
 
 def exists():
-    for args in (["git", "ls-remote", "--heads", "origin", branch], ["git", "branch", "--list", branch]):
-        try:
-            r = subprocess.run(args, cwd=PROJECT_DIR, capture_output=True, text=True, encoding="utf-8",
-                               errors="replace", timeout=8)
-            if r.returncode == 0 and r.stdout.strip():
-                return True
-        except (OSError, subprocess.SubprocessError):
-            pass
-    return False
+    # v3.2.4: the branch must hold the update commit. An empty branch (same commit as main) used to release the session
+    # (Weekly-Planner 2026-10-08), and the setup then never reached the repository.
+    from _common import setup_branch_state
+    return setup_branch_state(PROJECT_DIR, branch) in ("pending", "unknown")
 
 
 if exists():
@@ -40,4 +35,5 @@ if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
 block(f"Do the setup update first, as the session start says. Put the updated setup files on the branch {branch} "
       "from origin/main. Push it. Open the pull request, ready for review. Switch back. In the 'I need from you' "
-      "line, ask me to merge it. Send only that.", kind="work")
+      "line, ask me to merge it. Send only that. The branch must hold the commit of the updated files: an empty branch "
+      "does not count.", kind="work")

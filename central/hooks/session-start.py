@@ -90,7 +90,10 @@ if setup_note:
             import json as _json
             os.makedirs(os.path.join(PROJECT_DIR, ".claude", "state"), exist_ok=True)
             with open(os.path.join(PROJECT_DIR, ".claude", "state", "setup-pending.json"), "w", encoding="utf-8") as f:
-                _json.dump({"branch": "hz-setup-update-" + str((cfg.get("stub_expect") or {}).get("version", "latest"))}, f)
+                import re as _re5
+                _bm = _re5.search(r"git switch -c (hz-setup-update-[\w.-]+)", setup_note)   # v3.2.4: the name may end in -2
+                _json.dump({"branch": _bm.group(1) if _bm else "hz-setup-update-" +
+                            str((cfg.get("stub_expect") or {}).get("version", "latest"))}, f)
         except OSError:
             pass
 if os.path.exists(os.path.join(PROJECT_DIR, "tools", "build_manifest.py")) and cfg.get("update_notice"):

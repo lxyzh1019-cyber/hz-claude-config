@@ -1311,3 +1311,82 @@ def newer_rules_on_github(timeout=3, max_age_s=1200):
             except OSError:
                 pass
     return latest if latest and now_v != "unknown" and _vkey(latest) > _vkey(now_v) else ""
+
+
+# ---- Setup update branches (v3.2.4) --------------------------------------------------------------------------------
+# Weekly-Planner 2026-10-08: the branch hz-setup-update-3.2.1 existed on GitHub with no commit of its own (same commit
+# as main) and no pull request. Session start only looked for the branch NAME, so it said "already waiting in a pull
+# request" and asked for a merge that did not exist; the setup never arrived. The version line also said "waiting" for
+# any old hz-setup-update-* branch. A setup branch now counts as waiting only when it holds a change that main lacks.
+SETUP_PATHS = (".claude/agents", ".claude/settings.json", ".claude/hz-loader.py", "CLAUDE.md")
+
+
+def _g(project_dir, args, timeout=10):
+    import subprocess
+    try:
+        return subprocess.run(["git", *args], cwd=project_dir, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=timeout)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return None
+
+
+def setup_branch_state(project_dir, branch, fetch=True):
+    """'none' (no such branch), 'settled' (it holds nothing main lacks: empty or already merged), 'pending' (it holds
+    setup changes main lacks: a pull request can be merged), or 'unknown' (GitHub could not be read: treated as waiting)."""
+    remote = _g(project_dir, ["ls-remote", "--heads", "origin", branch], timeout=8)
+    remote_ok = bool(remote and remote.returncode == 0)
+    has_remote = remote_ok and bool(remote.stdout.strip())
+    local = _g(project_dir, ["rev-parse", "--verify", "-q", f"refs/heads/{branch}"], timeout=5)
+    has_local = bool(local and local.returncode == 0 and local.stdout.strip())
+    if not has_remote and not has_local:
+        return "none"
+    if has_remote and fetch:
+        f = _g(project_dir, ["fetch", "-q", "origin", "main", branch], timeout=25)
+        if not f or f.returncode != 0:
+            return "unknown"
+    tips = []
+    if has_remote:
+        tips.append(f"refs/remotes/origin/{branch}")
+    if has_local:
+        tips.append(f"refs/heads/{branch}")
+    main = None
+    for m in ("refs/remotes/origin/main", "refs/remotes/origin/master", "refs/heads/main", "refs/heads/master"):
+        r = _g(project_dir, ["rev-parse", "--verify", "-q", m], timeout=5)
+        if r and r.returncode == 0:
+            main = m
+            break
+    if not main:
+        return "unknown"
+    for tip in tips:
+        ahead = _g(project_dir, ["rev-list", "--count", f"{main}..{tip}"], timeout=8)
+        if not ahead or ahead.returncode != 0:
+            return "unknown"
+        if int((ahead.stdout.strip() or "0")) == 0:
+            continue                                    # nothing of its own: empty, or already merged
+        # pending = the branch itself changes setup files (against its fork point) AND main does not have that change yet.
+        # A branch whose only change is elsewhere, or one merged by squash (main already has its content), is settled.
+        mb = _g(project_dir, ["merge-base", main, tip], timeout=8)
+        base = (mb.stdout.strip() if mb and mb.returncode == 0 else "")
+        if not base:
+            return "unknown"
+        own = _g(project_dir, ["diff", "--quiet", base, tip, "--", *SETUP_PATHS], timeout=10)
+        same = _g(project_dir, ["diff", "--quiet", main, tip, "--", *SETUP_PATHS], timeout=10)
+        if own is None or same is None:
+            return "unknown"
+        if own.returncode == 1 and same.returncode == 1:
+            return "pending"
+    return "settled"
+
+
+def setup_update_target(project_dir, version, fetch=True):
+    """('waiting', branch) when a real setup pull request waits, else ('new', branch): the first unused branch name.
+    A settled branch is never reused and never deleted: the next name is hz-setup-update-<version>-2, -3, ..."""
+    base = f"hz-setup-update-{version}"
+    for n in range(1, 10):
+        name = base if n == 1 else f"{base}-{n}"
+        st = setup_branch_state(project_dir, name, fetch=fetch)
+        if st in ("pending", "unknown"):
+            return "waiting", name
+        if st == "none":
+            return "new", name
+    return "waiting", f"{base}-9"

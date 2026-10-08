@@ -37,13 +37,12 @@ def version_line(first=False):
     if os.path.exists(os.path.join(STATE_DIR, "setup-pending.json")):
         stub = "waiting"   # rewritten on disk at session start; the setup pull request is not merged yet
     elif stub.startswith("OUTDATED"):
-        try:   # the setup-update branch exists: the pull request is waiting for my merge
-            refs = subprocess.run(["git", "for-each-ref", "--format=%(refname)", "refs/heads/hz-setup-update-*",
-                                   "refs/remotes/origin/hz-setup-update-*"], cwd=PROJECT_DIR, capture_output=True,
-                                  text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip()
-        except (OSError, subprocess.SubprocessError, UnicodeError):
-            refs = ""
-        stub = "waiting" if refs else stub
+        try:   # v3.2.4: waiting only when a setup branch of this version holds changes main lacks (not any old branch)
+            from _common import setup_update_target
+            kind_, _name = setup_update_target(PROJECT_DIR, str((cfg.get("stub_expect") or {}).get("version", "latest")))
+            stub = "waiting" if kind_ == "waiting" else stub
+        except Exception:
+            pass
     word = ("current on main (this branch is older)" if stub.startswith("current on main") else
             "current" if stub.startswith("current") else "waiting for your merge" if stub.startswith("waiting")
             else "needs attention" if stub else "unknown")
