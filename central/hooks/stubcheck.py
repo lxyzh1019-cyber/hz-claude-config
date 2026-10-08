@@ -55,6 +55,6 @@ def stub_status(cfg, project_dir):
     want = exp.get("version", "?")
     if not missing:
         return f"current (matches v{want})"
-    return ("OUTDATED — this repository still has an older stub; missing: " + ", ".join(missing) +
-            f". Features that need it do not work here yet. Fix: run Step B from the hz-claude-config README in this "
-            "repository, in default permission mode (not auto), and merge its pull request.")
+    return ("OUTDATED — this repository has an older setup. Missing: " + "; ".join(missing) +
+            ". Features that need it do not work here yet. Fix: run Step B from the hz-claude-config README in this "
+            "repository, in default permission mode (not auto). Then merge its pull request.")

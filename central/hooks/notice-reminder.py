@@ -27,6 +27,11 @@ elif re.match(r"^mcp__.*update_pull_request$", tool):
 if not ready:
     sys.exit(0)
 log("notice-reminder", {"tool": tool})
-add_context("PostToolUse", "[notice] A pull request is now ready for review. Before your answer, send the owner one "
-            "notice with the PushNotification tool (load it with ToolSearch): '<app>: pull request #<number> is ready "
-            "to merge'. Do not mention the notice in the answer. If the tool is not in this session, skip it.")
+try:
+    from _common import live_proof
+    live_proof("notice-reminder", {"tool": tool})
+except ImportError:
+    pass
+add_context("PostToolUse", "[notice] A pull request is now ready for review. Before your answer, send me one notice "
+            "with the PushNotification tool (load it with ToolSearch): '<app>: pull request #<number> is ready to "
+            "merge'. Do not mention the notice in the answer. If the tool is not in this session, skip it.")

@@ -13,7 +13,7 @@ import json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from _common import save_fixes, load_config, bump_stat, log  # noqa: E402
+from _common import save_fixes, load_config, bump_stat, log, live_proof  # noqa: E402
 
 raw = sys.stdin.buffer.read()
 try:
@@ -76,7 +76,8 @@ if reasons and "work" not in kinds:
     save_fixes(sid, [re.split(r"\s+(?:Send only|Your re-send|Do not repeat|Send the |Then send)", r_, maxsplit=1)[0]
                      for r_ in reasons])
     bump_stat(sid, "savedfixes")
-    notes.append("Noted for the next step: " + str(len(reasons)) + " format or record fix(es) — no repeat of this answer.")
+    live_proof("saved-fixes", {"saved": len(reasons)})
+    notes.append("Noted for the next step: " + str(len(reasons)) + " format or record fix(es). This answer is not repeated.")
     log("dispatch", {"event": event, "sent_back": 0, "saved_fixes": len(reasons), "notices": len(notes)})
     out = {"systemMessage": "\n".join(notes)}
     print(json.dumps(out))

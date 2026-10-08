@@ -17,5 +17,5 @@ r = use_round("qc", data.get("session_id"), int(cfg.get("auto_fix_max_rounds", 1
 if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
 block("QC2: this reply tells me to do something destructive (" + ", ".join(h.strip("\\b") for h in hits[:3]) + "). Remove "
-      "that step, or put it in its own message that names every item, says why and what I should see afterwards, "
-      "and ends with 'This needs your separate yes.' Send only that corrected part.", kind="work")   # v3.1.31: safety
+      "that step. Or put it in its own message: name every item, say why, and say what I will see after. End that "
+      "message with 'This needs your separate yes.' Send only that corrected part.", kind="work")   # v3.1.31: safety

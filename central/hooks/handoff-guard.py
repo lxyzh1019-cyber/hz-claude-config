@@ -25,8 +25,7 @@ comp = None
 if newest:
     if named and max(named) > newest:
         problems.append(f"This reply names Plan v{max(named)}, but the newest plan file in plans/ is Plan v{newest}. "
-                        "A plan change agreed in chat must be presented in plan mode as the next Plan vN (its Rev "
-                        "label and 'Changes in this version' block), so the plan file carries every revision. Until "
+                        "Show a plan change agreed in chat in plan mode, so the plan file has every version. Until "
                         f"then it is Plan v{newest}.")
     comp = completion_summary(cfg)
     pv = PLAN_NUMBER.search(comp.get("plan") or "")
@@ -60,8 +59,8 @@ if rm:
                         "the record from GitHub, not from this session.")
     missing = [n for n in comp.get("not_done", []) if norm(n)[:40] not in norm(text)]
     if missing:
-        problems.append("List every row of the plan that is not complete — open, blocked, queued, waiting — so "
-                        "done plus listed adds up to the total. Missing: " + "; ".join(missing[:6]) + ".")
+        problems.append("List every row of the plan that is not complete: open, blocked, queued or waiting. Done plus "
+                        "listed must add up to the total. Missing: " + "; ".join(missing[:6]) + ".")
 
 if not problems:
     sys.exit(0)

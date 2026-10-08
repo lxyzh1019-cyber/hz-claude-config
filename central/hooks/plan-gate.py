@@ -13,16 +13,90 @@ cfg = load_config()
 bump_prompt_number(data.get("session_id"))
 # v3.1.31: format, wording and record problems from the last answer were saved, not sent back — fix them now
 _fixes = take_fixes(data.get("session_id"))
-FIX_TEXT = ("[fix first] Your last answer had these problems. Fix any file or record item now, silently; do not "
-            "write about the fixes; follow the format rules in your next answer:\n" +
+if _fixes:
+    try:
+        from _common import live_proof
+        live_proof("saved-fixes", {"handed_on": len(_fixes)})
+    except ImportError:
+        pass
+FIX_TEXT = ("[fix first] Your last answer had these problems. Fix any file or record item now. Do not write about "
+            "the fixes. Follow the formats in your next answer:\n" +
             "\n".join(f"- {f}" for f in _fixes)) if _fixes else ""
+# v3.2.0: memory budget for the main session — one notice each time it passes another 100 k above the budget
+def memory_notice():
+    try:
+        from _common import read_transcript as _rt
+        _ctx = 0
+        for _r in reversed(_rt(data.get("transcript_path"))):
+            _u = (_r.get("message") or {}).get("usage") if _r.get("type") == "assistant" and not _r.get("isSidechain") \
+                else None
+            if _u:
+                _ctx = sum(int(_u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens",
+                                                         "cache_creation_input_tokens"))
+                break
+        _budget = int(cfg.get("main_memory_max", 200000))
+        if _ctx < _budget:
+            return ""
+        _lvl = (_ctx - _budget) // 100000
+        _sp = os.path.join(STATE_DIR, "memory-notice.json")
+        try:
+            _seen = json.load(open(_sp, encoding="utf-8"))
+        except (OSError, ValueError):
+            _seen = {}
+        if _seen.get(str(data.get("session_id") or "")) == _lvl:
+            return ""
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump({str(data.get("session_id") or ""): _lvl}, open(_sp, "w", encoding="utf-8"))
+        return (f"[memory] Each step now re-reads about {round(_ctx / 1000)} k tokens (budget {round(_budget / 1000)} k). "
+                "At the next stage break, put 'Type /compact' in the 'I need from you' line. Send long work to fresh "
+                "workers.")
+    except Exception:
+        return ""
+
+
+MEM_TEXT = memory_notice()
+
+
+# v3.2.0: measured stop signals. A worker stopped by a limit, a stage over twice its size, or a worker that reports
+# "Stuck:" means the plan no longer fits: the main session shows the next Rev with the problem and its solution.
+def stop_notice():
+    reasons = []
+    sp = os.path.join(STATE_DIR, "stop-signals.json")
+    try:
+        sig = json.load(open(sp, encoding="utf-8"))
+    except (OSError, ValueError):
+        sig = []
+    for s in sig:
+        if not s.get("told"):
+            reasons.append(s.get("reason") or "a worker stopped")
+            s["told"] = True
+    if re.search(r"(?m)(^|>)\s*\**Stuck:", str(data.get("prompt") or "")):
+        reasons.append("a worker reported 'Stuck:'")
+    if not reasons:
+        return ""
+    try:
+        json.dump(sig, open(sp, "w", encoding="utf-8"))
+    except OSError:
+        pass
+    try:
+        from _common import live_proof
+        live_proof("stop-for-plan", {"reasons": reasons})
+    except ImportError:
+        pass
+    return ("[stop for plan] " + "; ".join(reasons) + ". Before more build work, show the next Rev of the plan in "
+            "plan mode: the problem, its cause, and your recommended solution. A small fix that changes no approved "
+            "result may go on; say why in one line.")
+
+
+STOP_TEXT = stop_notice()
 # v3.1.30: a worker or background-command notice is not a request of mine. In the Weekly-Planner money session 79 of
 # 106 plan-gate texts went to such notices ("Full Plan vN is required (90 bullets)"), 128,000 characters re-read on
 # every later step.
 if prompt.lstrip().startswith("<task-notification>"):
     log("plan-gate", {"skipped": "task notification", "fixes": len(_fixes)})
-    if FIX_TEXT:
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": FIX_TEXT}}))
+    _ctx_txt = "\n".join(x for x in (FIX_TEXT, STOP_TEXT, MEM_TEXT) if x)
+    if _ctx_txt:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": _ctx_txt}}))
     sys.exit(0)
 bullets = count_bullets(prompt)
 low = prompt.lower()
@@ -40,8 +114,8 @@ elif bullets >= 3 or triggers:
     why = f"{bullets} bullets" if bullets >= 3 else "design/diagnostic trigger: " + ", ".join(triggers)
     log("plan-gate", {"tier": "full", "why": why})
     msgs.append(f"[plan-gate] Full 'Plan vN — Title — Awaiting approval' is required for this request ({why}). "
-                "Do not edit files before approval. If this is a follow-up on an already approved plan, present the "
-                "revision with Rev-N colour-square markers (🟦🟩🟧🟪, no HTML) instead of a new plan. "
+                "Do not edit files before approval. If this is a follow-up on an already approved plan, show the next "
+                "version in plan mode; the plan check adds the coloured marks by itself. "
                 + ("Executor: opus-worker (Diagnostic/Redesign trigger)." if triggers else
                    "Name the helper and level for every Claude stage: sonnet-worker for Level: Routine, opus-worker "
                    "for Level: Complex (shared data, settings, sync, data model, diagnosis, design)."))
@@ -86,9 +160,10 @@ if msgs and not skip and (bullets >= 3 or triggers):
         msgs.append("[reviewer] Big or risky plan: before presenting it, send the reviewer (moment: Before a plan) "
                     "with the draft plan and the area's ledger and hotspot rows, and fix what it finds.")
         msgs.append("[planner] Big or risky plan (" + "; ".join(why) + "): the planner helper writes it.")
-    # v3.1.30: every full plan comes from the planner helper (first-choice model; planner-opus only on 'Fallback:')
-    msgs.append("[planner] A full plan is written by the 'planner' helper (planner instructions, the plan shape, the "
-                "agreed points); save what it returns in one step and present it. A micro-plan stays with you.")
+    # v3.2.0: the planner helper writes a new plan and big changes; later Revs and versions come from the main session
+    msgs.append("[planner] A new plan is written by the 'planner' helper (planner file, plan shape, agreed points). "
+                "Save what it returns in one step and show it. Later Revs and versions, and micro-plans, are yours. "
+                "Tag each stage: files, after, level, tests, group (stages in the same group run in parallel).")
 
 # pause: the next final report may stand with open ledger items (completion-guard honours this once)
 if any(ph in low for ph in cfg["pause_phrases"]):
@@ -151,6 +226,49 @@ if comp["total"] and comp["open"]:
                 "these lines (just before the validation line) and may claim done only when nothing is open." +
                 ("" if comp["scoped"] else " The base branch could not be read, so nothing is blocked on this count."))
 
+# v3.2.0: night work in two steps. "night check": every open question plus the overnight plan, while I can still answer.
+# "good night": start, with my answers. After 9 PM Edmonton time, one reminder per evening to type "night check".
+NIGHT_CHECK = cfg.get("night_check_phrases") or ["night check", "before bed", "before i sleep", "睡前"]
+NIGHT = cfg.get("night_phrases") or ["good night", "goodnight", "going to sleep", "going to bed", "晚安", "睡觉了", "去睡了"]
+try:
+    from _common import live_proof as _lp
+except ImportError:
+    _lp = lambda *a, **k: None
+if any(ph in low for ph in NIGHT_CHECK):
+    log("plan-gate", {"night": "check"})
+    _lp("night-work", {"step": "night check"})
+    msgs.append("[night check] I sleep soon. In this reply, list every open question at once, numbered, each with your "
+                "recommendation. Then list what you will do overnight: the stages in order, and which pull requests "
+                "you will stack on which branch. Start nothing yet; wait for my answers and my 'good night'.")
+elif any(ph in low for ph in NIGHT):
+    log("plan-gate", {"night": True})
+    _lp("night-work", {"step": "good night"})
+    msgs.append("[night] I am away now. Use my answers. Keep working on every approved stage that needs no other answer "
+                "from me. Stack pull requests as usual: branch from the earlier unmerged branch, with that branch as "
+                "the base, at most 3 unmerged. I merge them in order in the morning. "
+                "Never merge. Stop only for a destructive step or a problem that changes an approved result. Leave any "
+                "still-open question for the morning reply, with the pull requests listed in merge order.")
+else:
+    try:
+        from _common import edmonton_hour
+        from datetime import datetime as _d
+        _ev = _d.now().strftime("%Y-%m-%d")
+        _np = os.path.join(STATE_DIR, "evening-reminder.json")
+        try:
+            _done = json.load(open(_np, encoding="utf-8")).get("day")
+        except (OSError, ValueError):
+            _done = None
+        if edmonton_hour() >= int(cfg.get("evening_hour", 21)) and _done != _ev and comp.get("open"):
+            os.makedirs(STATE_DIR, exist_ok=True)
+            json.dump({"day": _ev}, open(_np, "w", encoding="utf-8"))
+            msgs.append("[evening] It is evening in Edmonton and work is still open. In your next final answer, add one "
+                        "sentence to the 'I need from you' line: \"Before you sleep, type 'night check'.\"")
+    except Exception:
+        pass
+if STOP_TEXT:
+    msgs.insert(0, STOP_TEXT)
+if MEM_TEXT:
+    msgs.append(MEM_TEXT)
 if FIX_TEXT:
     msgs.insert(0, FIX_TEXT)
 if msgs:

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """SessionStart hook (run by the repo's .claude/hz-loader.py): inject the central rules, the version, branch,
 where the worker instructions and skills are, per-repo file status, and hotspot alerts."""
-import json, os, subprocess
-from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, STATE_DIR, RULES_PATH, SKILLS_DIR, PLAN_TEMPLATE,
+import json, os, re, subprocess
+from _common import (log, read_hook_input, load_config, add_context, PROJECT_DIR, STATE_DIR, RULES_PATH, SKILLS_DIR, 
                      WORKER_PATH, hotspot_alerts, central_version, completion_summary)
 from stubcheck import stub_status
 
@@ -28,23 +28,47 @@ except OSError:
 note = os.environ.get("HZ_LOADER_NOTE", "")
 facts = [f"[session-start] Rules v{version} loaded · branch: {branch}" + (f" · {note}" if note else "")
          if loaded else "[session-start] Central rules NOT loaded (rules file missing in cache). Stop and report."]
-facts.append(f"Worker instructions: {WORKER_PATH} — include this path in every opus-worker or sonnet-worker delegation.")
-_agents = os.path.dirname(WORKER_PATH)   # v3.1.28: the explorer and the reviewer on call
-facts.append(f"Planner instructions: {os.path.join(_agents, 'planner-instructions.md')} — name this path when you send "
-             "'planner' (or 'planner-opus' on 'Fallback:') to write or revise a full plan.")
-facts.append(f"Compare instructions: {os.path.join(_agents, 'compare-instructions.md')} — name this path in every "
-             "hand-over whose task changes screens or figures. Feature list conversion (once per app, when the owner "
-             f"asks): {os.path.join(_agents, 'conversion-instructions.md')}.")
-facts.append(f"Explorer instructions: {os.path.join(_agents, 'explorer-instructions.md')} — send Explore before a Complex "
-             "stage and put its map in the worker's hand-over ('Map: …'). Reviewer instructions: "
-             f"{os.path.join(_agents, 'reviewer-instructions.md')} — the reviewer starts before a big plan, when a worker "
-             "reports 'Stuck:', and before done; name the moment in its assignment.")
-facts.append(f"Central skills folder: {SKILLS_DIR} — when a skill is named, read its SKILL.md there.")
+_agents = os.path.dirname(WORKER_PATH)
+# v3.2.0: role files. Each helper reads its own file; the main session only names the path in the hand-over.
+facts.append("Role files. Name the path in each hand-over. The helper reads it, not you.\n"
+             f"- workers: {WORKER_PATH}\n"
+             f"- planner: {os.path.join(_agents, 'planner-instructions.md')}\n"
+             f"- explorer: {os.path.join(_agents, 'explorer-instructions.md')}\n"
+             f"- reviewer: {os.path.join(_agents, 'reviewer-instructions.md')}\n"
+             f"- compare (when screens or figures change): {os.path.join(_agents, 'compare-instructions.md')}\n"
+             f"- feature list conversion (once per app, when I ask): {os.path.join(_agents, 'conversion-instructions.md')}")
+facts.append(f"Skills: {SKILLS_DIR}. When a skill is named, read its SKILL.md there.")
+# v3.2.0: the test rule of this repository — a test map, and a full run of 5 minutes or less
+try:
+    _feat = open(os.path.join(PROJECT_DIR, cfg["features_file"]), encoding="utf-8").read()
+except (OSError, KeyError):
+    _feat = ""
+try:
+    _ts = json.load(open(os.path.join(STATE_DIR, "test-speed.json"), encoding="utf-8"))
+except (OSError, ValueError):
+    _ts = {}
+_lim = float(cfg.get("full_test_max_minutes", 5))
+_split = re.search(r"(?im)^\s*-?\s*Test speed:\s*full run\s*([\d.]+)\s*min", _feat)
+if _feat and not re.search(r"(?im)^\s*-?\s*Tests:\s*\S", _feat):
+    facts.append("[test rule] FEATURES.md has no test map yet. In the next build stage, add 'Tests: <area or files> → "
+                 "<tests it needs>' lines under ## References, so a fix runs only its tests.")
+# v3.2.0: references first — an app with screens but no picture references cannot be checked against them
+import glob as _glob
+_has_screens = bool(_glob.glob(os.path.join(PROJECT_DIR, "*.html")) or _glob.glob(os.path.join(PROJECT_DIR, "*", "*.html")))
+_refs = _glob.glob(os.path.join(PROJECT_DIR, cfg.get("reference_dir", "tests/reference"), "*.png"))
+if _has_screens and not _refs:
+    facts.append("[references] This app has screens but no picture references yet "
+                 f"({cfg.get('reference_dir', 'tests/reference')}). Before any stage that changes a screen, add a stage "
+                 "that makes them, as the compare instructions say. Then every screen change is checked against them.")
+if float(_ts.get("slowest_full_minutes") or 0) > _lim and not (_split and float(_split.group(1)) <= _lim):
+    facts.append(f"[test rule] A full test run here took {_ts.get('slowest_full_minutes')} minutes; the aim is "
+                 f"{int(_lim)} or less. If the plan has no stage yet to split the test suite into parts that run side "
+                 "by side, add it as the next Rev, before other build stages.")
 missing = [p for p in (cfg["features_file"], cfg["record_file"]) if not os.path.exists(os.path.join(PROJECT_DIR, p))]
-facts.append("Missing per-repo files: " + (", ".join(missing) if missing else "none"))
+facts.append("Missing files in this repository: " + (", ".join(missing) if missing else "none"))
 try:
     if "<app or plan name>" in open(os.path.join(PROJECT_DIR, cfg["features_file"]), encoding="utf-8").read():
-        facts.append(f"Note: {cfg['features_file']} is the unfilled template — fill it before the first implementation turn")
+        facts.append(f"Note: {cfg['features_file']} is still the template. Fill it before the first build step.")
 except OSError:
     pass
 stub = stub_status(cfg, PROJECT_DIR)
@@ -69,52 +93,42 @@ if setup_note:
         except OSError:
             pass
 if os.path.exists(os.path.join(PROJECT_DIR, "tools", "build_manifest.py")) and cfg.get("update_notice"):
-    facts.append("[update] " + cfg["update_notice"] + " Put this in the 'I need from you' line of your first reply.")
+    facts.append("[update] " + cfg["update_notice"] + " Say this in one sentence in your first reply. Put it in the 'I need from you' line only if it asks me to do something.")
 facts.append(f"Note: routing guard mode: {cfg.get('routing_guard_mode', 'observe')}")
 facts += [f"[hotspot] {a}" for a in hotspot_alerts(cfg)]
 comp = completion_summary(cfg)
 if comp["total"] and comp["open"]:
-    facts.append("[completion] " + comp["display"] + "\n— this branch's ledger rows; read the deliverable ledger before "
-                 "claiming anything is done, and state these lines in your first reply.")
+    facts.append("[completion] " + comp["display"] + "\nThese are the rows of this branch. Read the deliverable ledger "
+                 "before you say anything is done. Show these lines in your first reply.")
 try:
     from _common import edmonton_time
-    facts.append(f"Times for me are in Edmonton time: it is now {edmonton_time()}. Convert any UTC time "
-                 "(MDT = UTC-6 from the second Sunday of March, MST = UTC-7 from the first Sunday of November); a "
-                 "finished answer that shows a UTC time is sent back.")
+    facts.append(f"Times for me are in Edmonton time. It is now {edmonton_time()}. Change any UTC time: MDT is UTC-6 "
+                 "from the second Sunday of March, MST is UTC-7 from the first Sunday of November. A finished answer "
+                 "with a UTC time gets a saved fix.")
 except Exception:
     pass
-facts.append("The 📌 Result line starts with where the work stands (Ready to merge / Waiting on your decision / Still "
-             "being worked on). While I'm still discussing or deciding, make no code changes, files or pull requests; "
-             "when you think I'm ready, ask me first and build only after my yes.")
-facts.append("Pushing the work branch (never main) to GitHub is always fine without asking — merging stays mine. "
-             "While a design is still being shaped, the plan version does not move: keep agreed points in a '## Design "
-             "decisions' section of the working record ('- [agreed] <point> — search: <phrase>'), answer with short "
-             "change notes, and when it seems settled ask me first, then write one new plan version with every agreed "
-             "point. The Rev number is the plan version.")
-facts.append("Find all, fix all, check once: when tests, checks or a review find problems, first run the whole test suite or check and list every problem; then fix them together in one pass (or hand the whole list to one worker); then run everything again once. Never find one, fix one, re-run, find the next — each round re-reads everything. Fix one by one only when one fix clearly changes the cause of the others, and say so.")
-facts.append("Plans: write the first version in this shape, so the plan check passes it the first time "
-             "(squares only on Rev labels; no 'Changes in this version' block in a first version):\n" + PLAN_TEMPLATE)
-facts.append("The version line is shown to me in the notice after your reply: do not write a 'Rules v…' line. "
-             "Every final answer ends with a "
-             "quote block of three lines in everyday words, after a line with just ---, and nothing after it:\n"
-             "---\n"
-             "> 📌 **Result:** <status only: what works now or what I get, no requests>\n"
-             "> 👉 **I need from you:** <one action, one short line, or nothing>\n"
-             "> ➡️ **Next:** <what happens after>\n"
-             "Above the --- line, in this order: the technical detail, the Completion lines if required, the "
-             "validation line, then a '❓ Decisions' list (one line each with your recommendation). A change from what I "
-             "approved (plan, prototype, design: a colour, a size, a layout, a feature) is a question in that list, "
-             "never news in the details, with a link to a page showing prototype and build side by side for each "
-             "difference; no colour codes or sizes in the closing lines. If the stub is "
-             "outdated, say so in the 'I need from you' line. No running commentary between tool calls and no progress "
-             "reports: dispatch workers in the foreground and wait; if asked for status, one line '⏳ Working on: …'. "
-             "Present every Plan vN in plan mode (plan file + Approve); the plan file is written into plans/ in this "
-             "repository — commit the approved one with the work and delete drafts that were not approved. Rules, "
-             "hooks, worker instructions and skills come from "
-             "hz-claude-config through .claude/hz-loader.py; never copy them into this repository.")
+# v3.2.0: short rules for this session in ASD-STE100-lite. The formats come from formats.py only.
+facts.append("While I discuss or decide, make no code changes, files or pull requests. When you think I am ready, "
+             "ask me first. Build only after my yes.")
+facts.append("You can push the work branch (never main) without asking. Merging is mine.")
+facts.append("While we shape a design, keep each agreed point in '## Design decisions' of the working record "
+             "('- [agreed] <point> — search: <phrase>'). Answer with short change notes. When it seems settled, ask "
+             "me. Then write one plan with every agreed point.")
+facts.append("Find all, fix all, check once. Run the whole check and list every problem. Fix them together. Then run "
+             "everything one time.")
+facts.append("Do not write a 'Rules v…' line: the notice after your reply shows it. If the setup is old, say so in "
+             "the 'I need from you' line.")
+facts.append("A change from what I approved (plan, prototype, design) is a question in the '❓ Decisions' list. Add "
+             "a link to a page that shows prototype and build side by side.")
+facts.append("Show every Plan vN in plan mode. The plan file goes into plans/ in this repository. Commit the approved "
+             "file with the work. Delete plans that were never approved.")
+facts.append("Rules, checks, helper files and skills come from hz-claude-config through .claude/hz-loader.py. Never "
+             "copy them into this repository.")
+from formats import session_formats
+facts.append(session_formats())
 if loaded:
-    facts.append(f"FIRST, before any other tool or reply: read the full working rules with the Read tool: {RULES_PATH} "
-                 "— they are not in this message. Other tools wait until it is read.")
+    facts.append(f"FIRST, before any other tool or reply: read the working rules with the Read tool: {RULES_PATH}. "
+                 "They are not in this message. Other tools wait until you read them.")
 text = "\n".join(facts)
 LIMIT = int(cfg.get("session_start_max_chars", 9500))
 if len(text) > LIMIT:   # never let Claude Code cut this text: move the rest into a file read together with the rules

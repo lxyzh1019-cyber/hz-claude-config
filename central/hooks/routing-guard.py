@@ -22,6 +22,10 @@ if mode != "enforce":
     sys.exit(0)
 if is_governance_path(path, cfg):
     sys.exit(0)
+# v3.2.0: Claude's own scratch folder (…/Temp/claude/…) is not app code. In the
+# Weekly-Planner consistency pass two writes there were refused for nothing.
+if path and __import__("re").search(r"[\\/]temp[\\/]claude[\\/]", path.replace("\\", "/").lower()):
+    sys.exit(0)
 if os.path.exists(os.path.join(STATE_DIR, "main-session-edit-authorized")):
     sys.exit(0)
 is_worker = any(v for v in subagent_markers.values() if v and str(v) != str(data.get("session_id")))
@@ -37,5 +41,5 @@ if is_worker:
             deny_tool(f"sonnet-worker may not change '{path}' (shared data rules, settings, build or deploy set-up). Stop "
                       "and return: 'Escalate to opus-worker: this task needs " + hit + "'.")
     sys.exit(0)
-deny_tool(f"Routing rule: source edits must run through a worker subagent, opus-worker or sonnet-worker ({path}). Delegate this change, "
-          "or ask the user to authorize main-session execution (touch .claude/state/main-session-edit-authorized).")
+deny_tool(f"Routing rule: a worker makes source edits, opus-worker or sonnet-worker ({path}). Send this change to a "
+          "worker. Or ask me to allow main-session edits (touch .claude/state/main-session-edit-authorized).")

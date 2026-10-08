@@ -38,6 +38,6 @@ if m and m.group(2).split()[0] == "Proposed":
 r = use_round("setup", data.get("session_id"), 2)
 if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
-block(f"Do the setup update before anything else, as the session start instructed: put the updated setup files on "
-      f"the branch {branch} from origin/main, push it, open the pull request ready for review, switch back, and ask me "
-      "in the 'I need from you' line to merge it. Send only that.", kind="work")
+block(f"Do the setup update first, as the session start says. Put the updated setup files on the branch {branch} "
+      "from origin/main. Push it. Open the pull request, ready for review. Switch back. In the 'I need from you' "
+      "line, ask me to merge it. Send only that.", kind="work")
