@@ -57,26 +57,9 @@ if _open_ready and not re.search(r"^\s*\**PR:\**\s*#?\d+\s+(merged|closed|back t
 
 # v3.2.0: up to 3 workers at once. A worker that starts while another runs gets its own worktree (a second working
 # folder on its own branch), so they never edit the same files; the plan's parallel group is named.
-_open = {}
-for _rec in read_transcript(data.get("transcript_path")):
-    if _rec.get("isSidechain"):
-        continue
-    _c = (_rec.get("message") or {}).get("content")
-    if isinstance(_c, str) and "<task-notification>" in _c:
-        for _tid in re.findall(r"<tool-use-id>([^<]+)</tool-use-id>", _c):
-            _open.pop(_tid, None)
-    if not isinstance(_c, list):
-        continue
-    for _b in _c:
-        if not isinstance(_b, dict):
-            continue
-        if _b.get("type") == "tool_use" and _b.get("name") in ("Agent", "Task") and \
-                str((_b.get("input") or {}).get("subagent_type") or "") in workers:
-            _open[_b.get("id")] = True
-        elif _b.get("type") == "tool_result" and _b.get("tool_use_id") in _open:
-            _r = json.dumps(_b.get("content"), ensure_ascii=False)
-            if not re.search(r"(?i)launched|running in the background|started in the background", _r[:400]):
-                _open.pop(_b.get("tool_use_id"), None)
+from _common import open_workers
+_open = open_workers(read_transcript(data.get("transcript_path")), workers, data.get("transcript_path"),
+                     exclude_id=data.get("tool_use_id"))
 _max = int(cfg.get("max_parallel_workers", 3))
 if len(_open) >= _max:
     deny_tool(f"{len(_open)} workers already run; the limit is {_max}. Wait for one to report, then start this one.")

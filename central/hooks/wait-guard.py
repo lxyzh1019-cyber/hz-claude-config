@@ -49,6 +49,18 @@ if not inp.get("run_in_background") and _gh_wait:
     deny_tool("Do not wait for GitHub here. Run the same command in the background (run_in_background, starting with "
               "'timeout 1800 '). Then go on with the next stage that does not need this result. Its notice tells you "
               "the result; a failure becomes a Build row 'Fix — <problem>'.")
+# v3.2.1: while the full suite is known to be too slow and is not split yet, no full local run
+try:
+    from _common import is_full_test_run, slow_suite_blocks, test_speed_load
+    if is_full_test_run(cmd, cfg) and slow_suite_blocks(cfg):
+        _st = test_speed_load()
+        log("wait-guard", {"refused": "full local test run, suite too slow"})
+        deny_tool(f"The full test suite here is too slow ({_st.get('slowest_full_minutes')} min"
+                  + (", stopped by the time limit" if _st.get("stopped_by_limit") else "") + "). Do not run it locally "
+                  "until it is split. Use the fast loop (the tests the test map names), and run the full suite on "
+                  "GitHub. The plan needs the stage that splits it.")
+except ImportError:
+    pass
 if problems:
     log("wait-guard", {"refused": problems[:3]})
     deny_tool("No waiting commands (" + ", ".join(sorted(set(problems))[:3]) + "). Claude Code tells you when a worker "

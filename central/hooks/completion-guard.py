@@ -98,7 +98,7 @@ if comp.get("build_done") and comp.get("check_open") and comp.get("plan"):
     except OSError:
         record = ""
     if not re.search(r"Continue\s+" + re.escape(comp["plan"]), text + "\n" + record):
-        reasons.append("Build is at 100% and only checks are left: " + handoff_text(cfg, comp, after_build=True))
+        reasons.append("Build is at 100% and only checks are left: " + handoff_text(cfg, comp, after_build=True, lessons=True))
     # v3.1.28: before done, the reviewer checks the changes against the plan (fresh, small memory)
     if not re.search(r"Reviewer before done\s*\(\s*" + re.escape(comp["plan"]), text + "\n" + record, re.I):
         reasons.append("Before done: send the reviewer (moment: Before done) with the plan file and the changed "

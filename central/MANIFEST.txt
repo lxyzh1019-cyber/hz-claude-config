@@ -1,4 +1,4 @@
-version: 3.2.0
+version: 3.2.1
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md

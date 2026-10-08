@@ -60,10 +60,11 @@ if _has_screens and not _refs:
     facts.append("[references] This app has screens but no picture references yet "
                  f"({cfg.get('reference_dir', 'tests/reference')}). Before any stage that changes a screen, add a stage "
                  "that makes them, as the compare instructions say. Then every screen change is checked against them.")
-if float(_ts.get("slowest_full_minutes") or 0) > _lim and not (_split and float(_split.group(1)) <= _lim):
-    facts.append(f"[test rule] A full test run here took {_ts.get('slowest_full_minutes')} minutes; the aim is "
-                 f"{int(_lim)} or less. If the plan has no stage yet to split the test suite into parts that run side "
-                 "by side, add it as the next Rev, before other build stages.")
+if (float(_ts.get("slowest_full_minutes") or 0) > _lim or _ts.get("stopped_by_limit")) and not (_split and float(_split.group(1)) <= _lim):
+    facts.append(f"[test rule] A full test run here took {_ts.get('slowest_full_minutes')} minutes"
+                 + (" and was stopped by the time limit" if _ts.get("stopped_by_limit") else "") + f"; the aim is "
+                 f"{int(_lim)} or less. No full local runs until the suite is split (fast loop here, full suite on "
+                 "GitHub). If the plan has no stage yet to split it, add it as the next Rev, before other build stages.")
 missing = [p for p in (cfg["features_file"], cfg["record_file"]) if not os.path.exists(os.path.join(PROJECT_DIR, p))]
 facts.append("Missing files in this repository: " + (", ".join(missing) if missing else "none"))
 try:

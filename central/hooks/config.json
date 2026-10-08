@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.0: each app opens one setup pull request at its next session; merge it. Plans get coloured change marks by code; Rev counts each showing. Up to 3 workers run in parallel, each in its own worktree. Before you sleep, type 'night check' (open questions and the overnight plan), then 'good night' (night work with stacked pull requests). Workers have time, test-run and memory limits. GitHub test waits run in the background while the next stage goes on. Pull requests stack (at most 3 unmerged), so work goes on between your merges. A full test run over 5 minutes adds a stage to split the test suite. The session summary shows time worked, with away time left out. Each build stage names its proof and size; the work stops for a plan Rev when a stage runs over twice its size or a worker is stuck. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.1: each app opens one setup pull request at its next session; merge it (the reviewer now runs at high effort). Fixed: finished background workers are counted as finished again, so new workers start. Plans show only the changed words, and ask open questions in chat before the plan. Test runs in the background are measured; a slow or stopped full suite asks for a split stage. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

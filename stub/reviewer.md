@@ -2,7 +2,7 @@
 name: reviewer
 description: Read-only reviewer on call. The main session sends it at three moments only - before a big or risky plan, when a worker is stuck on the same failing check, and before the work is called done. It reads the plan, the changed files and the errors, and returns problems with a recommended fix. It never changes files.
 model: claude-opus-5-5
-effort: medium
+effort: high
 tools: Read, Grep, Glob
 ---
 

@@ -44,7 +44,8 @@ def version_line(first=False):
         except (OSError, subprocess.SubprocessError, UnicodeError):
             refs = ""
         stub = "waiting" if refs else stub
-    word = ("current" if stub.startswith("current") else "waiting for your merge" if stub.startswith("waiting")
+    word = ("current on main (this branch is older)" if stub.startswith("current on main") else
+            "current" if stub.startswith("current") else "waiting for your merge" if stub.startswith("waiting")
             else "needs attention" if stub else "unknown")
     line = f"Rules v{central_version()} · {branch} · setup {word}"
     # v3.1.30: the main session runs on the main-session model; the planner helper plans on the first-choice model
@@ -403,7 +404,8 @@ def session_time(recs):
                 if isinstance(b, dict) and b.get("type") == "tool_use":
                     uses[b.get("id")] = (t_, b)
         _cs = (r.get("message") or {}).get("content")
-        if r.get("type") == "user" and isinstance(_cs, str) and _cs.lstrip().startswith("<task-notification") \
+        _raw = json.dumps(r, ensure_ascii=False) if r.get("type") in ("user", "attachment", "queue-operation") else ""
+        if "<task-notification>" in _raw and r.get("operation") != "remove" \
                 and last_a is not None and in_stop is None:
             workers += max(t_ - last_a, 0)     # v3.2.0: the main session idles until a background worker reports
             last_a = t_
@@ -640,6 +642,7 @@ if _stage:
     lines.append(f"  Stages against size: {len(_stage) - len(_over)} of {len(_stage)} within"
                  + ("; over: " + " · ".join(f"{k} {mins(v[1])} (size {v[0]}, about {_est[v[0]]} min)" for k, v in _over[:4])
                     if _over else ""))
+slowest = [x for x in slowest if x[0] >= 60]     # v3.2.1: steps under a minute are not "slow"
 if slowest:
     lines.append("  Slowest steps: " + " · ".join(f"{w} {mins(s)}" for s, w in slowest[:3]))
 names = {"opus-worker": "Opus", "sonnet-worker": "Sonnet"}

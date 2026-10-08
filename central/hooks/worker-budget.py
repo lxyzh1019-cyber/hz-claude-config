@@ -196,6 +196,14 @@ try:
     json.dump(state, open(path, "w", encoding="utf-8"))
 except OSError:
     pass
+# v3.2.1: a worker's own background full test run, measured when its notice arrives in the worker's record
+try:
+    from _common import background_test_note as _btn
+    _tmsg = _btn(cfg, [json.loads(l) for l in open(rf, encoding="utf-8", errors="replace")]) if rf else ""
+except Exception:
+    _tmsg = ""
+if _tmsg and tool not in NEVER_REFUSE:
+    deny_tool(_tmsg + " Retry this step only if it is not a full test run.")
 if say == "wrap up":
     log("worker-budget", {"agent": aid, "steps": n, "source": a["source"], "said": say})
     deny_tool(f"Step {n} of this worker run. Finish the fix you are on in about {stop - n if stop > n else 5} steps. "
