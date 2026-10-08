@@ -98,7 +98,7 @@ except OSError:
 if features_is_template:
     send_back(f"{cfg['features_file']} is missing or still the unfilled template, so no regression check is possible. "
           f"Before you finish: if it is missing, make it and {cfg['record_file']} from the templates in {SEED_DIR}. "
-          "Then put the app's current locked features into it (hz-plan-regression-guard). Make the regression "
+          "Then put the app's current locked features into it (hz-change-guard). Make the regression "
           f"table and update {cfg['record_file']}.")
 if not record_touched:
     problems.append(f"update {cfg['record_file']} (request ledger, hotspot counter, deliverable ledger)")
