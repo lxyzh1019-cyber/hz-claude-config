@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """UserPromptSubmit hook: deterministic skill invocation from keyword rules in skill-router.json."""
 import json, os, re, sys
-from _common import read_hook_input, add_context, log, HOOK_DIR, SKILLS_DIR
+from _common import read_hook_input, add_context, log, HOOK_DIR, SKILLS_DIR, is_notice_text
 
 RULES = os.path.join(HOOK_DIR, "skill-router.json")
 data = read_hook_input()
 prompt = (data.get("prompt") or "")
 low = prompt.lower()
-if prompt.lstrip().startswith("<task-notification>"):   # v3.1.30: a notice, not a request
+if is_notice_text(prompt):   # v3.1.30: a notice, not a request (v3.2.5: also a helper's hand-back message)
     sys.exit(0)
 try:
     rules = json.load(open(RULES, encoding="utf-8"))

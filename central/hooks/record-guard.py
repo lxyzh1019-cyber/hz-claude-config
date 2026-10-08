@@ -3,7 +3,7 @@
 record must be updated and a regression table produced. Governance-only edits are exempt; files outside the
 repository (for example Claude Code's own plan files) never count."""
 import os, re, subprocess, sys
-from _common import (PROJECT_DIR, SEED_DIR, is_progress_report, read_hook_input, load_config, read_transcript, last_turn, last_assistant_text,
+from _common import (PROJECT_DIR, SEED_DIR, work_dir, in_repo, is_progress_report, read_hook_input, load_config, read_transcript, last_turn, last_assistant_text,
                      tool_uses, is_governance_path, block, use_round)
 
 data = read_hook_input()
@@ -30,9 +30,7 @@ paths = [(e.get("input") or {}).get("file_path") or (e.get("input") or {}).get("
 
 
 def inside_project(p):
-    full = os.path.normcase(os.path.abspath(os.path.join(PROJECT_DIR, p)))
-    root = os.path.normcase(os.path.abspath(PROJECT_DIR))
-    return full == root or full.startswith(root + os.sep)
+    return in_repo(p)   # v3.2.5: edits in a worktree of this repository count
 
 
 def repo_has_source_changes():
@@ -68,7 +66,7 @@ def turn_start_epoch(records):
 
 def record_changed_outside_edits():
     """Record updated by a shell command: modified since the turn began, or showing in git status."""
-    rec_path = os.path.join(PROJECT_DIR, cfg["record_file"])
+    rec_path = os.path.join(work_dir(), cfg["record_file"])
     start = turn_start_epoch(turn)
     if start is not None:
         try:
@@ -76,7 +74,7 @@ def record_changed_outside_edits():
         except OSError:
             return False
     try:  # no timestamp in the transcript: fall back to git status
-        r = subprocess.run(["git", "status", "--porcelain", "--", cfg["record_file"]], cwd=PROJECT_DIR,
+        r = subprocess.run(["git", "status", "--porcelain", "--", cfg["record_file"]], cwd=work_dir(),
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
         return r.returncode == 0 and bool(r.stdout.strip())
     except (OSError, subprocess.SubprocessError, UnicodeError):

@@ -79,7 +79,7 @@ Pass = every test passed or not applicable. The three closing lines at the end o
 |---|---|---|
 | `Central rules NOT loaded … nothing is cached` | fetch failed and no earlier copy | check this repo is public and `central/MANIFEST.txt` exists on `main` |
 | No notice starting `Rules v… · setup …` after the first reply | the checks did not run in this session | tell the chat |
-| The notice says `vX is on GitHub: reopen this session to load it` | the session started before the newer rules were merged | close the session and open it again; it keeps the chat and loads the new rules (unverified in the desktop app) |
+| The notice says `vX is on GitHub: start a new session to load it` | the session started before the newer rules were merged. A session keeps its rules; reopening it does not load new ones | start a new session (the "+" next to the repository). Continue from the restart line in the record |
 | `setup waiting for your merge`, but no open pull request on GitHub | before v3.2.4, an empty setup branch counted as waiting. A helper file in an older published version was skipped. | update to v3.2.4. The next session opens a real setup pull request; merge it |
 | `offline: using cached vX` | GitHub could not be reached, earlier copy used | usually temporary; start a new session later |
 | `hz-claude-config is incomplete on GitHub … using cached vX` | files are missing in this repository on GitHub | tell the chat; it sends a full package (Step E) |

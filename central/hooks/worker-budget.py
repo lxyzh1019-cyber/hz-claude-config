@@ -79,8 +79,9 @@ def read_record(path):
                         if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash" and \
                                 _is_test((b.get("input") or {}).get("command")):
                             tests += 1
-                if "running in background with ID:" in line:
-                    started.update(_re.findall(r"running in background with ID: ([A-Za-z0-9_-]+)", line))
+                if "running in background with ID:" in line or "moved to the background (ID:" in line:
+                    from _common import BG_START_RE   # v3.2.5: both ways a command ends up in the background
+                    started.update(BG_START_RE.findall(line))
                 if "<task-id>" in line:
                     ended.update(_re.findall(r"<task-id>([A-Za-z0-9_-]+)</task-id>", line))
     except OSError:
@@ -253,11 +254,15 @@ except Exception:
     _tmsg = ""
 if _tmsg and tool not in NEVER_REFUSE:
     deny_tool(_tmsg + " Retry this step only if it is not a full test run.")
+# v3.2.5: a one-time warning is advice, not a refusal. A refused step still re-reads the whole memory (100–250 k tokens in
+# the Weekly-Planner Stage 7 helpers) and gets nothing done; the same words reach the model with the tool's result
+# (real Claude Code 2.1.293: PreToolUse added text reaches the model). Refusals stay for real stops and for test runs.
+from _common import add_context as _advise
 if say == "wrap up":
     log("worker-budget", {"agent": aid, "steps": n, "source": a["source"], "said": say})
-    deny_tool(f"Step {n} of this worker run. Finish the fix you are on in about {stop - n if stop > n else 5} steps. "
-              "Then stop and report what is done and what is left. A fresh worker continues; that costs less. Retry "
-              "this step if you still need it.")
+    _advise("PreToolUse", f"[worker budget] Step {n} of this worker run. Finish the fix you are on in about "
+            f"{stop - n if stop > n else 5} steps. Then stop and report what is done and what is left. A fresh worker "
+            "continues; that costs less.")
 if say == "stop":
     log("worker-budget", {"agent": aid, "steps": n, "source": a["source"], "said": say})
     deny_tool(f"Step limit reached ({stop}). Stop now and write your report: what is done (with evidence), what is "
@@ -274,8 +279,8 @@ if say == "runs open":
     deny_tool("Your own test runs are still going (" + ", ".join(open_runs[:4]) + "). Ending now stops them and their "
               "results are lost. Wait for them, or stop them and say so in your report. Then hand back.")
 if say == "time warn":
-    deny_tool(f"This worker run is at {round(minutes)} minutes; the limit is {lim[1]}. Finish the fix you are on. Then "
-              "report what is done and what is left. Retry this step if you still need it.")
+    _advise("PreToolUse", f"[worker budget] This worker run is at {round(minutes)} minutes; the limit is {lim[1]}. "
+            "Finish the fix you are on. Then report what is done and what is left.")
 if say == "time stop":
     deny_tool(f"Time limit reached ({lim[1]} minutes). Stop your own runs if any still go. Then write your report: "
               "what is done (with evidence), what is left, and anything half-finished.")
@@ -286,12 +291,12 @@ if say == "tests stop":
     deny_tool(f"Test-run limit reached ({tests}). Stop and write your report: what passes, what still fails, and your "
               "fix for each. The main session decides the next step.")
 if say == "memory":
-    deny_tool(f"This worker re-reads about {round(ctx / 1000)} k tokens per step; the budget is "
-              f"{round(int(cfg.get('worker_memory_max', 250000)) / 1000)} k. Finish the fix you are on and report what is done "
-              "and what is left. A fresh worker continues with a small memory. Retry this step if you still need it.")
+    _advise("PreToolUse", f"[worker budget] This worker re-reads about {round(ctx / 1000)} k tokens per step; the budget is "
+            f"{round(int(cfg.get('worker_memory_max', 250000)) / 1000)} k. Finish the fix you are on and report what is done "
+            "and what is left. A fresh worker continues with a small memory.")
 if say == "batch reads":
-    deny_tool("Your last 5 steps each read one thing, and every step re-reads your whole memory. Read all the files or "
-              "parts you need in one step: several Read or Grep calls together. Retry now with them together.")
+    _advise("PreToolUse", "[worker budget] Your last 5 steps each read one thing, and every step re-reads your whole "
+            "memory. From now on read all the files or parts you need in one step: several Read or Grep calls together.")
 if say == "screenshot":
-    deny_tool("Opening a screenshot costs many tokens. Compare pictures in code (compare instructions); open one only "
-              "when the task is a visual check. If it is, retry this step.")
+    _advise("PreToolUse", "[worker budget] Opening a screenshot costs many tokens. Compare pictures in code (compare "
+            "instructions); open one only when the task is a visual check.")

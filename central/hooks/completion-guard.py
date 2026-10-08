@@ -11,7 +11,7 @@
 - A user prompt with a pause phrase (plan-gate writes .claude/state/completion-pause) lets one final report stand.
 - Progress reports (workers still running), plans awaiting approval, and answers on non-implementation turns pass."""
 import json, os, re, sys
-from _common import (PROJECT_DIR, STATE_DIR, read_hook_input, load_config, read_transcript, last_turn,
+from _common import (PROJECT_DIR, STATE_DIR, work_dir, in_repo, read_hook_input, load_config, read_transcript, last_turn,
                      last_assistant_text, tool_uses, is_governance_path, is_progress_report, completion_summary,
                      prompt_number, block, log, handoff_text)
 
@@ -66,8 +66,7 @@ edits = tool_uses(turn, {"Edit", "Write", "MultiEdit", "NotebookEdit"})
 paths = [(e.get("input") or {}).get("file_path") or (e.get("input") or {}).get("path") or "" for e in edits]
 root = os.path.normcase(os.path.abspath(PROJECT_DIR))
 def inside(p):
-    full = os.path.normcase(os.path.abspath(os.path.join(PROJECT_DIR, p)))
-    return full == root or full.startswith(root + os.sep)
+    return in_repo(p)   # v3.2.5: an edit in a worktree of this repository is an edit of this project
 implementation = (any(p and inside(p) and not is_governance_path(p, cfg) for p in paths)
                   or bool(tool_uses(turn, {"Agent", "Task"})) or used > 0)
 stated = re.search(cfg["completion_line_pattern"], text)
@@ -94,7 +93,7 @@ if comp.get("build_done") and comp.get("check_open") and comp.get("plan"):
     # v3.1.24: the hand-off is due in the report where Build reaches 100% — once per plan: the restart line then
     # stands in '## Where we are' (pushed), which every later session reads
     try:
-        record = open(os.path.join(PROJECT_DIR, cfg["record_file"]), encoding="utf-8", errors="replace").read()
+        record = open(os.path.join(work_dir(), cfg["record_file"]), encoding="utf-8", errors="replace").read()
     except OSError:
         record = ""
     if not re.search(r"Continue\s+" + re.escape(comp["plan"]), text + "\n" + record):

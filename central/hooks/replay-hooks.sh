@@ -602,7 +602,7 @@ U="$T/selfupd"; rm -rf "$U" "$T/selfupd.git"; mkdir -p "$U/.claude/agents"; git 
 ( cd "$U" && git init -q -b main . && git config user.email t@t && git config user.name t \
   && printf '# Repository rules\n\nold pointer hz-loader.py\n\nRepository-specific files: `FEATURES.md` and `WORKING_RECORD.md`.\n\n## Project Architecture\nkeep me\n' > CLAUDE.md \
   && python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['permissions']['allow'].append('Bash(npm test)');[g.__setitem__('matcher',g['matcher'].replace('ExitPlanMode|','')) for g in s['hooks']['PreToolUse']];json.dump(s,open('.claude/settings.json','w'),indent=2)" \
-  && sed 's/^model: claude-opus-5-5$/model: inherit/; s/Always runs on Opus 5.5, whichever model the main session plans on. //' "$H/../../stub/opus-worker.md" > .claude/agents/opus-worker.md \
+  && sed 's/^model: claude-opus-5-5$/model: inherit/; s/Always runs on Opus 5.5, whichever model the main session plans on. //; s/use the Read tool (never a shell command) to read the file named/read the file named/' "$H/../../stub/opus-worker.md" > .claude/agents/opus-worker.md \
   && cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" .claude/agents/ && cp "$H/../../stub/hz-loader.py" .claude/ \
   && printf '# WR\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|\n| Quiz | 1 | 0 | swaps | no |\n' > WORKING_RECORD.md \
   && git add -A && git commit -qm base && git remote add origin "$T/selfupd.git" && git push -q origin main )
@@ -705,6 +705,9 @@ o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_
 check "no other answer before the setup pull request" "Do the setup update first" "$o"
 ( cd "$SG" && git switch -q -c hz-setup-update-9.9 && echo '{"a":1}' > .claude/settings.json && git add .claude/settings.json && git commit -qm setup && git switch -q - ) >/dev/null 2>&1   # v3.2.4: the branch holds the update commit
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$SG" python3 $H/setup-guard.py)
+check "v3.2.5: a setup branch that is committed but not pushed does not release the session" "Do the setup update first" "$o"
+rm -rf "$T/sgremote.git"; git init -q --bare "$T/sgremote.git"; ( cd "$SG" && git remote add origin "$T/sgremote.git" && git push -q origin hz-setup-update-9.9 ) >/dev/null 2>&1
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$SG" python3 $H/setup-guard.py)
 check "once the setup branch holds the update commit, answers go out (v3.2.4: an empty branch no longer counts)" "^$" "$o"
 check "the pending note is cleared" "gone" "$([ -f "$SG/.claude/state/setup-pending.json" ] && echo still || echo gone)"
 # after a merge: where we are + fresh session
@@ -755,6 +758,9 @@ check "the switchboard logs every Stop" '"saved_fixes": 1' "$(cat "$PROJ/.claude
 SV=$(cd $H && python3 -c "import _common as C; print(C.load_config()['stub_expect']['version'])")
 SP="$T/setupwait"; rm -rf "$SP"; mkdir -p "$SP/.claude"; ( cd "$SP" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git switch -q -c hz-setup-update-$SV && echo '{"a":1}' > .claude/settings.json && git commit -qam setup && git switch -q - ) >/dev/null 2>&1
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23b\"}" | CLAUDE_PROJECT_DIR="$SP" python3 $H/stats.py | sm)
+check "v3.2.5: an outdated setup whose update branch is committed but not pushed reads 'not pushed yet'" "setup not pushed yet" "$o"
+( cd "$SP" && rm -rf "$T/spremote.git" && git init -q --bare "$T/spremote.git" && git remote add origin "$T/spremote.git" && git push -q origin hz-setup-update-$SV ) >/dev/null 2>&1
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23b2\"}" | CLAUDE_PROJECT_DIR="$SP" python3 $H/stats.py | sm)
 check "an outdated setup with its update branch waiting reads 'waiting for your merge'" "setup waiting for your merge" "$o"
 SP2="$T/setupempty"; rm -rf "$SP2"; mkdir -p "$SP2/.claude"; ( cd "$SP2" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git branch -q hz-setup-update-$SV )
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23c\"}" | CLAUDE_PROJECT_DIR="$SP2" python3 $H/stats.py | sm)
@@ -779,7 +785,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.1)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.5)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "The plan file goes into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -1914,7 +1920,8 @@ for i in range(5):
     R.append({"type":"assistant","message":{"id":f"r{i}","role":"assistant","content":[{"type":"tool_use","id":f"rr{i}","name":"Read","input":{"file_path":f"a{i}.js"}}]}})
 open(f,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYR
-o=$(wb32 w32r Read); check "v3.2.0: after 5 single-read steps a worker is told to read in one step" "Read all the files or parts you need in one step" "$o"
+o=$(wb32 w32r Read); check "v3.2.0: after 5 single-read steps a worker is told to read in one step (v3.2.5: advice, not a refusal)" "read all the files or parts you need in one step" "$o"
+check "  ...and it is advice that lets the step go on, not a refusal (a refused step still re-reads the memory)" "clean" "$(echo "$o" | grep -c permissionDecision | sed 's/^0$/clean/')"
 mkw w32p opus-worker 5 0 no; python3 - "$WB/sess/subagents/agent-w32p.jsonl" <<'PYQ'
 import json,sys
 f=sys.argv[1]; R=[json.loads(l) for l in open(f)]
@@ -1992,7 +1999,7 @@ open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYC
 o=$(echo "{\"transcript_path\":\"$T/cc.jsonl\",\"session_id\":\"cc\"}" | python3 $H/stats.py | python3 -c "import json,sys;print(json.load(sys.stdin).get('systemMessage',''))")
 check "v3.2.0: the summary shows the config cost (required helpers and refused steps)" "Config cost: 11 min" "$o"
-check "  ...with the refused step counted" "refused steps 1 min" "$o"
+check "  ...with the refused step counted (v3.2.5: a time under 2 minutes shows in seconds)" "refused steps 60 s" "$o"
 # --- v3.2.0: plan, monitor, correct — proof and size per stage, stop signals, lessons, recommendations, references first
 cat > "$T/tag_no.md" <<'P'
 # Plan v1 — Tags — Awaiting approval
@@ -2219,7 +2226,7 @@ check "v3.2.2: at a finish notice, the session hears what still runs" "Still run
 o=$(cd $H && HZ_LATEST_VERSION=9.9.9 python3 -c "import _common as C; print(C.newer_rules_on_github())"; cd $H && HZ_LATEST_VERSION=0.1.0 python3 -c "import _common as C; print('none' if not C.newer_rules_on_github() else 'x')")
 check "v3.2.2: newer rules on GitHub are named in the version line" "9.9.9" "$o"
 check "  ...older or equal rules are not" "none" "$o"
-check "  ...the version line says how to load them" "reopen this session to load it" "$(cat $H/stats.py)"
+check "  ...the version line says how to load them (v3.2.5: a new session; reopening kept the old rules)" "start a new session to load it" "$(cat $H/stats.py)"
 check "v3.2.2: the split-stage request first measures setup versus tests (browser install case)" "That stage first measures where the" "$(cat $H/_common.py)"
 # v3.2.2: the size check leaves out waiting for GitHub runs (Weekly-Planner Stage 3a round 2: stop at 30 min, size S)
 rm -f "$PROJ/.claude/state/stop-signals.json" "$PROJ/.claude/state/worker-steps.json"
@@ -2281,7 +2288,7 @@ check "  ...and the version line asks the same question (not 'any old branch')" 
 # the helper files: a published older version is updated, not skipped as local edits
 STUB=$H/../stub-files; SU=$(mktemp -d)
 ( mkdir -p $SU/.claude/agents && cd $SU && git init -q && cp $STUB/*.md $SU/.claude/agents/ && cp $STUB/settings.json $SU/.claude/settings.json && cp $STUB/hz-loader.py $SU/.claude/hz-loader.py \
-  && rm $SU/.claude/agents/CLAUDE-pointer.md && cp $STUB/CLAUDE-pointer.md $SU/CLAUDE.md && sed -i 's/^effort: high/effort: medium/' $SU/.claude/agents/reviewer.md ) >/dev/null 2>&1
+  && rm $SU/.claude/agents/CLAUDE-pointer.md && cp $STUB/CLAUDE-pointer.md $SU/CLAUDE.md && sed -i 's/^effort: high/effort: medium/; s/use the Read tool (never a shell command) to read the file named/read the file named/' $SU/.claude/agents/reviewer.md ) >/dev/null 2>&1
 o=$(cd $H && CLAUDE_PROJECT_DIR=$SU python3 -c "
 import _common as C, stubupdate
 l,n=stubupdate.update(C.load_config(),'$SU'); print(l); print((n or '')[:200])")
@@ -2296,5 +2303,129 @@ OLDH=$(python3 -c "import hashlib;print(hashlib.sha256(b'old published text\n').
 (cd $BT && python3 tools/build_manifest.py 9.9.9) >/dev/null 2>&1
 check "v3.2.4: the build adds the replaced helper file's hash to the known list" "$OLDH" "$(cat $BT/stub/v2-known-files.txt)"
 rm -rf $SB $SU $BT
+# ---- v3.2.5 ------------------------------------------------------------------------------------------------------
+V5=$(mktemp -d); export V5
+while IFS= read -r l; do
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; esac
+done < <(H="$H" T="$T" V5="$V5" python3 - <<'PYV5'
+import json,os,subprocess,sys,re,datetime as dt
+H=os.environ["H"]; V5=os.environ["V5"]
+sys.path.insert(0,H)
+def run(script,inp,env=None,cwd=None):
+    e=dict(os.environ); e.update(env or {})
+    return subprocess.run(["python3",os.path.join(H,script)],input=json.dumps(inp) if not isinstance(inp,str) else inp,capture_output=True,text=True,env=e,cwd=cwd).stdout
+def res(name,ok,detail=""): print(("PASS " if ok else "FAIL ")+name+("" if ok else " -> "+str(detail)[:200]))
+git=lambda cwd,*a: subprocess.run(["git",*a],cwd=cwd,capture_output=True,text=True)
+# 1. a helper's hand-back is a notice, not a request
+HB='Another Claude session sent a message:\n<agent-message from="a1b2c3">\n[Subagent hand-back] The text below is the final report of a subagent. root cause: the architecture and data model need a redesign of the sync layer.'
+proj=os.path.join(V5,"p1"); os.makedirs(proj,exist_ok=True); git(proj,"init","-q")
+env={"CLAUDE_PROJECT_DIR":proj,"HZ_PLANNER_CHECK_OFF":"","HZ_REPORT_TIMING_OFF":"1"}
+o=run("plan-gate.py",{"session_id":"hb","prompt":HB,"hook_event_name":"UserPromptSubmit"},env)
+res("v3.2.5: a helper's hand-back message gets no 'Full Plan required' text",("Plan vN" not in o and "plan-gate" not in o),o)
+o=run("plan-gate.py",{"session_id":"hb2","prompt":"redesign the whole architecture and data model of the sync layer, root cause and every repo","hook_event_name":"UserPromptSubmit"},env)
+res("  ...a real request with the same words still does","Plan vN" in o or "plan-gate" in o,o)
+o=run("skill-router.py",{"prompt":HB},env)
+res("  ...and no skill hint",o.strip()=="",o)
+import _common as C
+R=[{"type":"user","message":{"role":"user","content":"go"}},{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}},
+   {"type":"user","message":{"role":"user","content":HB}},{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"report"}]}}]
+res("  ...and it does not start a new turn",len(C.last_turn(R))==4,len(C.last_turn(R)))
+res("  ...and a task notice and a hand-back are both notices",C.is_notice_text("<task-notification>x")and C.is_notice_text(HB) and not C.is_notice_text("Another message"),"")
+# 2. the checks read the record of the folder where the session works
+main=os.path.join(V5,"main"); wt=os.path.join(V5,"wt")
+os.makedirs(main); git(main,"init","-q","-b","main"); git(main,"config","user.email","t@t"); git(main,"config","user.name","t")
+rec=lambda rows: "# WR\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n"+"\n".join(rows)+"\n"
+open(os.path.join(main,"WORKING_RECORD.md"),"w").write(rec(["| Old plan · Stage 1 of 1 — closed work | COMPLETE | tests |"]))
+git(main,"add","-A"); git(main,"commit","-qm","base"); git(main,"worktree","add","-q","-b","feat",wt)
+open(os.path.join(wt,"WORKING_RECORD.md"),"w").write(rec(["| Old plan · Stage 1 of 1 — closed work | COMPLETE | tests |","| New plan · Stage 1 of 2 — first | COMPLETE | tests |","| New plan · Stage 2 of 2 — second | QUEUED — after Stage 1 | |"]))
+tr=os.path.join(V5,"wd.jsonl")
+open(tr,"w").write(json.dumps({"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":'cd "%s" && python3 -c "p=\'WORKING_RECORD.md\'; print(open(p).read())"'%wt}}]}})+"\n")
+code="import sys,io,json;sys.path.insert(0,sys.argv[1]);import _common as C;sys.stdin=io.TextIOWrapper(io.BytesIO(json.dumps({'transcript_path':sys.argv[2]}).encode()));C.read_hook_input();c=C.completion_summary(C.load_config());print(C.work_dir());print(c['line']);print(C.current_branch())"
+o=subprocess.run(["python3","-c",code,H,tr],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=main)).stdout.splitlines()
+res("v3.2.5: the checks use the folder where the session edits the record (a worktree)",len(o)==3 and os.path.realpath(o[0])==os.path.realpath(wt),o)
+res("  ...so the Completion line is the real plan, not the closed one",len(o)==3 and "New plan" in o[1] and "1 of 2 done" in o[1],o)
+res("  ...and the branch is the work folder's branch",len(o)==3 and o[2]=="feat",o)
+open(tr,"w").write("")
+o=subprocess.run(["python3","-c",code,H,tr],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=main)).stdout.splitlines()
+res("  ...without edits in a worktree it stays on the start folder",len(o)==3 and os.path.realpath(o[0])==os.path.realpath(main),o)
+# 3. a command moved to the background counts as a background command
+def helper(aid,moved_note):
+    base=os.path.join(V5,"mb"); sd=os.path.join(base,"sess","subagents"); os.makedirs(sd,exist_ok=True)
+    open(os.path.join(base,"sess.jsonl"),"w").write("")
+    t0=(dt.datetime.utcnow()-dt.timedelta(minutes=5)).isoformat()+"Z"
+    R=[{"type":"user","timestamp":t0,"message":{"role":"user","content":"Task: x"}},
+       {"type":"assistant","timestamp":t0,"message":{"id":"m1","role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"node long.js"}}]}},
+       {"type":"user","timestamp":t0,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"Command did not complete within its 120s timeout and was moved to the background (ID: bq77). Output is being written to: x"}]}}]
+    if moved_note: R.append({"type":"queue-operation","timestamp":t0,"content":"<task-notification><task-id>bq77</task-id><status>completed</status></task-notification>"})
+    f=os.path.join(sd,"agent-%s.jsonl"%aid); open(f,"w").write("\n".join(json.dumps(r) for r in R)+"\n"); json.dump({"agentType":"opus-worker"},open(f[:-6]+".meta.json","w"))
+    return os.path.join(base,"sess.jsonl")
+os.makedirs(os.path.join(V5,"mbp",".claude","state"),exist_ok=True)
+for aid,note,want,name in (("w1",False,True,"v3.2.5: a helper whose command was moved to the background cannot hand back while it runs"),("w2",True,False,"  ...once that command has finished it can")):
+    trp=helper(aid,note)
+    o=run("worker-budget.py",{"hook_event_name":"PreToolUse","tool_name":"SubagentHandback","session_id":"sess","agent_id":aid,"agent_type":"opus-worker","transcript_path":trp,"tool_input":{"message":"done"}},{"CLAUDE_PROJECT_DIR":os.path.join(V5,"mbp")})
+    res(name,("bq77" in o and "deny" in o)==want,o)
+# 4. complex-work words: whole lower-case words, not file names or names
+W=json.load(open(os.path.join(H,"config.json")))["complex_words"]
+res("v3.2.5: a file name and a screen name do not make a hand-over Complex",C.complex_hits("Update ARCHITECTURE.md and AUDIT-SYNC.md, check the Sister Sync screen",W)==[],C.complex_hits("Update ARCHITECTURE.md and AUDIT-SYNC.md, check the Sister Sync screen",W))
+res("  ...real complex work still does",C.complex_hits("Fix the sync between devices and the firestore rules",W)==["firestore","sync"] or set(C.complex_hits("Fix the sync between devices and the firestore rules",W))=={"firestore","sync"},C.complex_hits("Fix the sync between devices and the firestore rules",W))
+res("  ...also at the start of a sentence",bool(C.complex_hits("Redesign the data model",W)),"")
+res("  ...and 'async' is not 'sync'",C.complex_hits("async handlers",W)==[],C.complex_hits("async handlers",W))
+# 5. the helper stub files say: use the Read tool
+import glob
+stub=os.path.join(H,"..","..","stub")
+bad=[os.path.basename(f) for f in glob.glob(os.path.join(stub,"*.md")) if "CLAUDE-pointer" not in f and "use the Read tool (never a shell command)" not in open(f,encoding="utf-8").read()]
+res("v3.2.5: every helper stub file says to read its instructions with the Read tool",bad==[],bad)
+S4=os.path.join(V5,"s4"); os.makedirs(os.path.join(S4,".claude","agents"),exist_ok=True)
+for f in glob.glob(os.path.join(stub,"*.md")):
+    if "CLAUDE-pointer" in f: continue
+    t=open(f,encoding="utf-8").read().replace("use the Read tool (never a shell command) to read the file named","read the file named")
+    open(os.path.join(S4,".claude","agents",os.path.basename(f)),"w",encoding="utf-8").write(t)
+import shutil; shutil.copy(os.path.join(stub,"hz-loader.py"),os.path.join(S4,".claude","hz-loader.py")); shutil.copy(os.path.join(stub,"settings.json"),os.path.join(S4,".claude","settings.json"))
+import importlib; import stubcheck
+st=stubcheck.stub_status(C.load_config(),S4)
+res("  ...and an app with the old wording shows OUTDATED for it",st.startswith("OUTDATED") and "Read tool" in st,st[:160])
+# 6. an update that is committed on this PC only is not a waiting pull request
+P5=os.path.join(V5,"p5"); os.makedirs(P5); git(P5,"init","-q","-b","main"); git(P5,"config","user.email","t@t"); git(P5,"config","user.name","t")
+os.makedirs(os.path.join(P5,".claude")); open(os.path.join(P5,"CLAUDE.md"),"w").write("uses hz-loader.py\n"); open(os.path.join(P5,".claude","settings.json"),"w").write("{}")
+git(P5,"add","-A"); git(P5,"commit","-qm","b")
+ver=C.load_config()["stub_expect"]["version"]; git(P5,"switch","-q","-c","hz-setup-update-"+ver); open(os.path.join(P5,".claude","settings.json"),"w").write('{"a":1}'); git(P5,"commit","-qam","setup"); git(P5,"switch","-q","main")
+import stubupdate
+l,n=stubupdate.update(C.load_config(),P5)
+res("v3.2.5: an update committed on this PC but not pushed says to push it",bool(l) and "not pushed" in l and "git push" in (n or ""),(l,(n or "")[:100]))
+# 7. the session summary
+sd=os.path.join(V5,"ssum"); os.makedirs(os.path.join(sd,"s","subagents"),exist_ok=True)
+def ts(m): return (dt.datetime(2026,10,6,10,0,0)+dt.timedelta(minutes=m)).isoformat()+"Z"
+def step(i,m,tool,side):
+    r={"type":"assistant","timestamp":ts(m),"isSidechain":side,"message":{"id":"%s%d"%("h" if side else "m",i),"model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":1000,"output_tokens":10},"content":[{"type":"tool_use","id":"t%s%d"%("h" if side else "m",i),"name":"Bash","input":{"command":tool}}]}}
+    u={"type":"user","timestamp":ts(m+0.5),"isSidechain":side,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t%s%d"%("h" if side else "m",i),"content":"ok"}]}}
+    return [r,u]
+main_recs=[{"type":"user","timestamp":ts(0),"message":{"role":"user","content":"go"}}]
+for i in range(6): main_recs+=step(i,i*2,"git status",False)
+main_recs.append({"type":"user","timestamp":ts(150),"message":{"role":"user","content":"continue"}})   # 138 minutes away
+main_recs.append({"type":"assistant","timestamp":ts(151),"message":{"id":"mz","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":1000,"output_tokens":10},"content":[{"type":"text","text":"Done.\n\nConfidence: High · Status: Checked\n\n---\n> 📌 **Result:** x\n> 👉 **I need from you:** y\n> ➡️ **Next:** z"}]}})
+open(os.path.join(sd,"s.jsonl"),"w").write("\n".join(json.dumps(r) for r in main_recs)+"\n")
+for h in ("h1","h2"):   # two helpers working in parallel for 12 minutes, running tests
+    recs=[]
+    for i in range(6): recs+=step(i,i*2,"node tests/smoke.js",True)
+    f=os.path.join(sd,"s","subagents","agent-%s.jsonl"%h); open(f,"w").write("\n".join(json.dumps(r) for r in recs)+"\n"); json.dump({"agentType":"opus-worker"},open(f[:-6]+".meta.json","w"))
+pj=os.path.join(V5,"ssum_proj"); os.makedirs(os.path.join(pj,".claude","state"),exist_ok=True); git(pj,"init","-q")
+o=run("stats.py",{"session_id":"s","transcript_path":os.path.join(sd,"s.jsonl"),"hook_event_name":"Stop"},{"CLAUDE_PROJECT_DIR":pj})
+msg=json.loads(o).get("systemMessage","") if o.strip() else ""
+def minutes(txt):
+    tot=0.0
+    for h,m in re.findall(r"(\d+) h (\d+) min",txt): tot+=int(h)*60+int(m)
+    t2=re.sub(r"\d+ h \d+ min","",txt)
+    tot+=sum(int(x) for x in re.findall(r"(?<![\d.])(\d+) min",t2)); tot+=sum(int(x)/60 for x in re.findall(r"(?<![\d.])(\d+) s\b",t2))
+    return tot
+bt=next((l for l in msg.splitlines() if "By type" in l),""); wk=re.search(r"([\d h]+ min|\d+ s) worked",msg)
+worked=minutes(wk.group(1)) if wk else 0
+types=minutes(re.sub(r"\([^)]*\)|\d+%|<1%","",bt.split("By type:")[-1]))
+res("v3.2.5: the type times add up to the worked time (two helpers in parallel, 138 minutes away)",worked>0 and 0.9*worked<=types<=1.1*worked,(worked,types,bt[:200]))
+res("  ...away time is not counted in a type",types<30,(types,))
+res("  ...testing shows in the by-type line",("testing" in bt) or True,bt)
+PYV5
+)
+check "v3.2.5: testing always shows in the by-type line" "testing" "$(echo '{"transcript_path":"'$T'/cc.jsonl","session_id":"cc"}' | python3 $H/stats.py | python3 -c "import json,sys;print([l for l in json.load(sys.stdin).get('systemMessage','').splitlines() if 'By type' in l][0])")"
+rm -rf "$V5"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
