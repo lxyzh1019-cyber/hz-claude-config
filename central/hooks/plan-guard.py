@@ -145,6 +145,24 @@ if any(l.startswith("stages to finish") for l in lines):
                         "and 'size: S|M|L' (S about 15 min, M about 45, L about 90). "
                         f"Missing proof: {len(_noproof)} stage(s); missing size: {len(_nosize)}.")
         reasons.append("no proof or size per stage")
+# v3.2.1: questions before the plan. A plan reaches me with no open questions: the session asks them in chat first,
+# then shows the plan once with my answers written in (real case: Plan v4 Rev 1 asked two questions inside the plan,
+# I answered instead of approving, and Rev 2 only wrote the answers in).
+_dec = re.search(r"(?ims)^#*\s*❓\s*Decisions\s*$(.*?)(?=^#+\s|\Z)", text)
+_open_q = []
+if _dec:
+    for _l in _dec.group(1).splitlines():
+        _s = _l.strip().lstrip("-*• ").strip()
+        _s2 = re.sub(r"^\d+[.)]\s*", "", _s)
+        _s2 = re.sub(r"^[" + "🟦🟩🟧🟪" + r"]\s*\*{0,2}Rev\s*\d+\*{0,2}\s*[—–:-]\s*", "", _s2)
+        if _s2 and not re.match(r"(?i)\**(decided|none open|checked against|removes|no open)", _s2) and \
+                (re.search(r"\?", _s2) or re.search(r"(?i)\brecommended\s*:", _s2)):
+            _open_q.append(_s2[:80])
+if _open_q and not os.environ.get("HZ_QUESTIONS_CHECK_OFF"):   # test switch only
+    problems.append("This plan still holds open questions: " + "; ".join(_open_q[:3]) + ". Ask them in chat first, all "
+                    "at once, numbered, each with your recommendation. After my answers, show the plan with them "
+                    "written in as decided, so I only approve it.")
+    reasons.append("open questions in the plan")
 # v3.2.0: versions and Revs. Version = approvals; Rev = each showing inside a version, from Rev 1.
 _store = plan_mark_approved(plan_store_load(), read_transcript(data.get("transcript_path")))
 _name, _ver = plan_name_of(text), plan_version_of(text)

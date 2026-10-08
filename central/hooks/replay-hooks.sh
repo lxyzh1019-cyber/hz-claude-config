@@ -13,6 +13,7 @@ git init -q . && git config user.email t@t && git config user.name t
 pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
 export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if the planner wrote the plan; the v3.1.30 tests switch it on
+export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
 export HZ_PLAN_ROUNDS_OFF=1        # v3.1.33: older plan tests are independent plans; the v3.1.33 tests switch it on
 export HZ_RULES_FIRST_OFF=1        # v3.1.29: older tests run as if the rules were read; the v3.1.29 tests switch it on
@@ -770,7 +771,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.0)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.1)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "The plan file goes into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -889,7 +890,8 @@ check "once the restart line stands in Where we are, later reports pass" "^$" "$
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['line'])")
 check "an open Build stage keeps Build below 100%" "Completion: Build 3 of 4 done (75%) · Check 0 of 3" "$o"
 o=$(echo '{"prompt":"go on","session_id":"b1"}' | CLAUDE_PROJECT_DIR="$HCA" python3 $H/plan-gate.py)
-check "while Build is open, the session is told to hand off when Build reaches 100%" "When the last Build stage is finished" "$o"
+check "while one Build stage is left, the session is told to hand off when it finishes (v3.2.1: not before, and not 'done')" "Only when the last Build stage finishes" "$o"
+check "  ...and it never says the build is done" "clean" "$(echo "$o" | grep -c 'The build of this plan is done' | sed 's/^0$/clean/')"
 check "that hand-off names the first check as next" "next: Stage 5 of 7" "$o"
 printf '%s' "$(msg 'Not yet.
 Completion: Build 3 of 4 done (75%) · Check 0 of 3
@@ -1760,7 +1762,8 @@ o=$(pr "$T/r_none.jsonl" "$T/rv1.md"); check "v3.2.0: the first showing (Plan v1
 o=$(pr "$T/r_no.jsonl" "$T/rv1b.md"); check "v3.2.0: a changed second showing gets its marks written into the plan file" "Rev 2) to the plan file" "$o"
 check "  ...the plan file now marks the changed line with the Rev 2 square" "🟩 \*\*Rev 2\*\* — Money shows as \$3 and \$2.50." "$(cat "$PROJ/plans/cur.md")"
 check "  ...and has the change list under the Summary" "Changes in this version\*\* — Plan v1 · 🟩 Rev 2" "$(cat "$PROJ/plans/cur.md")"
-check "  ...with the removed line" "^- 🟩 Rev 2 — Money shows as \$3\.$" "$(cat "$PROJ/plans/cur.md")"
+check "  ...a line that changed in part shows only its changed words, once (v3.2.1)" '^+ 🟩 Rev 2 — Money shows as.*"\$3\." → "\$3 and \$2.50\."' "$(cat "$PROJ/plans/cur.md")"
+check "  ...and not as a removed plus an added line" "clean" "$(grep -c '^- 🟩 Rev 2 — Money shows' "$PROJ/plans/cur.md" | sed 's/^0$/clean/')"
 check "  ...and the older showing as one line" "🟦 \*\*Rev 1\*\* — first showing" "$(cat "$PROJ/plans/cur.md")"
 o=$(pagain "$T/r_no.jsonl"); check "  ...shown again unchanged, it passes" "Plan size: about" "$o"
 check "  ...the store counts Rev 2 of version 1" '"rev": 2' "$(cat "$PROJ/.claude/state/plan-store.json")"
@@ -1881,7 +1884,7 @@ for i in range(n):
 open(out,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYP
 }
-hov(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'par','transcript_path':sys.argv[1],'tool_input':{'subagent_type':'opus-worker','prompt':sys.argv[2]}}))" "$1" "$2" | python3 $H/worker-guard.py; }
+hov(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'par','tool_use_id':'tnew','transcript_path':sys.argv[1],'tool_input':{'subagent_type':'opus-worker','prompt':sys.argv[2]}}))" "$1" "$2" | python3 $H/worker-guard.py; }
 mkpar "$T/par1.jsonl" 1; mkpar "$T/par3.jsonl" 3
 o=$(hov "$T/par1.jsonl" $'Task: stage B\nLevel: Complex\nMap: not needed - test'); check "v3.2.0: a second worker without its own worktree is refused" "own worktree" "$o"
 o=$(hov "$T/par1.jsonl" $'Task: stage B\nLevel: Complex\nMap: not needed - test\nWorktree: ../app-b\nGroup: A'); check "  ...with Worktree and Group it may start" "clean" "$(echo "$o" | grep -c 'own worktree\|workers already run' | sed 's/^0$/clean/')"
@@ -1959,7 +1962,7 @@ R=[{"type":"assistant","timestamp":t0,"message":{"role":"assistant","content":[{
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYT
 o=$(echo "{\"tool_name\":\"Bash\",\"session_id\":\"t1\",\"transcript_path\":\"$T/ts1.jsonl\",\"tool_input\":{\"command\":\"SMOKE_DATE=2026-10-07 timeout 590 node tests/smoke.js\"}}" | python3 $H/test-speed.py)
-check "v3.2.0: a 9-minute full test run asks for a stage that splits the suite" "\[test speed\] This full test run took 9" "$o"
+check "v3.2.0: a 9-minute full test run asks for a stage that splits the suite" "\[test speed\] The full test run took 9" "$o"
 o=$(echo "{\"tool_name\":\"Bash\",\"session_id\":\"t1\",\"transcript_path\":\"$T/ts1.jsonl\",\"tool_input\":{\"command\":\"SMOKE_DATE=2026-10-07 timeout 590 node tests/smoke.js\"}}" | python3 $H/test-speed.py)
 check "  ...only once" "^$" "$o"
 o=$(echo "{\"tool_name\":\"Bash\",\"session_id\":\"t1\",\"transcript_path\":\"$T/ts1.jsonl\",\"tool_input\":{\"command\":\"SMOKE_ONLY=a SMOKE_DATE=2026-10-07 node tests/smoke.js\"}}" | python3 $H/test-speed.py)
@@ -2022,7 +2025,7 @@ o=$(echo '{"prompt":"next","session_id":"sg"}' | python3 $H/plan-gate.py); check
 o=$(echo '{"prompt":"next","session_id":"sg"}' | python3 $H/plan-gate.py); check "  ...only once" "clean" "$(echo "$o" | grep -c 'stop for plan' | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"<task-notification>Stuck: smoke date check — still fails — tried two fixes</task-notification>","session_id":"sg"}' | python3 $H/plan-gate.py)
 check "v3.2.0: a worker's 'Stuck:' stops the work for a plan Rev" "a worker reported 'Stuck:'" "$o"
-check "v3.2.0: when the build of a plan is done, the hand-off asks for lessons" "## Lessons" "$(cd $H && python3 -c "import _common as C;print(C.handoff_text(C.load_config(),{'plan':'P','line':''},after_build=True))")"
+check "v3.2.0: when the build of a plan is done, the hand-off asks for lessons" "## Lessons" "$(cd $H && python3 -c "import _common as C;print(C.handoff_text(C.load_config(),{'plan':'P','line':''},after_build=True,lessons=True))")"
 python3 - "$T/sz.jsonl" <<'PYZ'
 import json,sys
 R=[{"type":"user","timestamp":"2026-10-06T10:00:00Z","message":{"role":"user","content":"go"}},
@@ -2040,5 +2043,91 @@ o=$(echo '{}' | python3 $H/session-start.py); check "v3.2.0: an app with screens
 mkdir -p "$PROJ/tests/reference"; touch "$PROJ/tests/reference/home-phone.png"
 o=$(echo '{}' | python3 $H/session-start.py); check "  ...with references it says nothing" "clean" "$(echo "$o" | grep -c '\[references\]' | sed 's/^0$/clean/')"
 rm -rf "$PROJ/index.html" "$PROJ/tests" "$PROJ/.claude/state/stop-signals.json"
+# --- v3.2.1: the real case — "timeout 1800 npm test" in the background ran 30 minutes and was stopped (exit=124)
+rm -f "$PROJ/.claude/state/test-speed.json" "$PROJ/.claude/state/stop-signals.json"
+printf 'npm test output...\nexit=124\n' > "$T/npmtest.out"
+python3 - "$T/bg.jsonl" "$T/npmtest.out" <<'PYB'
+import json,sys,datetime as dt
+now=dt.datetime.utcnow(); t0=(now-dt.timedelta(minutes=30,seconds=5)).isoformat()+"Z"; t1=now.isoformat()+"Z"
+cmd='cd "D:/User/Heng Z/Documents/GitHub/Weekly-Planner-A" && SMOKE_CHROMIUM="C:/Program Files/Google/Chrome/Application/chrome.exe" timeout 1800 npm test > "C:/Users/HENGZ~1/AppData/Local/Temp/claude/x/scratchpad/test.log" 2>&1; echo exit=$?'
+note='<task-notification>\n<task-id>bnpm1</task-id>\n<output-file>%s</output-file>\n<status>completed</status>\n<summary>Background command "Run full npm test suite" completed (exit code 0)</summary>\n</task-notification>' % sys.argv[2]
+R=[{"type":"assistant","timestamp":t0,"message":{"role":"assistant","content":[{"type":"tool_use","id":"tb","name":"Bash","input":{"command":cmd,"run_in_background":True}}]}},
+{"type":"user","timestamp":t0,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tb","content":"Command running in background with ID: bnpm1. Output is being written to: x"}]}},
+{"type":"user","timestamp":t1,"message":{"role":"user","content":note}}]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+json.dump({"prompt":note,"session_id":"bg","transcript_path":sys.argv[1]},open(sys.argv[1]+".in","w"))
+PYB
+o=$(python3 $H/plan-gate.py < "$T/bg.jsonl.in")
+check "v3.2.1: the real 30-minute background npm test (exit=124) asks for the split stage" "was stopped by the time limit after 30 minutes (exit 124)" "$o"
+check "  ...it counts as a stop signal" "the full test suite was stopped" "$(cat "$PROJ/.claude/state/stop-signals.json")"
+o=$(echo '{"tool_name":"Bash","tool_input":{"command":"cd app && timeout 1800 npm test"}}' | python3 $H/wait-guard.py); check "v3.2.1: then a full local run is refused until the suite is split" "too slow (30" "$o"
+o=$(echo '{"tool_name":"Bash","tool_input":{"command":"cd app && timeout 1800 npm test","run_in_background":true}}' | python3 $H/wait-guard.py); check "  ...also in the background" "Do not run it locally" "$o"
+o=$(echo '{"tool_name":"Bash","tool_input":{"command":"SMOKE_ONLY=kidScreens node tests/smoke.js"}}' | python3 $H/wait-guard.py); check "  ...the fast loop still runs" "^$" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "v3.2.1: the session start repeats it until the suite is split" "and was stopped by the time limit" "$o"
+cp FEATURES.md "$T/feat.bak"; printf '\n## References\n- Test speed: full run 4 min in 4 parts\n' >> FEATURES.md
+o=$(echo '{"tool_name":"Bash","tool_input":{"command":"cd app && timeout 1800 npm test"}}' | python3 $H/wait-guard.py); check "v3.2.1: after the split (Test speed line within 5 min) the full run is allowed again" "^$" "$o"
+cp "$T/feat.bak" FEATURES.md; rm -f "$PROJ/.claude/state/test-speed.json" "$PROJ/.claude/state/stop-signals.json"
+mkw w321 opus-worker 5 0 no; python3 - "$WB/sess/subagents/agent-w321.jsonl" "$T/bg.jsonl" <<'PYW2'
+import json,sys
+f=sys.argv[1]; R=[json.loads(l) for l in open(f)]+[json.loads(l) for l in open(sys.argv[2])]
+open(f,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYW2
+o=$(wb32 w321 Read); check "v3.2.1: a worker's own background full run that was stopped tells the worker too" "was stopped by the time limit" "$o"
+rm -f "$PROJ/.claude/state/test-speed.json" "$PROJ/.claude/state/stop-signals.json"
+check "v3.2.1: the reviewer runs at high effort" "effort: high" "$(cat $H/../../stub/reviewer.md)"
+check "  ...and an app with the old reviewer file gets a setup update" "reviewer at high effort (v3.2.1)" "$(cat $H/_common.py)"
+# v3.2.1: real Plan v2 → v3 (Weekly-Planner): renumbered stages and added stage tags are not marked; Technical details not marked
+o=$(cd $H && python3 -c "
+import planmarks as P
+base='# Plan v2 — T — Approved\n\n| Summary |\n|---|\n| What changed: First version. |\n\nStages to finish\n2 stages.\n1. PR 0-A picture test · Claude · Build · opus-worker, Complex\n2. Merge PR 0-A · You · Check\n\nTechnical details\n- Detail one.\n'
+new='# Plan v3 — T — Awaiting approval\n\n| Summary |\n|---|\n| What changed: a split stage. |\n\nStages to finish\n3 stages.\n1. PR 0-split test parts · Claude · Build · size: M · proof: two runs\n2. PR 0-A picture test · Claude · Build · opus-worker, Complex · size: M · proof: 0 differences\n3. Merge PR 0-A · You · Check\n\nTechnical details\n- Detail one, longer.\n'
+m,_=P.apply(new,base,3,1,[],'Plan v2'); print(m)")
+check "v3.2.1: a new stage is marked" "🟦 \*\*Rev 1\*\* — PR 0-split test parts" "$o"
+check "  ...a stage that only gained size and proof is named in one line, not marked" 'tags only: PR 0-A picture test' "$o"
+check "  ...a renumbered stage is not marked" "clean" "$(echo "$o" | grep -c 'Rev 1\*\* — Merge PR 0-A' | sed 's/^0$/clean/')"
+check "  ...Technical details are counted, not marked" "clean" "$(echo "$o" | grep -c 'Rev 1\*\* — Detail one' | sed 's/^0$/clean/')"
+# --- v3.2.1: real worker notices (Claude Code 2.1.293, session 1573ab09): finish notices arrive as queue-operation,
+# attachment or user records; the call being checked is not "another worker"
+python3 - "$T/wk.jsonl" <<'PYK'
+import json,sys,datetime as dt
+now=dt.datetime.utcnow(); ts=lambda m:(now-dt.timedelta(minutes=m)).isoformat()+"Z"
+def start(i,m): return {"type":"assistant","timestamp":ts(m),"message":{"role":"assistant","content":[{"type":"tool_use","id":f"toolu_{i}","name":"Agent","input":{"subagent_type":"opus-worker","prompt":"Task: x\nSize: M\nLevel: Complex","run_in_background":True}}]}}
+def launched(i,a,m): return {"type":"user","timestamp":ts(m),"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":f"toolu_{i}","content":[{"type":"text","text":f"Async agent launched successfully. (This tool result is internal metadata.)\nagentId: {a} (internal ID - do not mention to user.)"}]}]}}
+def note(i,a,m): return f"<task-notification>\n<task-id>{a}</task-id>\n<tool-use-id>toolu_{i}</tool-use-id>\n<status>completed</status>\n<summary>Agent \"x\" finished</summary>\n</task-notification>"
+R=[start(1,90),launched(1,"a9cfee3b2ef0b2b59",90),{"type":"queue-operation","operation":"enqueue","timestamp":ts(80),"content":note(1,"a9cfee3b2ef0b2b59",80)},
+   start(2,70),launched(2,"acb4648bdc566ac06",70),{"type":"attachment","timestamp":ts(60),"attachment":{"type":"queued_command","prompt":note(2,"acb4648bdc566ac06",60)}},
+   start(3,50),launched(3,"a8610e73e4ba92a2e",50),{"type":"queue-operation","operation":"enqueue","timestamp":ts(40),"content":note(3,"a8610e73e4ba92a2e",40).replace("<tool-use-id>toolu_3</tool-use-id>\n","")},
+   start(4,1)]
+open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYK
+o=$(python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'wk','tool_use_id':'toolu_4','transcript_path':sys.argv[1],'tool_input':{'subagent_type':'opus-worker','prompt':'Task: next\nSize: M\nLevel: Complex\nMap: not needed - test'}}))" "$T/wk.jsonl" | HZ_STAGE_TAGS_OFF= python3 $H/worker-guard.py)
+check "v3.2.1: 3 finished background workers (queue-operation, attachment, notice without tool-use-id) do not block the 4th" "clean" "$(echo "$o" | grep -c 'already run\|Another worker is running' | sed 's/^0$/clean/')"
+o=$(cd $H && python3 -c "
+import json,_common as C
+recs=[json.loads(l) for l in open('$T/wk.jsonl')]
+print(len(C.open_workers(recs,['opus-worker'],None,exclude_id='toolu_4')), len(C.open_workers(recs[:-1]+[recs[-1]],['opus-worker'],None)))")
+check "  ...0 still running, also when the call's id is not given" "^0 0$" "$o"
+python3 - "$T/wk.jsonl" "$T/wk2.jsonl" <<'PYK2'
+import json,sys
+R=[json.loads(l) for l in open(sys.argv[1])]
+R=[r for r in R if r.get("type")!="queue-operation" and r.get("type")!="attachment"]
+open(sys.argv[2],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+PYK2
+o=$(cd $H && python3 -c "
+import json,_common as C
+recs=[json.loads(l) for l in open('$T/wk2.jsonl')]
+print(len(C.open_workers(recs,['opus-worker'],None,exclude_id='toolu_4')))")
+check "  ...without finish notices, workers older than 150 minutes still count as running only until then" "^3$" "$o"
+check "v3.2.1: the summary counts background-worker waits from every record kind" "queue-operation" "$(cat $H/stats.py)"
+o=$(cd $H && python3 -c "
+import stubcheck,_common as C
+print(stubcheck.stub_status(C.load_config(), '$PROJ')[:40])")
+check "v3.2.1: the setup check also looks at origin/main for a branch made before the setup merge" "current\|OUTDATED" "$o"
+check "  ...and says 'current on main' then (code present)" "current on main" "$(cat $H/stubcheck.py)"
+# v3.2.1: questions before the plan
+sed 's/^Technical details: none\.$/## ❓ Decisions\n1. Test parts repeat the earlier tests (D17)? Recommended: yes.\n\nTechnical details: none./' "$T/rv1.md" > "$T/q_open.md"
+o=$(HZ_QUESTIONS_CHECK_OFF= pg "$T/q_open.md"); check "v3.2.1: a plan that still holds an open question is sent back: ask in chat first" "This plan still holds open questions" "$o"
+sed 's/^1. Test parts repeat.*$/Decided: test parts repeat the earlier tests (D17, you: yes)./' "$T/q_open.md" > "$T/q_done.md"
+o=$(HZ_QUESTIONS_CHECK_OFF= pg "$T/q_done.md"); check "  ...with the answers written in as decided, it passes" "clean" "$(echo "$o" | grep -c 'open questions' | sed 's/^0$/clean/')"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

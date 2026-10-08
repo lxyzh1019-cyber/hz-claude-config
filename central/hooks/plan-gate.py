@@ -88,13 +88,20 @@ def stop_notice():
             "result may go on; say why in one line.")
 
 
+# v3.2.1: background full test runs, measured when their notice arrives (the real case: 30 min, stopped, exit 124)
+try:
+    from _common import background_test_note as _btn, read_transcript as _rt2
+    TEST_TEXT = _btn(cfg, _rt2(data.get("transcript_path")))
+except Exception as _e:
+    TEST_TEXT = ""
+    log("plan-gate", {"test_speed_error": str(_e)[:200]})   # never blocks a prompt
 STOP_TEXT = stop_notice()
 # v3.1.30: a worker or background-command notice is not a request of mine. In the Weekly-Planner money session 79 of
 # 106 plan-gate texts went to such notices ("Full Plan vN is required (90 bullets)"), 128,000 characters re-read on
 # every later step.
 if prompt.lstrip().startswith("<task-notification>"):
     log("plan-gate", {"skipped": "task notification", "fixes": len(_fixes)})
-    _ctx_txt = "\n".join(x for x in (FIX_TEXT, STOP_TEXT, MEM_TEXT) if x)
+    _ctx_txt = "\n".join(x for x in (FIX_TEXT, TEST_TEXT, STOP_TEXT, MEM_TEXT) if x)
     if _ctx_txt:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": _ctx_txt}}))
     sys.exit(0)
@@ -214,9 +221,12 @@ else:
                 f.write(sid + "\n")
         except OSError:
             pass
-if (not handoff_why and not resume and comp.get("check_total") and comp["total"] and not comp.get("build_done")):
-    # v3.1.24: Build and Check are counted apart; the hand-off happens in the report where Build reaches 100%
-    msgs.append("[hand-off] When the last Build stage is finished, " + handoff_text(cfg, comp, after_build=True))
+# v3.2.1: only when one Build stage is left, and said as a future step (3.2.0 sent it every prompt, with a lessons line
+# that said "the build of this plan is done" — the session rightly called it untrue)
+if (not handoff_why and not resume and comp.get("check_total") and comp["total"] and not comp.get("build_done")
+        and comp["total"] - comp["complete"] <= 1):
+    msgs.append("[hand-off] Build is not finished yet. Only when the last Build stage finishes, in that same reply, "
+                + handoff_text(cfg, comp, after_build=True))
 if handoff_why and not resume:
     log("plan-gate", {"handoff": handoff_why[:40]})
     msgs.append("[hand-off] " + handoff_why + handoff_text(cfg, comp))
@@ -246,8 +256,11 @@ elif any(ph in low for ph in NIGHT):
     msgs.append("[night] I am away now. Use my answers. Keep working on every approved stage that needs no other answer "
                 "from me. Stack pull requests as usual: branch from the earlier unmerged branch, with that branch as "
                 "the base, at most 3 unmerged. I merge them in order in the morning. "
-                "Never merge. Stop only for a destructive step or a problem that changes an approved result. Leave any "
-                "still-open question for the morning reply, with the pull requests listed in merge order.")
+                "Never merge. When a new question comes up, take your own recommendation if it changes no app behaviour and "
+                "no stored data and can be undone: build it on its branch and note 'built on my recommendation — "
+                "undone if you say no'. Show no plan at night; in the morning, show the next Rev with these decisions "
+                "marked, and the pull requests in merge order. Only an app change, a data change or a destructive "
+                "step waits for me.")
 else:
     try:
         from _common import edmonton_hour
@@ -267,6 +280,8 @@ else:
         pass
 if STOP_TEXT:
     msgs.insert(0, STOP_TEXT)
+if TEST_TEXT:
+    msgs.insert(0, TEST_TEXT)
 if MEM_TEXT:
     msgs.append(MEM_TEXT)
 if FIX_TEXT:

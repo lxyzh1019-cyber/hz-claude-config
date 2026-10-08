@@ -227,3 +227,8 @@ Lessons after each plan (v3.2.0) | R | **Lessons after each plan (Hook).**
 Recommendation on every decision line (v3.2.0) | R | Each line of the `❓ Decisions` list names your recommendation (Hook).
 References first (v3.2.0) | R | **References first (Hook).**
 Size line in every hand-over (v3.2.0) | R | `Size: S|M|L` from the plan, and a level.
+Reviewer and planner at high effort (v3.2.1) | R | The planner and the reviewer run at `effort: high`
+Background test runs measured; no full local run until split (v3.2.1) | R | Until the suite is split, a full local run is refused
+Questions before the plan (v3.2.1) | R | **Questions before the plan (Hook).**
+Changed words only in the change list (v3.2.1) | R | A line that changed in part shows only its changed words.
+Night: build on the recommendation when reversible (v3.2.1) | R | A new question at night takes your recommendation

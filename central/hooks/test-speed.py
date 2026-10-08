@@ -7,17 +7,16 @@ Weekly-Planner's smoke suite took about 9.5 minutes per run; test runs were abou
 State: .claude/state/test-speed.json {"slowest_full_minutes", "command", "told", "split_done"}."""
 import json, os, re, sys, time
 from datetime import datetime
-from _common import read_hook_input, load_config, add_context, log, STATE_DIR, read_transcript, is_test_run, live_proof
+from _common import (read_hook_input, load_config, add_context, log, read_transcript, live_proof, is_full_test_run,
+                     test_speed_note)
 
 data = read_hook_input()
 cfg = load_config()
 inp = data.get("tool_input") or {}
 cmd = str(inp.get("command") or "")
-if inp.get("run_in_background") or not is_test_run(cmd):
+if inp.get("run_in_background"):   # v3.2.1: background runs are measured at their notice (plan-gate, worker-budget)
     sys.exit(0)
-SUBSET = cfg.get("test_subset_markers") or [r"SMOKE_ONLY=", r"--grep\b", r"\s-g\s", r"--shard\b", r"\.(spec|test)\.[jt]s\b",
-                                            r"--testNamePattern", r"\s-t\s", r"::"]
-if any(re.search(p, cmd) for p in SUBSET):
+if not is_full_test_run(cmd, cfg):
     sys.exit(0)
 # when did this command start? the newest tool call with this exact command in this transcript
 start = None
@@ -32,25 +31,14 @@ for rec in reversed(read_transcript(data.get("transcript_path"))):
         except (TypeError, ValueError):
             pass
         break
-if start is None:
+if start is None and data.get("duration_ms") is None:
     sys.exit(0)
+start = start or time.time()
 minutes = (time.time() - start) / 60
-path = os.path.join(STATE_DIR, "test-speed.json")
-try:
-    st = json.load(open(path, encoding="utf-8"))
-except (OSError, ValueError):
-    st = {}
-limit = float(cfg.get("full_test_max_minutes", 5))
-if minutes > float(st.get("slowest_full_minutes") or 0):
-    st["slowest_full_minutes"], st["command"] = round(minutes, 1), cmd[:200]
-os.makedirs(STATE_DIR, exist_ok=True)
-json.dump(st, open(path, "w", encoding="utf-8"))
+if data.get("duration_ms") is not None:      # v3.2.1: the real run time from Claude Code (2.1.293 sends it)
+    minutes = float(data.get("duration_ms") or 0) / 60000
 log("test-speed", {"full_run_minutes": round(minutes, 1)})
 live_proof("test-speed", {"full_run_minutes": round(minutes, 1)})
-if minutes > limit and not st.get("told") and not st.get("split_done"):
-    st["told"] = True
-    json.dump(st, open(path, "w", encoding="utf-8"))
-    add_context("PostToolUse", f"[test speed] This full test run took {round(minutes, 1)} minutes; the aim is {int(limit)} "
-                "or less. Add a stage to the current plan, as its next Rev, before other build stages: split the test "
-                "suite into parts that run side by side, locally and on GitHub, with the same checks and results. When "
-                "it is done, add the line 'Test speed: full run <n> min in <k> parts' to FEATURES.md ## References.")
+_msg = test_speed_note(cfg, minutes, cmd)
+if _msg:
+    add_context("PostToolUse", _msg)

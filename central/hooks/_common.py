@@ -1,7 +1,9 @@
 """Shared helpers for the .claude/hooks scripts. No third-party imports."""
+import glob
 import json
 import os
 import re
+import time
 import subprocess
 import sys
 
@@ -62,7 +64,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.2.0",
+        "version": "3.2.1",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -76,7 +78,8 @@ DEFAULT_CONFIG = {
         "file_text": {".claude/agents/opus-worker.md": ["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"],
                       ".claude/hz-loader.py": ["incomplete on GitHub", "loader that reports an incomplete rules repository"],
                       ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"],
-                      ".claude/agents/reviewer.md": ["tools: Read, Grep, Glob", "reviewer that only reads"],
+                      ".claude/agents/reviewer.md": [["tools: Read, Grep, Glob", "reviewer that only reads"],
+                                                     ["effort: high", "reviewer at high effort (v3.2.1)"]],
                       ".claude/agents/explore.md": ["model: claude-sonnet-5-5", "explorer pinned to Sonnet 5.5"],
                       ".claude/agents/planner.md": ["model: claude-fable-5-1", "planner pinned to Fable 5.1"],
                       ".claude/agents/planner-opus.md": ["model: claude-opus-5-5", "planner fallback pinned to Opus 5.5"]},
@@ -756,7 +759,7 @@ def restart_line(comp, branch=None):
     return f"Continue {plan} on branch {branch or current_branch()}; next: {next_stage(comp)}."
 
 
-def handoff_text(cfg, comp, after_build=False):
+def handoff_text(cfg, comp, after_build=False, lessons=False):
     """The hand-off the session does itself in one reply, so the user never has to ask for it."""
     branch = current_branch()
     rec = cfg["record_file"]
@@ -770,13 +773,13 @@ def handoff_text(cfg, comp, after_build=False):
             f"`{restart_line(comp, branch) if not after_build else restart_after_build(comp, branch)}`\n"
             "In the 'I need from you' line, ask only for my next action (a merge, a check), or nothing. Do not ask me "
             "to open a new session. This session carries on. The restart line is only for later, if the session "
-            "closes." + (LESSONS_TEXT.format(rec=rec, plan=comp.get("plan") or "the plan") if after_build else ""))
+            "closes." + (LESSONS_TEXT.format(rec=rec, plan=comp.get("plan") or "the plan") if lessons else ""))
 
 
 # v3.2.0: plan versus actual. When the build of a plan is done, the session writes what caused rework, so the next
 # plan is better (the summary shows each stage's time against its size).
-LESSONS_TEXT = ("\n4) The build of this plan is done. Add '## Lessons — {plan}' to {rec} with 3 lines: what caused "
-                "rework, which stages ran over their size and why, and which rule or plan habit to change. Put each "
+LESSONS_TEXT = ("\n4) The build of this plan is done. Add '## Lessons — {plan}' to {rec} with 3 lines. Name what "
+                "caused rework, which stages ran over their size and why, and which rule or plan habit to change. Put each "
                 "proposed change to hz-claude-config in the '❓ Decisions' list, with your recommendation.")
 
 
@@ -959,10 +962,224 @@ def is_test_run(cmd):
         part = part.strip().lstrip("( ")
         part = re.sub(r"^(do\s+|then\s+)", "", part)
         for _ in range(3):   # v3.2.0: "time", "timeout 590" and VAR=value before the program
-            part = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+", "", part)
+            part = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|\S+)\s+)+", "", part)   # v3.2.1: quoted values
             part = re.sub(r"^(time\s+|timeout\s+\d+[smh]?\s+)", "", part)
         if not RUNNER.match(part) or re.match(r"^node\s+--check\b", part):
             continue
         if TEST_CMD.search(part) or ("<<" in part and TEST_CMD.search(cmd)):   # a script written inline
             return True
     return False
+
+
+# ---- Test speed (v3.2.1) -------------------------------------------------------------------------------------------
+# Weekly-Planner consistency pass Stage 3: "timeout 1800 npm test" ran in the background for 30 minutes and was stopped
+# (exit=124). 3.2.0 measured only foreground runs, so the split-suite stage was never asked for.
+SUBSET_MARKERS = [r"SMOKE_ONLY=", r"--grep\b", r"\s-g\s", r"--shard\b", r"\.(spec|test)\.[jt]s\b", r"--testNamePattern",
+                  r"\s-t\s", r"::"]
+TEST_SPEED_PATH = os.path.join(STATE_DIR, "test-speed.json")
+
+
+def is_full_test_run(cmd, cfg=None):
+    """A test run with no subset marker: the whole suite."""
+    markers = (cfg or {}).get("test_subset_markers") or SUBSET_MARKERS
+    return is_test_run(cmd) and not any(re.search(p, str(cmd or "")) for p in markers)
+
+
+def test_speed_load():
+    try:
+        return json.load(open(TEST_SPEED_PATH, encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def test_split_done(cfg):
+    """The suite counts as split when FEATURES.md says 'Test speed: full run <n> min' with n within the limit."""
+    try:
+        feat = open(os.path.join(PROJECT_DIR, cfg["features_file"]), encoding="utf-8").read()
+    except (OSError, KeyError):
+        return False
+    m = re.search(r"(?im)^\s*-?\s*Test speed:\s*full run\s*([\d.]+)\s*min", feat)
+    return bool(m) and float(m.group(1)) <= float(cfg.get("full_test_max_minutes", 5))
+
+
+def test_speed_note(cfg, minutes, cmd, stopped=False):
+    """Record a full run's time. Returns the one-time instruction to add the split stage, or ""."""
+    st = test_speed_load()
+    limit = float(cfg.get("full_test_max_minutes", 5))
+    if minutes > float(st.get("slowest_full_minutes") or 0):
+        st["slowest_full_minutes"], st["command"] = round(minutes, 1), str(cmd)[:200]
+    if stopped:
+        st["stopped_by_limit"] = True
+    msg = ""
+    if (minutes > limit or stopped) and not st.get("told") and not test_split_done(cfg):
+        st["told"] = True
+        how = (f"was stopped by the time limit after {round(minutes)} minutes (exit 124), so it gave no result"
+               if stopped else f"took {round(minutes, 1)} minutes")
+        msg = (f"[test speed] The full test run {how}. The aim is {int(limit)} minutes or less. Do not run the full "
+               "suite locally again until it is split; use the fast loop, and run the full suite on GitHub. Show the "
+               "next Rev of the plan with a stage before the other build stages. That stage splits the test suite "
+               "into parts that run side by side, each under the aim. When it is done, add 'Test speed: full run <n> min in <k> parts' to "
+               "FEATURES.md ## References.")
+        try:
+            sp = os.path.join(STATE_DIR, "stop-signals.json")
+            sig = json.load(open(sp, encoding="utf-8")) if os.path.exists(sp) else []
+            sig.append({"agent": "tests", "reason": "the full test suite " + how, "told": True})
+            json.dump(sig[-20:], open(sp, "w", encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+    os.makedirs(STATE_DIR, exist_ok=True)
+    json.dump(st, open(TEST_SPEED_PATH, "w", encoding="utf-8"))
+    return msg
+
+
+def background_test_results(records):
+    """Finished background test runs in a transcript: [(task id, command, minutes, exit code or None)].
+    Start: the tool result 'Command running in background with ID: X'; end: the notice with <task-id>X</task-id>."""
+    from datetime import datetime as _d
+
+    def _t(r):
+        try:
+            return _d.fromisoformat(str(r.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return None
+    cmds, started, out = {}, {}, []
+    for r in records:
+        c = (r.get("message") or {}).get("content")
+        if r.get("type") == "assistant" and isinstance(c, list):
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash" and \
+                        (b.get("input") or {}).get("run_in_background"):
+                    cmds[b.get("id")] = str((b.get("input") or {}).get("command") or "")
+        if r.get("type") == "user" and isinstance(c, list):
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in cmds:
+                    m = re.search(r"running in background with ID: ([A-Za-z0-9_-]+)", json.dumps(b.get("content")))
+                    if m:
+                        started[m.group(1)] = (cmds[b["tool_use_id"]], _t(r))
+        # v3.2.1: the finish notice can be a queue-operation, an attachment or a user message (real 2.1.293 files)
+        text = json.dumps(r, ensure_ascii=False).replace("\\n", "\n") if r.get("type") != "assistant" else ""
+        if "<task-notification>" in text:
+            for m in re.finditer(r"<task-id>([A-Za-z0-9_-]+)</task-id>", text):
+                tid = m.group(1)
+                if tid in started:
+                    cmd, t0 = started.pop(tid)
+                    after = text[m.end():m.end() + 1500]
+                    ex = re.search(r"exit code (\d+)", after)
+                    code = int(ex.group(1)) if ex else None
+                    # real case: "...; echo exit=$?" ends with code 0 while the test itself got 124 — read the output
+                    of = re.search(r"<output-file>([^<]+)</output-file>", after)
+                    try:
+                        tail = open(of.group(1).replace("\\\\", "\\"), encoding="utf-8",
+                                    errors="replace").read()[-4000:] if of else ""
+                    except OSError:
+                        tail = ""
+                    if re.search(r"\bexit=124\b", tail):
+                        code = 124
+                    t1 = _t(r)
+                    mins = ((t1 - t0) / 60) if t0 and t1 else 0
+                    lim = re.search(r"\btimeout\s+(\d+)", cmd)
+                    if code in (None, 0) and lim and mins >= int(lim.group(1)) / 60 - 0.5:
+                        code = 124      # it ran the whole time limit: the limit stopped it
+                    out.append((tid, cmd, mins, code))
+    return out
+
+
+def background_test_note(cfg, records):
+    """Measure finished background full test runs once each; returns the split-stage instruction or ""."""
+    st = test_speed_load()
+    seen = set(st.get("seen_background") or [])
+    msg = ""
+    for tid, cmd, mins, code in background_test_results(records):
+        if tid in seen or not is_full_test_run(cmd, cfg):
+            continue
+        seen.add(tid)
+        st = test_speed_load()
+        st["seen_background"] = sorted(seen)[-50:]
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(st, open(TEST_SPEED_PATH, "w", encoding="utf-8"))
+        m = test_speed_note(cfg, mins, cmd, stopped=(code == 124))
+        try:
+            live_proof("test-speed", {"background_full_run_minutes": round(mins, 1), "exit": code})
+        except Exception:
+            pass
+        msg = msg or m
+    return msg
+
+
+def slow_suite_blocks(cfg):
+    """True while the full suite is known to be too slow and is not split yet."""
+    st = test_speed_load()
+    slow = float(st.get("slowest_full_minutes") or 0) > float(cfg.get("full_test_max_minutes", 5)) or \
+        st.get("stopped_by_limit")
+    return bool(slow) and not test_split_done(cfg)
+
+
+# ---- Workers still running (v3.2.1) --------------------------------------------------------------------------------
+# Real Claude Code 2.1.293 (read from the program and from session 1573ab09): a background worker's start returns
+# "Async agent launched successfully … agentId: <id>"; its finish arrives as <task-notification> with
+# <task-id><agentId></task-id> and usually <tool-use-id>, written as a "queue-operation" record, an "attachment"
+# (queued_command) or a user message. 3.2.0 looked only at user messages, so finished workers stayed "running".
+def open_workers(records, kinds, transcript_path=None, max_minutes=150, exclude_id=None):
+    from datetime import datetime as _d, timezone as _tz
+
+    def _t(r):
+        try:
+            return _d.fromisoformat(str(r.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return None
+    started = {}
+    for rec in records:
+        if rec.get("isSidechain"):
+            continue
+        c = (rec.get("message") or {}).get("content")
+        if isinstance(c, list):
+            for b in c:
+                if not isinstance(b, dict):
+                    continue
+                if b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task") and \
+                        str((b.get("input") or {}).get("subagent_type") or "") in kinds:
+                    started[b.get("id")] = {"t": _t(rec), "agent": None}
+                elif b.get("type") == "tool_result" and b.get("tool_use_id") in started:
+                    txt = json.dumps(b.get("content"), ensure_ascii=False)
+                    m = re.search(r"agentId:\s*([A-Za-z0-9_-]+)", txt)
+                    if m and re.search(r"(?i)launched", txt[:400]):
+                        started[b["tool_use_id"]]["agent"] = m.group(1)
+                    else:
+                        started.pop(b["tool_use_id"], None)    # refused, or finished in the foreground
+        raw = json.dumps(rec, ensure_ascii=False) if "<task-notification>" in json.dumps(rec, ensure_ascii=False) else ""
+        if raw:
+            for note in re.findall(r"<task-notification>(.*?)</task-notification>", raw.replace("\\n", "\n"), re.S):
+                status = re.search(r"<status>([a-z]+)</status>", note)
+                if status and status.group(1) == "blocked":
+                    continue
+                tu = re.findall(r"<tool-use-id>([^<]+)</tool-use-id>", note)
+                task = re.findall(r"<task-id>([^<]+)</task-id>", note)
+                for k in list(started):
+                    a = started[k]["agent"] or ""
+                    if k in tu or any(a and (t.startswith(a) or a.startswith(t)) for t in task):
+                        started.pop(k, None)
+    # the call being checked is not "another worker" (3.2.0 counted it: the first start of a session was refused as
+    # "Another worker is running"). Without its id, every start in the newest assistant record is left out.
+    if exclude_id:
+        started.pop(exclude_id, None)
+    else:
+        last = next((r for r in reversed(records) if r.get("type") == "assistant" and not r.get("isSidechain")), None)
+        for b in ((last or {}).get("message") or {}).get("content") or []:
+            if isinstance(b, dict) and b.get("type") == "tool_use":
+                started.pop(b.get("id"), None)
+    # a worker whose own record shows its hand-back, or that started longer ago than any worker may run, is done
+    now = time.time()
+    folder = (transcript_path or "")[:-len(".jsonl")] if str(transcript_path or "").endswith(".jsonl") else ""
+    for k in list(started):
+        a, t0 = started[k]["agent"], started[k]["t"]
+        if t0 and now - t0 > max_minutes * 60:
+            started.pop(k, None)
+            continue
+        if a and folder:
+            for f in glob.glob(os.path.join(folder, "subagents", f"agent-{a}*.jsonl")):
+                try:
+                    if "SubagentHandback" in open(f, encoding="utf-8", errors="replace").read()[-200000:]:
+                        started.pop(k, None)
+                except OSError:
+                    pass
+    return started
