@@ -703,9 +703,9 @@ SG="$T/setuprepo"; rm -rf "$SG"; mkdir -p "$SG/.claude/state"; ( cd "$SG" && git
 echo '{"branch":"hz-setup-update-9.9"}' > "$SG/.claude/state/setup-pending.json"
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$SG" python3 $H/setup-guard.py)
 check "no other answer before the setup pull request" "Do the setup update first" "$o"
-( cd "$SG" && git branch -q hz-setup-update-9.9 )
+( cd "$SG" && git switch -q -c hz-setup-update-9.9 && echo '{"a":1}' > .claude/settings.json && git add .claude/settings.json && git commit -qm setup && git switch -q - ) >/dev/null 2>&1   # v3.2.4: the branch holds the update commit
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sg1\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR="$SG" python3 $H/setup-guard.py)
-check "once the setup branch exists, answers go out" "^$" "$o"
+check "once the setup branch holds the update commit, answers go out (v3.2.4: an empty branch no longer counts)" "^$" "$o"
 check "the pending note is cleared" "gone" "$([ -f "$SG/.claude/state/setup-pending.json" ] && echo still || echo gone)"
 # after a merge: where we are + fresh session
 o=$(echo '{"prompt":"merged, move on"}' | python3 $H/plan-gate.py); check "after a merge the session is told to hand off" "hand-off" "$o"
@@ -752,9 +752,16 @@ o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"v23\",\"transcript_path
 check "a send-back keeps the notice beside it" '"systemMessage": "Rules v' "$o"
 check "a format problem is saved, not sent back (v3.1.31)" "Noted for the next step" "$o"
 check "the switchboard logs every Stop" '"saved_fixes": 1' "$(cat "$PROJ/.claude/state/dispatch.jsonl")"
-SP="$T/setupwait"; rm -rf "$SP"; mkdir -p "$SP/.claude"; ( cd "$SP" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git branch -q hz-setup-update-3.1.23 )
+SV=$(cd $H && python3 -c "import _common as C; print(C.load_config()['stub_expect']['version'])")
+SP="$T/setupwait"; rm -rf "$SP"; mkdir -p "$SP/.claude"; ( cd "$SP" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git switch -q -c hz-setup-update-$SV && echo '{"a":1}' > .claude/settings.json && git commit -qam setup && git switch -q - ) >/dev/null 2>&1
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23b\"}" | CLAUDE_PROJECT_DIR="$SP" python3 $H/stats.py | sm)
 check "an outdated setup with its update branch waiting reads 'waiting for your merge'" "setup waiting for your merge" "$o"
+SP2="$T/setupempty"; rm -rf "$SP2"; mkdir -p "$SP2/.claude"; ( cd "$SP2" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git branch -q hz-setup-update-$SV )
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23c\"}" | CLAUDE_PROJECT_DIR="$SP2" python3 $H/stats.py | sm)
+check "v3.2.4: an empty setup branch (no commit of its own) does not read 'waiting for your merge'" "clean" "$(echo "$o" | grep -c 'setup waiting for your merge' | sed 's/^0$/clean/')"
+SP3="$T/setupold"; rm -rf "$SP3"; mkdir -p "$SP3/.claude"; ( cd "$SP3" && git init -q . && git config user.email t@t && git config user.name t && echo '{}' > .claude/settings.json && git add -A && git commit -qm b && git switch -q -c hz-setup-update-3.1.23 && echo '{"a":1}' > .claude/settings.json && git commit -qam old && git switch -q - ) >/dev/null 2>&1
+o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"v23d\"}" | CLAUDE_PROJECT_DIR="$SP3" python3 $H/stats.py | sm)
+check "  ...nor does an old setup branch of an earlier version" "clean" "$(echo "$o" | grep -c 'setup waiting for your merge' | sed 's/^0$/clean/')"
 pn 7; rm -f "$PROJ/.claude/state/record-rounds.json"; touch -d '1999-01-01' WORKING_RECORD.md
 o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":true}" | python3 $H/record-guard.py)
 check "record check still sends back when another check blocked first (stop_hook_active)" "record is incomplete" "$o"
@@ -2240,5 +2247,54 @@ o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skil
 check "  ...a review request does not" "clean" "$(echo "$o" | grep -c hz-designer | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"## Design decisions\n- [agreed] header colour"}' | python3 $H/skill-router.py)
 check "  ...a plan's Design decisions section does not" "clean" "$(echo "$o" | grep -c hz-designer | sed 's/^0$/clean/')"
+# v3.2.4: a setup branch counts as waiting only when it holds setup changes main lacks (Weekly-Planner 2026-10-08)
+SB=$(mktemp -d)
+( cd $SB && git init -q --bare remote.git && git clone -q remote.git app 2>/dev/null && cd app && git config user.email t@t && git config user.name t \
+  && mkdir -p .claude/agents && echo a > .claude/agents/reviewer.md && echo "uses hz-loader.py" > CLAUDE.md && git add -A && git commit -qm base \
+  && git branch -M main && git push -q origin main \
+  && git push -q origin main:refs/heads/hz-setup-update-1.1.1 \
+  && git switch -q -c hz-setup-update-2.2.2 && echo b > .claude/agents/reviewer.md && git commit -qam setup && git push -q origin hz-setup-update-2.2.2 \
+  && git switch -q main && git switch -q -c hz-setup-update-3.3.3 && echo c > other.txt && git add other.txt && git commit -qm other && git push -q origin hz-setup-update-3.3.3 \
+  && git switch -q main && git switch -q -c hz-setup-update-4.4.4 && echo d > .claude/agents/reviewer.md && git commit -qam merged && git push -q origin hz-setup-update-4.4.4 \
+  && git switch -q main && git merge -q --ff-only hz-setup-update-4.4.4 && git push -q origin main \
+  && git push -q origin main:refs/heads/hz-setup-update-5.5.5-2 2>/dev/null; git switch -q main ) >/dev/null 2>&1
+st(){ (cd $H && CLAUDE_PROJECT_DIR=$SB/app python3 -c "import _common as C; print(C.setup_branch_state('$SB/app','$1'))"); }
+check "v3.2.4: a setup branch that does not exist is 'none'" "^none$" "$(st hz-setup-update-0.0.1)"
+check "  ...an empty branch (same commit as main) is settled, not waiting" "^settled$" "$(st hz-setup-update-1.1.1)"
+check "  ...a branch with a setup change main lacks is pending" "^pending$" "$(st hz-setup-update-2.2.2)"
+check "  ...a branch whose only change is outside the setup files is settled" "^settled$" "$(st hz-setup-update-3.3.3)"
+check "  ...a branch already merged into main is settled" "^settled$" "$(st hz-setup-update-4.4.4)"
+tg(){ (cd $H && CLAUDE_PROJECT_DIR=$SB/app python3 -c "import _common as C; print(C.setup_update_target('$SB/app','$1'))"); }
+check "  ...the update uses a new name when the base branch is empty" "'new', 'hz-setup-update-1.1.1-2'" "$(tg 1.1.1)"
+check "  ...and reports waiting when the pending branch is the one found" "'waiting', 'hz-setup-update-2.2.2'" "$(tg 2.2.2)"
+check "  ...an empty -2 branch moves on to -3" "'new', 'hz-setup-update-5.5.5-3'" "$(cd $SB/app && git push -q origin main:refs/heads/hz-setup-update-5.5.5 2>/dev/null; tg 5.5.5)"
+# the setup guard releases the session only for a branch that holds the update
+mkdir -p $SB/app/.claude/state; printf '{"session_id":"g","type":"assistant"}' > /dev/null
+printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello."}]}}' > "$T/sg.jsonl"
+printf '{"branch": "hz-setup-update-1.1.1"}' > $SB/app/.claude/state/setup-pending.json
+o=$(echo "{\"session_id\":\"g1\",\"transcript_path\":\"$T/sg.jsonl\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR=$SB/app python3 $H/setup-guard.py)
+check "v3.2.4: the setup guard does not release the session for an empty branch" "block" "$o"
+printf '{"branch": "hz-setup-update-2.2.2"}' > $SB/app/.claude/state/setup-pending.json
+o=$(echo "{\"session_id\":\"g2\",\"transcript_path\":\"$T/sg.jsonl\",\"stop_hook_active\":false}" | CLAUDE_PROJECT_DIR=$SB/app python3 $H/setup-guard.py)
+check "  ...it releases the session once the branch holds the update commit" "clean" "$(echo "$o" | grep -c block | sed 's/^0$/clean/')"
+check "  ...and the version line asks the same question (not 'any old branch')" "setup_update_target" "$(cat $H/stats.py)"
+# the helper files: a published older version is updated, not skipped as local edits
+STUB=$H/../stub-files; SU=$(mktemp -d)
+( mkdir -p $SU/.claude/agents && cd $SU && git init -q && cp $STUB/*.md $SU/.claude/agents/ && cp $STUB/settings.json $SU/.claude/settings.json && cp $STUB/hz-loader.py $SU/.claude/hz-loader.py \
+  && rm $SU/.claude/agents/CLAUDE-pointer.md && cp $STUB/CLAUDE-pointer.md $SU/CLAUDE.md && sed -i 's/^effort: high/effort: medium/' $SU/.claude/agents/reviewer.md ) >/dev/null 2>&1
+o=$(cd $H && CLAUDE_PROJECT_DIR=$SU python3 -c "
+import _common as C, stubupdate
+l,n=stubupdate.update(C.load_config(),'$SU'); print(l); print((n or '')[:200])")
+check "v3.2.4: the old published reviewer.md (effort medium) is updated, not skipped as local edits" "updated on disk just now" "$o"
+check "  ...and the file now says effort high" "effort: high" "$(cat $SU/.claude/agents/reviewer.md)"
+check "  ...the known list holds that old version (v3.2.1 forgot it)" "53e6bd0b2a9c65faf33844cf1d60a3f86ff212b8a0d774709488a660aa5b4171" "$(cat $STUB/v2-known-files.txt)"
+# the build keeps every published helper version known
+BT=$(mktemp -d); mkdir -p $BT/tools $BT/stub $BT/central/stub-files; cp $H/../../tools/build_manifest.py $BT/tools/; cp $H/../../stub/* $BT/stub/ 2>/dev/null
+cp $STUB/*.md $STUB/*.json $STUB/*.py $STUB/v2-known-files.txt $BT/central/stub-files/ 2>/dev/null
+printf 'old published text\n' > $BT/central/stub-files/explore.md
+OLDH=$(python3 -c "import hashlib;print(hashlib.sha256(b'old published text\n').hexdigest())")
+(cd $BT && python3 tools/build_manifest.py 9.9.9) >/dev/null 2>&1
+check "v3.2.4: the build adds the replaced helper file's hash to the known list" "$OLDH" "$(cat $BT/stub/v2-known-files.txt)"
+rm -rf $SB $SU $BT
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

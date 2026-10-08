@@ -15,6 +15,11 @@ worker being started); 3.2.1 started all four.
   write its report. `OBEY=1`: the scripted model follows the wait text. Prints closing lines shown, summaries shown,
   early reports logged, and whether the wait and report texts reached the model.
 
+- `scenario_setup_update.sh <central dir> <label> <app repo folder>` (v3.2.4) — the real Claude Code starts a session in a
+  copy of a real app repository. The loader fetches the rules from a local web server (`HZ_CENTRAL_URL`), so the
+  session-start setup check of the served version runs for real. Prints what the session was told and whether
+  `reviewer.md` changed on disk. Weekly-Planner main on 2026-10-08: 3.2.3 left it at effort medium; 3.2.4 wrote effort high.
+
 Result on 2026-10-08 with Claude Code 2.1.293: 3.2.1 — closing lines 2, summaries 2, no text reached the model;
 3.2.2 — the texts reached the model at the helper start and at the finish notice; summaries 1; closing lines 1 when
 the model follows. Also seen: PreToolUse added text reaches the model; SessionStart runs again on `--resume`.

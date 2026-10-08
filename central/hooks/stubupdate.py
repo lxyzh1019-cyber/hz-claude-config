@@ -6,7 +6,8 @@ fetched centrally the way the rules and checks are. Instead, when the stub check
 rewrites them on disk from the central copies in stub-files/ (which the loader downloads with the rules), and
 session-start tells the session to commit them on their own branch and open a pull request for the user to merge.
 - Never in hz-claude-config itself (its own setup files change through Step E).
-- Never twice: if the update branch already exists (on GitHub or locally), the session only reminds the user.
+- Never twice: if a setup branch with changes main lacks exists (on GitHub or locally), the session only reminds the user
+  (v3.2.4: an empty or already merged branch does not count; the update then uses the next branch name).
 - A worker file with local edits (not a published version) is left alone and reported."""
 import hashlib, json, os, shutil, subprocess, tempfile
 
@@ -92,10 +93,11 @@ def update(cfg, project_dir):
     if "hz-loader.py" not in (_read(os.path.join(project_dir, "CLAUDE.md")) or ""):
         return None, None                                   # not installed through the stub: installer's job
     version = (cfg.get("stub_expect") or {}).get("version", "latest")
-    branch = f"hz-setup-update-{version}"
-    remote = _git(project_dir, "ls-remote", "--heads", "origin", branch)
-    local = _git(project_dir, "branch", "--list", branch)
-    if (remote and remote.returncode == 0 and remote.stdout.strip()) or (local and local.stdout.strip()):
+    # v3.2.4: a branch counts as waiting only when it holds setup changes main lacks (an empty or merged branch does
+    # not); then the update goes on a new branch name (-2, -3, ...). Nothing is deleted.
+    from _common import setup_update_target
+    kind, branch = setup_update_target(project_dir, version)
+    if kind == "waiting":
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
                 "Do not make another one. In your first reply's 'I need from you' line, ask me to merge it.")
