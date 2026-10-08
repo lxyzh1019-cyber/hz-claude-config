@@ -1,4 +1,4 @@
-version: 3.1.32
+version: 3.2.0
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -10,11 +10,14 @@ hooks/_common.py
 hooks/completion-guard.py
 hooks/config.json
 hooks/dispatch.py
+hooks/formats.py
 hooks/git-guard.py
 hooks/handoff-guard.py
 hooks/notice-reminder.py
+hooks/plan-edit-guard.py
 hooks/plan-gate.py
 hooks/plan-guard.py
+hooks/planmarks.py
 hooks/pr-ready-guard.py
 hooks/qc-guard.py
 hooks/ready-notice-guard.py
@@ -31,6 +34,7 @@ hooks/skill-router.py
 hooks/stats.py
 hooks/stubcheck.py
 hooks/stubupdate.py
+hooks/test-speed.py
 hooks/validation-line.py
 hooks/wait-guard.py
 hooks/worker-budget.py

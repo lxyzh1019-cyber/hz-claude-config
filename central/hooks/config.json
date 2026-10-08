@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.1.32: no app setup change (no setup pull request). Screen sizes and looks for picture comparisons come from each app's FEATURES.md `## References` (Sizes:, Looks:); without them the defaults stay phone, iPad and PC in one look. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.0: each app opens one setup pull request at its next session; merge it. Plans get coloured change marks by code; Rev counts each showing. Up to 3 workers run in parallel, each in its own worktree. Before you sleep, type 'night check' (open questions and the overnight plan), then 'good night' (night work with stacked pull requests). Workers have time, test-run and memory limits. GitHub test waits run in the background while the next stage goes on. Pull requests stack (at most 3 unmerged), so work goes on between your merges. A full test run over 5 minutes adds a stage to split the test suite. The session summary shows time worked, with away time left out. Each build stage names its proof and size; the work stops for a plan Rev when a stage runs over twice its size or a worker is stuck. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -33,6 +33,10 @@
       {
         "script": "plan-guard.py",
         "tools": "ExitPlanMode"
+      },
+      {
+        "script": "plan-edit-guard.py",
+        "tools": "Edit|Write|MultiEdit"
       },
       {
         "script": "worker-guard.py",
@@ -65,6 +69,10 @@
       {
         "script": "notice-reminder.py",
         "tools": "Bash|mcp__.*pull_request.*"
+      },
+      {
+        "script": "test-speed.py",
+        "tools": "Bash"
       }
     ]
   },
@@ -117,7 +125,6 @@
     "wipe"
   ],
   "fresh_session_hint_tokens": 1500000,
-  "plan_everyday_max_chars": 6000,
   "worker_step_warn": 80,
   "worker_step_stop": 100,
   "worker_never_refuse": [

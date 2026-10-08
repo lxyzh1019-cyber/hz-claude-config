@@ -5,7 +5,7 @@ main/master, without prompting, and block opening a pull request as a draft — 
 back to draft with update_pull_request is allowed). v3.1.30: a pull request opens last (pr_last_check). PRs open ready for
 review; the user merges on GitHub. Feature-branch commits and pushes pass through untouched. A hook "deny" is
 honoured in auto mode."""
-import re, shlex, subprocess, sys
+import os, re, shlex, subprocess, sys
 from _common import read_hook_input, deny_tool, PROJECT_DIR, read_transcript, pr_timeline, pr_branch_state
 
 PROTECTED = {"main", "master"}
@@ -58,9 +58,10 @@ if "git" not in cmd and "gh" not in cmd:
     sys.exit(0)
 
 
-def current_branch():
+def current_branch(where=None):
+    """v3.2.0: the branch of the folder the command runs in (cd <dir> / git -C <dir>), so parallel worktrees work."""
     try:
-        return subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_DIR,
+        return subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=where if where and os.path.isdir(where) else PROJECT_DIR,
                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip()
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return ""
@@ -98,7 +99,15 @@ def is_draft_pr(segment):
 
 
 branch = None
+where = None
 for segment in re.split(r"&&|\|\||;|\n", cmd):
+    _cd = re.match(r"^\s*cd\s+(\"[^\"]+\"|'[^']+'|\S+)\s*$", segment)
+    if _cd:
+        where, branch = os.path.join(PROJECT_DIR, _cd.group(1).strip("\"'")), None
+        continue
+    _gc = re.search(r"\bgit\s+-C\s+(\"[^\"]+\"|'[^']+'|\S+)", segment)
+    if _gc:
+        where, branch = os.path.join(PROJECT_DIR, _gc.group(1).strip("\"'")), None
     if is_draft_pr(segment.strip()):
         deny_tool("git-guard: pull requests open ready for review, not as drafts. Run the same gh pr create without "
                   "--draft/-d. If a draft PR already exists, mark it ready with gh pr ready <number>.")
@@ -112,7 +121,7 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
         continue
     sub, rest = args[0], args[1:]
     if sub == "commit":
-        branch = branch if branch is not None else current_branch()
+        branch = branch if branch is not None else current_branch(where)
         if branch in PROTECTED:
             deny_tool(f"git-guard: no commits on {branch}. Create a branch first (git switch -c claude/<topic>), "
                       "commit there, push it and open a pull request; the user merges on GitHub.")
@@ -125,7 +134,7 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
             deny_tool("git-guard: pushing to main is not allowed. Push the working branch and open a pull request; "
                       "the user merges on GitHub.")
         if not refspecs:
-            branch = branch if branch is not None else current_branch()
+            branch = branch if branch is not None else current_branch(where)
             if branch in PROTECTED:
                 deny_tool(f"git-guard: this would push {branch}. Switch to a working branch first.")
 sys.exit(0)

@@ -97,9 +97,9 @@ except OSError:
     features_is_template = True
 if features_is_template:
     send_back(f"{cfg['features_file']} is missing or still the unfilled template, so no regression check is possible. "
-          f"Before finishing: if it is missing, create it and {cfg['record_file']} from the templates in {SEED_DIR}; "
-          "then extract the manifest of the app's current locked features into it (hz-plan-regression-guard), "
-          f"produce the regression table and update {cfg['record_file']}.")
+          f"Before you finish: if it is missing, make it and {cfg['record_file']} from the templates in {SEED_DIR}. "
+          "Then put the app's current locked features into it (hz-plan-regression-guard). Make the regression "
+          f"table and update {cfg['record_file']}.")
 if not record_touched:
     problems.append(f"update {cfg['record_file']} (request ledger, hotspot counter, deliverable ledger)")
 progress = is_progress_report(text, records_all, cfg)
@@ -116,9 +116,9 @@ if not progress and re.search(cfg["regression_table_pattern"], text):
         converted = False
     kept = re.search(r"(?im)^\|\s*\**kept\**\s*\|(.*)$", text)
     if converted and not (kept and re.search(r"proof:\s*\S", kept.group(1), re.I)):
-        problems.append(f"{cfg['features_file']} is a by-screen list, so the regression table's Kept row names its "
-                        "proof: '| Kept | <n> features · Proof: pictures <n> screens × <sizes> sizes, <k> changed (all "
-                        "planned) · tests <passed>/<total> |' — from the compare instructions, not from memory")
+        problems.append(f"{cfg['features_file']} is a by-screen list. So the regression table's Kept row names its "
+                        "proof. Take it from the compare instructions, not from memory. Shape: '| Kept | <n> features · "
+                        "Proof: pictures <n> screens × <sizes> sizes, <k> changed (all planned) · tests <passed>/<total> |'")
 if problems:
     send_back("Implementation happened this turn but the record is incomplete. Before finishing: " + "; ".join(problems) + ".")
 sys.exit(0)

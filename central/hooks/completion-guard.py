@@ -83,10 +83,10 @@ wrong_count = stated and (int(stated.group(1)) != comp["complete"] or int(stated
 reasons = []
 if open_items:
     reasons.append(f"Not done: this branch's work still has {len(open_items)} open item(s): " + "; ".join(open_items[:6]) +
-                   f". Continue with '{open_items[0]}' now — dispatch it to the right worker or execute it as the approved "
-                   "plan allows, and update its ledger row with evidence. An item you cannot finish in this round gets "
-                   "state BLOCKED — <reason> in the ledger, or you write 'Auto-fix limit reached' and list it with why. "
-                   "This is the only send-back for this request.")
+                   f". Continue with '{open_items[0]}' now. Send it to the right worker, as the approved plan allows. "
+                   "Update its ledger row with evidence. If you cannot finish an item in this round, set it to BLOCKED "
+                   "— <reason> in the ledger. Or write 'Auto-fix limit reached' and list it with why. This is the only "
+                   "send-back for this request.")
 elif not stated:
     reasons.append("Implementation happened this turn: add the completion lines before the validation line.")
 # v3.1.26: a wrong count alone is not worth a whole extra turn — the notice shows me the line from the record
@@ -101,10 +101,9 @@ if comp.get("build_done") and comp.get("check_open") and comp.get("plan"):
         reasons.append("Build is at 100% and only checks are left: " + handoff_text(cfg, comp, after_build=True))
     # v3.1.28: before done, the reviewer checks the changes against the plan (fresh, small memory)
     if not re.search(r"Reviewer before done\s*\(\s*" + re.escape(comp["plan"]), text + "\n" + record, re.I):
-        reasons.append("Before done: send the reviewer (subagent 'reviewer', moment: Before done) with the plan file and "
-                       "the list of changed files; fix the blocking problems it finds (each fix is a new Build row); "
-                       "then write 'Reviewer before done (" + comp["plan"] + "): <verdict>' in '## Where we are' and push "
-                       "it with the hand-off.")
+        reasons.append("Before done: send the reviewer (moment: Before done) with the plan file and the changed "
+                       "files. Fix the blocking problems it finds; each fix is a new Build row. Then write 'Reviewer "
+                       "before done (" + comp["plan"] + "): <verdict>' in '## Where we are'. Push it with the hand-off.")
 if comp.get("untagged_checks"):   # v3.1.24: the label keeps a check a check after it is ticked COMPLETE
     reasons.append("Add ' (Check)' to the end of these row names in the ledger, so they still count as Check once "
                    "they are COMPLETE: " + "; ".join(comp["untagged_checks"][:6]) + ".")

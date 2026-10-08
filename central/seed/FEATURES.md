@@ -13,8 +13,10 @@ Locked features of the current version, one section per screen. Each line says w
 - <rule — one line> — Proof: <test name>
 
 ## References
-- Sizes: <e.g. phone 390×844, iPad 1194×834> · Looks: <e.g. Pop, Calm — or one look>
+- Sizes: <e.g. phone 390×844, tablet 820×1180> · Looks: <e.g. Light, Dark — or one look>
 - <figure or rule document the comparisons and tests must cover — one line each>
+- Tests: <area or file pattern> → <the tests it needs, e.g. "src/cart* → npm run test:cart; smoke cart checks">
+- Tools: <saved analysis script in tools/> — <what it does, one line>
 
 ## Regression table (paste at the end of every edit)
 | Regression table | Result |

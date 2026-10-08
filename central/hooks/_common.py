@@ -27,6 +27,8 @@ def central_version():
     except OSError:
         return "unknown"
 
+import formats as _F   # v3.2.0: every format the owner sees comes from formats.py
+
 DEFAULT_CONFIG = {
     "routing_guard_mode": "observe",          # observe | enforce | off
     "record_file": "WORKING_RECORD.md",
@@ -34,11 +36,11 @@ DEFAULT_CONFIG = {
     "governance_files": ["CLAUDE.md", "WORKING_RECORD.md", "FEATURES.md", "ARCHITECTURE.md", ".claude/", "docs/", "plans/"],
     "regression_table_pattern": r"(?is)regression\s*table|\|\s*(kept|added|removed|missing)\s*\|",
     # the only interim reply: one status line, and only when asked while a worker still runs
-    "progress_line_pattern": r"^\s*⏳\s*Working on:\s*\S.*$",
-    "need_line_max_words": 30,
+    "progress_line_pattern": _F.WORKING_PATTERN,
+    "need_line_max_words": _F.NEED_LINE_MAX_WORDS,
     # v3.1.29: a short note may follow any status ("Checked — PR checked", "Checked. Not sure which prompt"); group 2
     # is the status word alone, so every check reads it the same way
-    "validation_line_pattern": r"(?m)Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated|Uncertain)\b(\s*[—–\-.;:,]\s*\S.*|\s*\.)?\s*$",
+    "validation_line_pattern": _F.VALIDATION_PATTERN,
     "design_triggers": ["redesign", "architecture", "data model", "schema", "migration", "sync layer", "firestore rules", "shared state", "regression", "keeps breaking", "again", "still broken", "refactor"],
     # planner suggestion (plan-gate): strong signals that a plan needs Fable rather than the Opus default
     "fable_planner_signals": ["root cause", "why does", "why is", "investigate", "across all", "every repo", "all repos", "all apps",
@@ -47,7 +49,7 @@ DEFAULT_CONFIG = {
     # completion guard (Stop): auto-fix rounds per turn before a final report may stand with open ledger items
     "auto_fix_max_rounds": 1,
     "pause_phrases": ["stop here", "pause here", "that's enough for now", "that is enough for now", "leave the rest", "stop for now"],
-    "completion_line_pattern": r"Completion:\s*(?:Build\s+)?(\d+)\s+of\s+(\d+)",
+    "completion_line_pattern": _F.COMPLETION_PATTERN,
     # completion guard: compare the ledger with this ref (read only, never fetched); rows unchanged against it
     # belong to earlier rounds and are neither counted nor listed
     "ledger_base_ref": "origin/main",
@@ -57,10 +59,10 @@ DEFAULT_CONFIG = {
     # quote-block top of every final answer (validation-line.py) and first-reply version line.
     # Each entry is "<icon> <label>"; the check ignores the quote marker, bold and the invisible
     # variation selector in the arrow, but an answer whose labels have no icon is sent back.
-    "report_top_labels": ["📌 Result:", "👉 I need from you:", "➡️ Next:"],
+    "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.1.31",
+        "version": "3.2.0",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -85,7 +87,8 @@ DEFAULT_CONFIG = {
         # which tools an event's matcher must cover ("<needle in the matcher>", "<plain name>")
         "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"],
                            "PreToolUse ": ["ExitPlanMode", "plan check before approval"],
-                           "PreToolUse  ": ["Read|Glob|Grep", "worker step count on reads (v3.1.26)"]},
+                           "PreToolUse  ": ["Read|Glob|Grep", "worker step count on reads (v3.1.26)"],
+                           "PreToolUse   ": ["SubagentHandback", "worker hand-back check (v3.2.0)"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission",
                   "Read(~/.cache/hz-rules/**)": "reading the central rules without a prompt (v3.1.26)"},
         "pointer_text": {"hooks inactive": "multi-repo fallback in CLAUDE.md"},
@@ -271,10 +274,23 @@ def is_governance_path(path, cfg):
     return False
 
 
+def _msg_log(kind, text):
+    """Test aid (v3.2.0): with HZ_MSG_LOG set, every message a check sends is copied there for the word check."""
+    path = os.environ.get("HZ_MSG_LOG")
+    if path and text:
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"kind": kind, "script": os.path.basename(sys.argv[0]), "text": text},
+                                   ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+
+
 def block(reason, kind=None):
     """kind "work" (v3.1.31): the work must continue (open items, setup first, a draft pull request, a destructive
     step) — a real send-back. Anything else from a Stop check is a format, wording or record problem: the switchboard
     saves it as a fix for the next step instead of sending the answer back (a send-back shows the answer twice)."""
+    _msg_log("block", reason)
     out = {"decision": "block", "reason": reason}
     if kind:
         out["hz_kind"] = kind
@@ -318,11 +334,13 @@ def take_fixes(session_id):
 
 
 def add_context(event, text):
+    _msg_log("context:" + event, text)
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
     sys.exit(0)
 
 
 def deny_tool(reason):
+    _msg_log("deny", reason)
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                              "permissionDecision": "deny",
                                              "permissionDecisionReason": reason}}))
@@ -667,8 +685,8 @@ def completion_summary(cfg):
             f"- {n}" + (" (waiting on you)" if states[n].get("waiting") else " (queued)" if states[n].get("queued")
                         else " (blocked)" if states[n]["blocked"] else "") for n in check_open)
         if not open_ and not blocked and not waiting and not queued and check_open:
-            display += ("\nBuild is done; the rest is checking. If a check finds a problem, tell this session or "
-                        "start a new one with the restart line from the record: it becomes a new Build row.")
+            display += ("\nBuild is done; the rest is checking. If a check finds a problem, tell this session. It "
+                        "becomes a new Build row.")
     return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
             "waiting": waiting, "queued": queued, "pct": pct, "line": line, "plan": plan, "display": display,
             "scoped": scoped, "check_open": check_open, "check_total": len(checks),
@@ -742,19 +760,24 @@ def handoff_text(cfg, comp, after_build=False):
     """The hand-off the session does itself in one reply, so the user never has to ask for it."""
     branch = current_branch()
     rec = cfg["record_file"]
-    return ("do the hand-off yourself in this reply; the user must not have to ask for it: "
-            f"1) update '## Where we are' in {rec} (the plan name exactly as in the ledger, the newest Plan vN and its plan "
-            "file path, the next stage, the restart line itself, what the next session must know — a few lines that point to plan files, "
-            "commits and pull requests by path or number instead of copying them, with no keys or passwords), then "
-            "commit and push "
-            f"{rec} to {branch}; "
-            "2) show the Completion lines: every row of the plan that is not complete — open, blocked, queued, "
-            f"waiting, Build and Check — so done plus listed adds up ({comp.get('line', '')}); "
-            "3) above the --- line, give this restart line in a code block, exactly: "
-            f"`{restart_line(comp, branch) if not after_build else restart_after_build(comp, branch)}` — and in the "
-            "'I need from you' line ask the user only for the next action that is theirs (a merge, a check), or "
-            "nothing. Do not ask the user to open a new session: this session carries on; the restart line is kept "
-            "for picking the work up later, if this session is ever closed.")
+    return ("do the hand-off yourself in this reply. I must not have to ask for it.\n"
+            f"1) Update '## Where we are' in {rec}. Write the plan name as in the ledger, the newest Plan vN and its "
+            "plan file, the next stage, and the restart line. Point to plan files, commits and pull requests; do not "
+            f"copy them. Write no keys or passwords. Then commit and push {rec} to {branch}.\n"
+            "2) Show the Completion lines. List every row of the plan that is not complete: open, blocked, queued, "
+            f"waiting, Build and Check. Done plus listed must add up ({comp.get('line', '')}).\n"
+            "3) Above the --- line, give this restart line in a code block, exactly: "
+            f"`{restart_line(comp, branch) if not after_build else restart_after_build(comp, branch)}`\n"
+            "In the 'I need from you' line, ask only for my next action (a merge, a check), or nothing. Do not ask me "
+            "to open a new session. This session carries on. The restart line is only for later, if the session "
+            "closes." + (LESSONS_TEXT.format(rec=rec, plan=comp.get("plan") or "the plan") if after_build else ""))
+
+
+# v3.2.0: plan versus actual. When the build of a plan is done, the session writes what caused rework, so the next
+# plan is better (the summary shows each stage's time against its size).
+LESSONS_TEXT = ("\n4) The build of this plan is done. Add '## Lessons — {plan}' to {rec} with 3 lines: what caused "
+                "rework, which stages ran over their size and why, and which rule or plan habit to change. Put each "
+                "proposed change to hz-claude-config in the '❓ Decisions' list, with your recommendation.")
 
 
 def restart_after_build(comp, branch=None):
@@ -794,6 +817,15 @@ def read_stats(session_id):
 
 
 # ---- Edmonton time (v3.1.25) ----------------------------------------------------------------------------------
+def edmonton_hour(now_utc=None):
+    """v3.2.0: the hour (0–23) in Edmonton, for the evening reminder."""
+    from datetime import datetime, timezone
+    t = edmonton_time(now_utc or datetime.now(timezone.utc))
+    h, rest = t.split(", ")[1].split(":")
+    h = int(h) % 12
+    return h + (12 if "PM" in rest else 0)
+
+
 def edmonton_time(now_utc=None):
     """'Oct 4, 6:02 PM MDT' — Mountain Time worked out here (no tz database: Windows Python often lacks one).
     Daylight time (MDT, UTC-6) runs from the second Sunday of March, 2 AM local, to the first Sunday of November,
@@ -814,26 +846,123 @@ def edmonton_time(now_utc=None):
 
 
 # ---- The plan shape that passes the plan check the first time (v3.1.26) --------------------------------------
-PLAN_TEMPLATE = """# Plan vN — <short plan name>
+PLAN_TEMPLATE = _F.PLAN_TEMPLATE   # v3.2.0: the plan shape lives in formats.py
 
-| Summary |
-|---|
-| What changes for you: what you will see or what will be different, in everyday words |
-| What changed from the last version and why (first version: "First version") |
-| What I need to do |
 
-Changes in this version (from the second version on; the Rev number is the plan version — Plan v2 marks its changes
-"🟩 Rev 2", Plan v9 marks "🟦 Rev 9"; squares cycle 🟦 1 · 🟩 2 · 🟧 3 · 🟪 4, then repeat; earlier changes are unmarked):
-```diff
-+ 🟩 Rev 2 — <line added or changed>
-- 🟩 Rev 2 — <line removed>
-```
+# v3.2.0: the plan store. The plan check saves the plan it shows, per plan name, and makes the change view itself.
+# State: {"last": <name shown last>, "plans": {"<name>": {"version", "round", "text", "approved", "file"}}}
+PLAN_STORE_PATH = os.path.join(STATE_DIR, "plan-store.json")
 
-<the plan itself, in everyday words, at most about 2 pages (6,000 characters); a changed section starts with its label, e.g. "🟩 Rev 2 — …">
 
-Stages to finish
-<n> stages: <x> build steps by Claude, then <y> checks (<what they are>)
-1. <stage> · Claude · Build
-2. <stage> · You · Check
+def plan_store_load():
+    try:
+        d = json.load(open(PLAN_STORE_PATH, encoding="utf-8"))
+        if isinstance(d, dict) and isinstance(d.get("plans"), dict):
+            return d
+    except (OSError, ValueError):
+        pass
+    return {"last": None, "plans": {}}
 
-Technical details: <file names, line numbers, commits, code, and any longer detail — only here>"""
+
+def plan_store_save(d):
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(d, open(PLAN_STORE_PATH, "w", encoding="utf-8"), ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def plan_version_of(text):
+    m = re.search(r"\bPlan v(\d+)\b", text or "")
+    return int(m.group(1)) if m else None
+
+
+def plan_name_of(text):
+    """The short plan name from the title '# Plan vN — <name> — <status>', in lower case."""
+    m = re.search(r"(?m)^#*\s*Plan v\d+\s*[—–-]\s*(.+?)\s*$", text or "")
+    if not m:
+        return ""
+    name = re.split(r"\s+[—–]\s+", m.group(1))[0]
+    return re.sub(r"\s+", " ", name).strip().lower()
+
+
+def plan_norm(text):
+    """For comparing: the title's approval words and spacing are not a change."""
+    t = re.sub(r"(?i)\b(awaiting approval|approved)\b", " ", text or "")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def last_plan_approved(records):
+    """True if the newest ExitPlanMode with a result was approved, False if it was rejected, None if none has a result."""
+    ids = [b.get("id") for b in tool_uses(records, ("ExitPlanMode",))]
+    results = {}
+    for rec in records:
+        if rec.get("type") != "user":
+            continue
+        for b in _content_blocks(rec):
+            if b.get("type") == "tool_result" and b.get("tool_use_id"):
+                c = b.get("content")
+                if isinstance(c, list):
+                    c = " ".join(str(x.get("text") or "") for x in c if isinstance(x, dict))
+                results[b["tool_use_id"]] = (bool(b.get("is_error")), str(c or ""))
+    for i in reversed(ids):
+        if i in results:
+            err, txt = results[i]
+            # real texts (Oct 2026): "User has approved your plan. …" / "The user doesn't want to proceed with this tool use."
+            ok = bool(re.search(r"(?i)has approved your plan", txt)) or not (
+                err or re.search(r"(?i)reject|doesn't want to proceed|did not approve|not approved|hook error", txt))
+            live_proof("plan-approval", {"approved": ok, "result_text": txt[:160]})
+            return ok
+    return None
+
+
+def plan_mark_approved(store, records):
+    """Mark the plan shown last as approved when its ExitPlanMode result says so."""
+    last = store.get("last")
+    if last and last in store["plans"] and not store["plans"][last].get("approved") and last_plan_approved(records):
+        store["plans"][last]["approved"] = True
+        plan_store_save(store)
+    return store
+
+
+def live_proof(check, detail):
+    """v3.2.0: each check writes one line when it runs in a real session, so live proof needs no test by the owner."""
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        import datetime as _dt
+        with open(os.path.join(STATE_DIR, "live-proof.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": _dt.datetime.now().isoformat(timespec="seconds"), "check": check,
+                                "version": central_version(), **(detail or {})}, ensure_ascii=False) + "\n")
+    except (OSError, TypeError, ValueError):
+        pass
+
+
+# ---- Test runs (stats.py and worker-budget.py) ----
+TEST_CMD = re.compile(r"\b(npm\s+(run\s+)?test|npx\s+(playwright|jest|vitest)|playwright|pytest|jest|vitest|unittest|"
+                      r"smoke|replay-hooks|node\s+\S*tests?[/\\]|run[-_]?tests?)\b|screenshot|capture", re.I)
+# v3.1.26: shell commands that only read count as planning; git and gh get their own group
+READ_CMD = re.compile(r"^(cat|head|tail|sed\s+-n|grep|rg|find|ls|dir|wc|type|more|less|tree|stat|file|diff|"
+                      r"Get-Content|Select-String|Get-ChildItem|git\s+(log|show|diff|status|blame|grep|ls-files))\b", re.I)
+GIT_CMD = re.compile(r"^(git|gh)\b", re.I)
+
+
+RUNNER = re.compile(r"^(node|npm|npx|pnpm|yarn|python3?|py|pytest|bash|sh|playwright|jest|vitest|\./\S+|\S+\.(sh|cmd|bat))\b", re.I)
+
+
+def is_test_run(cmd):
+    """v3.1.28: a command counts as a test run only when one of its parts starts a program (node, npm, python, a
+    script …) that runs something test-like. Reading a test file or log (cat, grep, tail, ls, sed …), waiting for a
+    log line, or naming a test in a message is not a test run — the Weekly-Planner Sunday v15 session showed 730
+    'test runs', about two thirds of them reads of test files and logs."""
+    cmd = str(cmd or "")
+    for part in re.split(r"&&|\|\||;|\||\n", cmd):
+        part = part.strip().lstrip("( ")
+        part = re.sub(r"^(do\s+|then\s+)", "", part)
+        for _ in range(3):   # v3.2.0: "time", "timeout 590" and VAR=value before the program
+            part = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+", "", part)
+            part = re.sub(r"^(time\s+|timeout\s+\d+[smh]?\s+)", "", part)
+        if not RUNNER.match(part) or re.match(r"^node\s+--check\b", part):
+            continue
+        if TEST_CMD.search(part) or ("<<" in part and TEST_CMD.search(cmd)):   # a script written inline
+            return True
+    return False

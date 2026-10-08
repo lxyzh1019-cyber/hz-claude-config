@@ -115,30 +115,7 @@ NAMES = {"validation-line": "format", "completion-guard": "completion", "handoff
          "record-guard": "record", "setup-guard": "setup", "qc-guard": "QC"}
 test_runs = [0]   # v3.1.26: full or partial test runs, main session and helpers
 activity = {}   # v3.1.25: tokens by what the step was doing (an estimate, one group per step)
-TEST_CMD = re.compile(r"\b(npm\s+(run\s+)?test|npx\s+(playwright|jest|vitest)|playwright|pytest|jest|vitest|unittest|"
-                      r"smoke|replay-hooks|node\s+\S*tests?[/\\]|run[-_]?tests?)\b|screenshot|capture", re.I)
-# v3.1.26: shell commands that only read count as planning; git and gh get their own group
-READ_CMD = re.compile(r"^(cat|head|tail|sed\s+-n|grep|rg|find|ls|dir|wc|type|more|less|tree|stat|file|diff|"
-                      r"Get-Content|Select-String|Get-ChildItem|git\s+(log|show|diff|status|blame|grep|ls-files))\b", re.I)
-GIT_CMD = re.compile(r"^(git|gh)\b", re.I)
-
-
-RUNNER = re.compile(r"^(node|npm|npx|pnpm|yarn|python3?|py|pytest|bash|sh|playwright|jest|vitest|\./\S+|\S+\.(sh|cmd|bat))\b", re.I)
-
-
-def is_test_run(cmd):
-    """v3.1.28: a command counts as a test run only when one of its parts starts a program (node, npm, python, a
-    script …) that runs something test-like. Reading a test file or log (cat, grep, tail, ls, sed …), waiting for a
-    log line, or naming a test in a message is not a test run — the Weekly-Planner Sunday v15 session showed 730
-    'test runs', about two thirds of them reads of test files and logs."""
-    cmd = str(cmd or "")
-    for part in re.split(r"&&|\|\||;|\||\n", cmd):
-        part = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+", "", part.strip())   # VAR=value before the program
-        if not RUNNER.match(part) or re.match(r"^node\s+--check\b", part):
-            continue
-        if TEST_CMD.search(part) or ("<<" in part and TEST_CMD.search(cmd)):   # a script written inline
-            return True
-    return False
+from _common import RUNNER, TEST_CMD, READ_CMD, GIT_CMD, is_test_run   # v3.2.0: shared with the worker check
 
 
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
@@ -219,8 +196,18 @@ by_source = {"main": 0, "helpers": 0}
 helper_steps = {"tool": 0, "one": 0}   # v3.1.28: worker steps that used a tool, and those with only one tool call
 
 
-def add_file(recs, source="main"):
-    last_t, last_model, waiting_on_helper = None, None, False
+act_secs = {}   # v3.2.0: time by type
+
+
+file_tokens = {}   # v3.2.0: tokens per helper file, for the role line
+file_secs = {}     # v3.2.0: time per helper role, from each helper file's first to last record
+file_model_secs = {}   # v3.2.0: the same time, by each helper file's model
+helper_files = []      # v3.2.0: (hand-over id, records) for the parallel-group line
+extra_helper_recs = [] # v3.2.0: helper records without a hand-over id, for the config-cost line
+
+
+def add_file(recs, source="main", key=None):
+    last_t, last_model, waiting_on_helper, last_act = None, None, False, "other"
     # v3.1.26: Claude Code writes one step as several records (thinking, text, tool call) with the same message id;
     # classify the step on all of its blocks, not on the first record
     blocks_by_id = {}
@@ -236,6 +223,8 @@ def add_file(recs, source="main"):
             content = msg.get("content") if isinstance(msg.get("content"), list) else []
             helper_call = any(isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task")
                               for b in content)
+            if str(msg.get("model") or "") == "<synthetic>":   # v3.2.0: Claude Code's own notes (usage limit)
+                continue
             mid = msg.get("id") or id(rec)
             lab = label(msg.get("model"))
             u = msg.get("usage") or {}
@@ -246,6 +235,9 @@ def add_file(recs, source="main"):
                 reread[0] += int(u.get("cache_read_input_tokens") or 0)
                 by_source[source] += sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+                if key:
+                    file_tokens[key] = file_tokens.get(key, 0) + sum(int(u.get(k) or 0) for k in (
+                        "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
                 act = activity_of(rec, blocks_by_id.get(msg.get("id"), content))
                 if source == "helpers":
                     n_calls = sum(1 for b in blocks_by_id.get(msg.get("id"), content)
@@ -258,11 +250,17 @@ def add_file(recs, source="main"):
                                     and is_test_run((b.get("input") or {}).get("command")))
                 activity[act] = activity.get(act, 0) + sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+            _act_now = activity_of(rec, blocks_by_id.get(msg.get("id"), content))
             if t is not None and last_t is not None:
                 seconds[lab] = seconds.get(lab, 0) + min(max(t - last_t, 0), CAP)
-            last_model, waiting_on_helper = lab, helper_call
+                act_secs[_act_now] = act_secs.get(_act_now, 0) + min(max(t - last_t, 0), CAP)
+            last_model, waiting_on_helper, last_act = lab, helper_call, _act_now
         elif t is not None and last_t is not None and last_model and not is_prompt(rec) and not waiting_on_helper:
             seconds[last_model] = seconds.get(last_model, 0) + min(max(t - last_t, 0), CAP)   # tool time
+            _c = (rec.get("message") or {}).get("content")
+            _tr = isinstance(_c, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in _c)
+            _k = last_act if _tr else "waiting"   # v3.2.0: only a tool's own run counts for its type; other gaps wait
+            act_secs[_k] = act_secs.get(_k, 0) + min(max(t - last_t, 0), CAP)
         elif rec.get("type") == "user":
             waiting_on_helper = False   # the helper's own records carry that time
         if t is not None:
@@ -283,7 +281,26 @@ for pattern in (os.path.splitext(tp)[0] + "/subagents/*.jsonl", os.path.join(os.
             continue
         done_files.add(key)
         helper_found = True
-        add_file(read_transcript(f), "helpers")
+        try:   # v3.2.0: the helper's role from its meta file
+            _kind = str(json.load(open(f[:-len(".jsonl")] + ".meta.json", encoding="utf-8")).get("agentType") or "helper")
+        except (OSError, ValueError):
+            _kind = "helper"
+        _recs = read_transcript(f)
+        add_file(_recs, "helpers", _kind)
+        try:
+            _tuid = str(json.load(open(f[:-len(".jsonl")] + ".meta.json", encoding="utf-8")).get("toolUseId") or "")
+        except (OSError, ValueError):
+            _tuid = ""
+        if _tuid:
+            helper_files.append((_tuid, _recs))
+        else:
+            extra_helper_recs.append(_recs)
+        _tt = [ts(r) for r in _recs if ts(r) is not None]
+        if _tt:
+            file_secs[_kind] = file_secs.get(_kind, 0) + (max(_tt) - min(_tt))
+            _fm = next((label((r.get("message") or {}).get("model")) for r in _recs if r.get("type") == "assistant"
+                        and str((r.get("message") or {}).get("model") or "") not in ("", "<synthetic>")), "other")
+            file_model_secs[_fm] = file_model_secs.get(_fm, 0) + (max(_tt) - min(_tt))
 
 # hand-overs, from the main transcript
 handovers, escalated, results = {}, 0, {}
@@ -314,6 +331,142 @@ for rec in main:
             if tur.get("totalDurationMs"):
                 seconds[lab] = seconds.get(lab, 0) + int(tur["totalDurationMs"]) / 1000
 
+# v3.2.0: tokens by helper and by stage. The main session's steps count for the stage it handed out last (before the
+# first hand-over: "planning"); each helper's total comes from the hand-over result Claude Code attaches.
+by_helper, by_stage, stage_of = {}, {}, {}
+_cur, _seen_main = "planning", set()
+for rec in main:
+    msg = rec.get("message") or {}
+    content = msg.get("content") if isinstance(msg.get("content"), list) else []
+    if rec.get("type") == "assistant":
+        u = msg.get("usage") or {}
+        mid = msg.get("id") or id(rec)
+        if u and mid not in _seen_main:
+            _seen_main.add(mid)
+            n = sum(int(u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens",
+                                                   "cache_read_input_tokens"))
+            by_stage.setdefault(_cur, {"main": 0, "helpers": 0})["main"] += n
+        for b in content:
+            if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task"):
+                inp = b.get("input") or {}
+                stype = str(inp.get("subagent_type") or "helper")
+                m_ = re.search(r"(?mi)^\s*Task:\s*(.+?)\s*$", str(inp.get("prompt") or ""))
+                stage = (m_.group(1)[:60] if m_ else ("planning" if stype in PLAN_HELPERS or stype == "planner"
+                                                       else str(inp.get("description") or stype)[:60]))
+                stage_of[b.get("id")] = (stage, stype)
+                if m_:
+                    _cur = stage
+    tur = rec.get("toolUseResult")
+    if isinstance(tur, dict):
+        tid = next((b.get("tool_use_id") for b in content if isinstance(b, dict) and b.get("type") == "tool_result"),
+                   None)
+        if tid in stage_of:
+            stage, stype = stage_of[tid]
+            tot = int(tur.get("totalTokens") or sum(int((tur.get("usage") or {}).get(k) or 0) for k in (
+                "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")) or 0)
+            by_helper[stype] = by_helper.get(stype, 0) + tot
+            by_stage.setdefault(stage, {"main": 0, "helpers": 0})["helpers"] += tot
+# v3.2.0: session time. Usage-limit stops ("You've hit your session limit") are counted apart; the shares are of the
+# time without them.
+def _ts(r):
+    try:
+        return datetime.fromisoformat(str(r.get("timestamp")).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _owner_prompt(r):
+    c = (r.get("message") or {}).get("content")
+    return r.get("type") == "user" and isinstance(c, str) and not c.lstrip().startswith(("<", "Another Claude session"))
+
+
+AWAY_SECONDS = int(cfg.get("away_minutes", 60)) * 60
+
+
+def session_time(recs):
+    tl = [r for r in recs if _ts(r) is not None]
+    if len(tl) < 2:
+        return None
+    wall = _ts(tl[-1]) - _ts(tl[0])
+    limit, stops, you, workers, gh, tests, away, away_n = 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0
+    last_a, in_stop = None, None
+    uses = {}
+    for r in tl:
+        t_ = _ts(r)
+        m = r.get("message") or {}
+        c = m.get("content")
+        if r.get("type") == "assistant":
+            if "hit your session limit" in json.dumps(c or "", ensure_ascii=False):
+                in_stop, stops = t_, stops + 1
+            last_a = t_
+            for b in c if isinstance(c, list) else []:
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    uses[b.get("id")] = (t_, b)
+        _cs = (r.get("message") or {}).get("content")
+        if r.get("type") == "user" and isinstance(_cs, str) and _cs.lstrip().startswith("<task-notification") \
+                and last_a is not None and in_stop is None:
+            workers += max(t_ - last_a, 0)     # v3.2.0: the main session idles until a background worker reports
+            last_a = t_
+        if _owner_prompt(r):
+            if in_stop is not None:
+                limit += t_ - in_stop
+                in_stop = None
+            elif last_a is not None:
+                if t_ - last_a > AWAY_SECONDS:     # v3.2.0: sleep or out — shown apart, left out of the shares
+                    away += t_ - last_a
+                    away_n += 1
+                else:
+                    you += t_ - last_a
+        for b in c if isinstance(c, list) else []:
+            if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in uses:
+                t0, u = uses[b["tool_use_id"]]
+                d = max(t_ - t0, 0)
+                n, cmd = u.get("name"), str((u.get("input") or {}).get("command") or "")
+                if n in ("AskUserQuestion", "ExitPlanMode"):
+                    if d > AWAY_SECONDS:
+                        away += d
+                        away_n += 1
+                    else:
+                        you += d
+                elif n in ("Agent", "Task"):
+                    workers += d
+                elif n == "Bash" and re.search(r"\bgh\s+run\b", cmd):
+                    gh += d
+                elif n == "Bash" and is_test_run(cmd):
+                    tests += d
+    active = max(wall - limit - away, 1)
+    other = max(active - you - workers - gh - tests, 0)
+    return {"wall": wall, "limit": limit, "stops": stops, "active": active, "away": away, "away_n": away_n,
+            "parts": [("short waits for you", you), ("workers", workers), ("GitHub waits", gh),
+                      ("main session test runs", tests), ("main session other", other)]}
+
+
+ROLE_NAME = {"opus-worker": "Opus worker", "sonnet-worker": "Sonnet worker", "Explore": "explorer", "explore": "explorer"}
+main_secs, helper_secs, slowest = 0.0, {}, []
+_tl = [r for r in main if _ts(r) is not None]
+_uses = {}
+for r in _tl:
+    c = (r.get("message") or {}).get("content")
+    for b in c if isinstance(c, list) else []:
+        if isinstance(b, dict) and b.get("type") == "tool_use":
+            _uses[b.get("id")] = (_ts(r), b)
+        if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in _uses:
+            t0, u = _uses[b["tool_use_id"]]
+            d = max(_ts(r) - t0, 0)
+            if u.get("name") in ("Agent", "Task"):
+                k = str((u.get("input") or {}).get("subagent_type") or "helper")
+                helper_secs[k] = helper_secs.get(k, 0) + d
+                _i = u.get("input") or {}
+                _m = re.search(r"(?mi)^\s*Task:\s*(.+?)\s*$", str(_i.get("prompt") or ""))
+                _d = str(_i.get("description") or (_m.group(1) if _m else "") or "")[:40]
+                slowest.append((d, f"{ROLE_NAME.get(k, k)}" + (f" \"{_d}\"" if _d else "")))
+            elif u.get("name") == "Bash":
+                slowest.append((d, "main: " + str((u.get("input") or {}).get("description") or
+                                                  (u.get("input") or {}).get("command") or "")[:40]))
+slowest.sort(key=lambda x: -x[0])
+_st0 = session_time(main)
+if _st0:
+    main_secs = _st0["parts"][2][1] + _st0["parts"][3][1] + _st0["parts"][4][1]
 total = sum(tokens.values())
 try:   # v3.1.24: the prompt hook reads this to ask for the hand-off once the session is long
     tp_ = os.path.join(STATE_DIR, "session-tokens.json")
@@ -338,12 +491,15 @@ def big(n):
     return f"{n / 1e6:.1f} M" if n >= 1e6 else f"{round(n / 1e3)} k"
 
 
-order = sorted(tokens, key=lambda k: -tokens[k])
-lines = [version_line(first=FIRST), "Session summary",
-         "Tokens: " + " · ".join(f"{k} {round(100 * tokens[k] / total)}%" for k in order) + f" ({big(total)})"
-         + (f" — main {round(100 * by_source['main'] / total)}% · helpers {round(100 * by_source['helpers'] / total)}%"
-            if by_source["helpers"] else "")
-         + (f" — {big(reread[0])} of it re-reading what was already sent" if reread[0] else "")]
+def mins(sec):
+    m = int(round(sec / 60))
+    return f"{m // 60} h {m % 60} min" if m >= 60 else f"{m} min"
+
+
+def pct(v, of):
+    return f"{round(100 * v / of)}%" if of and 100 * v / of >= 0.5 else "<1%"
+
+
 # v3.1.25: messages written between tool steps (the rules ask for none); the last text of each request is the answer
 between, cur_texts = 0, []
 for rec in main + [{"type": "user", "message": {"role": "user", "content": "end"}}]:
@@ -357,33 +513,149 @@ for rec in main + [{"type": "user", "message": {"role": "user", "content": "end"
         for b in msg.get("content") or [] if isinstance(msg.get("content"), list) else []:
             if isinstance(b, dict) and b.get("type") == "text" and (b.get("text") or "").strip():
                 cur_texts.append((msg.get("id") or id(rec), b["text"]))
+# v3.2.0: the session summary in lines — "Tokens and time", then "Session time", then one line of counts
+order = sorted(tokens, key=lambda k: -tokens[k])
+lines = [version_line(first=FIRST), "Session summary", "Tokens and time",
+         f"  Tokens: {big(total)}" + (f" · re-read {pct(reread[0], total)} ({big(reread[0])})" if reread[0] else "")]
+MODEL_OF = {"opus-worker": "Opus", "reviewer": "Opus", "planner-opus": "Opus", "sonnet-worker": "Sonnet",
+            "Explore": "Sonnet", "explore": "Sonnet", "planner": "Fable"}
+model_sec = {}
+if file_secs:
+    model_sec = dict(file_model_secs)
+    _mm = label(next((((r.get("message") or {}).get("model")) for r in reversed(main) if r.get("type") == "assistant"
+                      and str((r.get("message") or {}).get("model") or "") not in ("", "<synthetic>")), ""))
+    model_sec[_mm] = model_sec.get(_mm, 0) + main_secs
+else:
+    model_sec = seconds
+lines.append("  By model: " + " · ".join(f"{k} {pct(tokens[k], total)} ({big(tokens[k])}) {mins(model_sec.get(k, 0))}"
+                                          for k in order))
+ROLE = {"opus-worker": "Opus workers", "sonnet-worker": "Sonnet worker", "reviewer": "reviewer", "Explore": "explorer",
+        "explore": "explorer", "planner": "planner", "planner-opus": "planner (fallback)"}
+role_tok, role_sec = {"main session": by_source["main"]}, {"main session": main_secs}
+for k, v in (file_tokens or by_helper).items():
+    role_tok[ROLE.get(k, k)] = role_tok.get(ROLE.get(k, k), 0) + v
+for k, v in (file_secs or helper_secs).items():
+    role_sec[ROLE.get(k, k)] = role_sec.get(ROLE.get(k, k), 0) + v
+if by_source["helpers"] and not by_helper and not file_tokens:
+    role_tok["helpers"] = by_source["helpers"]
+lines.append("  By role: " + " · ".join(f"{k} {pct(v, total)} ({big(v)})" + (f" {mins(role_sec[k])}" if role_sec.get(k) else "")
+                                       for k, v in sorted(role_tok.items(), key=lambda x: -x[1]) if v))
 act_total = sum(activity.values())
 if act_total:
-    pct_ = lambda v: f"{round(100 * v / act_total)}%" if 100 * v / act_total >= 0.5 else "<1%"
-    lines.append("Activity: " + " · ".join(f"{k} {pct_(activity[k])}"
-                                           for k in ("planning", "coding", "testing", "waiting", "git & pull requests",
-                                                     "talking", "other")
-                                           if activity.get(k))
-                 + " (an estimate: a step that does several things counts once — testing before coding before planning)")
-if seconds:
-    lines.append("Time: " + " · ".join(f"{k} {max(1, round(seconds[k] / 60))} min" for k in order if k in seconds))
+    ACT = ("planning", "coding", "testing", "waiting", "git & pull requests", "talking", "other")
+    NAME = {"coding": "building", "git & pull requests": "git"}
+    lines.append("  By type: " + " · ".join(f"{NAME.get(k, k)} {pct(activity[k], act_total)} ({big(activity[k])}) "
+                                           f"{mins(act_secs.get(k, 0))}" for k in ACT if activity.get(k)))
+st_ = session_time(main)
+if st_:
+    lines.append(f"Session time: {mins(st_['wall'])} actual · {mins(st_['active'])} worked"
+                 + (f" · usage-limit stops {mins(st_['limit'])} ({st_['stops']})" if st_["stops"] else "")
+                 + (f" · away {mins(st_['away'])} ({st_['away_n']}, waits over {AWAY_SECONDS // 60} min, left out)"
+                    if st_["away"] else ""))
+    lines.append("  " + " · ".join(f"{k} {pct(v, st_['active'])} ({mins(v)})" for k, v in st_["parts"] if v >= 30))
+# v3.2.0: parallel groups — tokens and time per 'Group:' named in the hand-overs
+_grp_of = {}
+for _r in main:
+    for _b in ((_r.get("message") or {}).get("content") or []) if isinstance((_r.get("message") or {}).get("content"), list) else []:
+        if isinstance(_b, dict) and _b.get("type") == "tool_use" and _b.get("name") in ("Agent", "Task"):
+            _g = re.search(r"(?mi)^\s*\**Group:\**\s*(.+?)\s*$", str((_b.get("input") or {}).get("prompt") or ""))
+            if _g:
+                _grp_of[_b.get("id")] = _g.group(1)[:30]
+group_tok, group_sec = {}, {}
+for _tuid, _recs in helper_files:
+    _g = _grp_of.get(_tuid)
+    if not _g:
+        continue
+    _seen_g = set()
+    for _r in _recs:
+        _m = _r.get("message") or {}
+        _u = _m.get("usage") if _r.get("type") == "assistant" else None
+        if _u and _m.get("id") not in _seen_g:
+            _seen_g.add(_m.get("id"))
+            group_tok[_g] = group_tok.get(_g, 0) + sum(int(_u.get(k) or 0) for k in (
+                "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+    _tt = [ts(r) for r in _recs if ts(r) is not None]
+    if _tt:
+        group_sec[_g] = group_sec.get(_g, 0) + max(_tt) - min(_tt)
+if _grp_of and group_tok:
+    lines.append("  By parallel group: " + " · ".join(f"{g} {pct(v, total)} ({big(v)}) {mins(group_sec.get(g, 0))}"
+                                                   for g, v in sorted(group_tok.items(), key=lambda x: -x[1])))
+# v3.2.0: the config's own cost — helpers the rules require (planner, reviewer, explorer) and steps right after a
+# check refused something, in time and tokens; the time share is of the time worked
+REQ = {"planner", "planner-opus", "reviewer", "Explore", "explore"}
+_ref_tok, _ref_sec = 0, 0.0
+_deny = re.compile(r"(?i)hook (error|blocked)|blocked by [^\n]{0,40}hook|PreToolUse:\w+ hook")
+for _recs in [main] + [r for _, r in helper_files] + extra_helper_recs:
+    _bad = set()
+    for _r in _recs:
+        _c = (_r.get("message") or {}).get("content")
+        if _r.get("type") == "user" and isinstance(_c, list):
+            for _b in _c:
+                if isinstance(_b, dict) and _b.get("type") == "tool_result" and _deny.search(json.dumps(_b.get("content"), ensure_ascii=False)[:400]):
+                    _bad.add(_b.get("tool_use_id"))
+    for _i, _r in enumerate(_recs):
+        _c = (_r.get("message") or {}).get("content")
+        if _r.get("type") == "user" and isinstance(_c, list) and any(isinstance(_b, dict) and _b.get("tool_use_id") in _bad for _b in _c):
+            _n = next((x for x in _recs[_i + 1:] if x.get("type") == "assistant"), None)
+            if _n:
+                _u = (_n.get("message") or {}).get("usage") or {}
+                _ref_tok += sum(int(_u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens",
+                                                               "cache_read_input_tokens"))
+                if ts(_n) is not None and ts(_r) is not None:
+                    _ref_sec += max(ts(_n) - ts(_r), 0)
+_req_tok = sum(v for k, v in (file_tokens or by_helper).items() if k in REQ)
+_req_sec = sum(v for k, v in (file_secs or helper_secs).items() if k in REQ)
+if _req_tok or _ref_tok:
+    _worked = st_["active"] if st_ else 0
+    lines.append(f"  Config cost: {mins(_req_sec + _ref_sec)}" + (f" ({pct(_req_sec + _ref_sec, _worked)} of time worked)" if _worked else "")
+                 + f" · {big(_req_tok + _ref_tok)} ({pct(_req_tok + _ref_tok, total)} of tokens) — required helpers "
+                 f"{mins(_req_sec)}, refused steps {mins(_ref_sec)}")
+# v3.2.0: stages against their size (S about 15 min, M about 45, L about 90), from the hand-overs' Task and Size
+_est = {"S": 15, "M": 45, "L": 90}
+_stage = {}
+_span_of = {}
+for _tuid, _recs in helper_files:
+    _tt = [ts(r) for r in _recs if ts(r) is not None]
+    if _tt:
+        _span_of[_tuid] = max(_tt) - min(_tt)
+_u2 = {}
+for _r in main:
+    _c = (_r.get("message") or {}).get("content")
+    for _b in _c if isinstance(_c, list) else []:
+        if not isinstance(_b, dict):
+            continue
+        if _b.get("type") == "tool_use" and _b.get("name") in ("Agent", "Task"):
+            _p = str((_b.get("input") or {}).get("prompt") or "")
+            _t = re.search(r"(?mi)^\s*\**Task:\**\s*(.+?)\s*$", _p)
+            _z = re.search(r"(?mi)^\s*\**Size:\**\s*([SML])\b", _p)
+            if _t and _z:
+                _u2[_b.get("id")] = (_t.group(1)[:40], _z.group(1).upper(), ts(_r))
+        elif _b.get("type") == "tool_result" and _b.get("tool_use_id") in _u2:
+            _name, _sz, _t0 = _u2[_b["tool_use_id"]]
+            _d = _span_of.get(_b["tool_use_id"]) or (max(ts(_r) - _t0, 0) if ts(_r) and _t0 else 0)
+            _e = _stage.setdefault(_name, [_sz, 0])
+            _e[1] += _d
+if _stage:
+    _over = [(k, v) for k, v in _stage.items() if v[1] > _est[v[0]] * 60]
+    lines.append(f"  Stages against size: {len(_stage) - len(_over)} of {len(_stage)} within"
+                 + ("; over: " + " · ".join(f"{k} {mins(v[1])} (size {v[0]}, about {_est[v[0]]} min)" for k, v in _over[:4])
+                    if _over else ""))
+if slowest:
+    lines.append("  Slowest steps: " + " · ".join(f"{w} {mins(s)}" for s, w in slowest[:3]))
 names = {"opus-worker": "Opus", "sonnet-worker": "Sonnet"}
 ho = " · ".join(f"{names.get(k, k)} {v}" for k, v in sorted(handovers.items())) or "none"
-lines.append(f"Hand-overs: {ho}" + (f" · escalated {escalated}" if escalated else ""))
-lines.append(f"In-between messages: {between} (written between tool steps; the rules ask for none)")
-lines.append(f"Test runs: {test_runs[0]} (find all, fix all, check once — fewer is better)")
-if helper_steps["tool"]:
-    lines.append(f"Worker steps: {helper_steps['tool']} · one tool call per step: "
-                 f"{round(100 * helper_steps['one'] / helper_steps['tool'])}% (several reads in one step re-read less)")
 st = read_stats(sid)
-lines.append(f"Refused: planner edits {st.get('refused:routing-guard', 0)} · hand-overs {st.get('refused:worker-guard', 0)}"
-             f" · plans sent back {st.get('refused:plan-guard', 0)} · Send-backs: {st.get('sendbacks', 0)}"
-             + (" (" + " · ".join(f"{NAMES.get(k[9:], k[9:])} {v}" for k, v in sorted(st.items())
-                                  if k.startswith("sendback:") and v) + ")"
-                if any(k.startswith("sendback:") and v for k, v in st.items()) else "")
-             + f" · Saved fixes: {st.get('savedfixes', 0)} (v3.1.31: format and record problems, fixed next step)")
+sb = (" (" + " · ".join(f"{NAMES.get(k[9:], k[9:])} {v}" for k, v in sorted(st.items()) if k.startswith("sendback:") and v) + ")"
+      if any(k.startswith("sendback:") and v for k, v in st.items()) else "")
+lines.append(f"Counts: hand-overs {ho}" + (f" (escalated {escalated})" if escalated else "")
+             + f" · test runs {test_runs[0]} · in-between messages {between}"
+             + (f" · worker steps {helper_steps['tool']} (one tool per step {round(100 * helper_steps['one'] / helper_steps['tool'])}%)"
+                if helper_steps["tool"] else "")
+             + f" · refused: planner edits {st.get('refused:routing-guard', 0)}, hand-overs {st.get('refused:worker-guard', 0)},"
+             f" plans {st.get('refused:plan-guard', 0)} · send-backs {st.get('sendbacks', 0)}{sb} · saved fixes {st.get('savedfixes', 0)}")
 if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
     lines.append("This session is long: it carries on, hands stages to fresh workers, and keeps a restart line in the record in case you close it.")
 mark_shown()
-log("stats", {"shown": "summary", "tokens": total, "reread": reread[0], "activity": activity})
+log("stats", {"shown": "summary", "tokens": total, "reread": reread[0], "activity": activity,
+               "by_helper": by_helper, "by_stage": by_stage})
 print(json.dumps({"systemMessage": "\n".join(lines)}))

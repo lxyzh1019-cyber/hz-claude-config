@@ -27,6 +27,12 @@ text = "\n".join(str(v) for k, v in inp.items() if isinstance(v, str) and k in (
 # v3.1.30: planners in order of preference (the agent files pin the models); a later one only after the earlier one
 # failed because its model is not available on this account
 _planners = cfg.get("planner_helpers") or ["planner", "planner-opus"]
+if sub in _planners:
+    try:
+        from _common import live_proof
+        live_proof("planner", {"helper": sub, "fallback": bool(re.search(r"^\s*\**Fallback:", text, re.M | re.I))})
+    except ImportError:
+        pass
 if sub in _planners[1:] and not re.search(r"^\s*\**Fallback:\**\s*\S", text, re.M | re.I):
     deny_tool(f"Send '{_planners[0]}' first: it plans on the first-choice model. Use '{sub}' only when {_planners[0]} "
               "failed because its model is not available; then start the hand-over with 'Fallback: <the error>'.")
@@ -43,11 +49,47 @@ _branch = current_branch()
 _open_ready = pr_branch_state(data.get("session_id")).get(_branch) == "ready" if _branch else False
 if _open_ready and not re.search(r"^\s*\**PR:\**\s*#?\d+\s+(merged|closed|back to draft|not touched)\b",
                                                   text, re.M | re.I):
-    deny_tool(f"Pull request on branch {_branch} is open and ready for review, so the owner could merge it while this "
-              "worker changes its branch. Switch it back to draft first (gh pr ready <number> --undo, or the GitHub "
-              "tool's update_pull_request with draft true) and tell the owner '#<number> back to draft — do not "
-              "merge'. If it is already merged or closed, add the line 'PR: #<number> merged' (or closed) to the "
-              "hand-over. If this worker does not change that pull request's branch, add 'PR: #<number> not touched'.")
+    deny_tool(f"The pull request on branch {_branch} is ready for review. I could merge it while this worker changes "
+              "its branch. First switch it back to draft: gh pr ready <number> --undo, or the GitHub tool's "
+              "update_pull_request with draft true. Tell me '#<number> back to draft — do not merge'. If it is merged "
+              "or closed, add 'PR: #<number> merged' (or closed) to the hand-over. If this worker does not change "
+              "that branch, add 'PR: #<number> not touched'.")
+
+# v3.2.0: up to 3 workers at once. A worker that starts while another runs gets its own worktree (a second working
+# folder on its own branch), so they never edit the same files; the plan's parallel group is named.
+_open = {}
+for _rec in read_transcript(data.get("transcript_path")):
+    if _rec.get("isSidechain"):
+        continue
+    _c = (_rec.get("message") or {}).get("content")
+    if isinstance(_c, str) and "<task-notification>" in _c:
+        for _tid in re.findall(r"<tool-use-id>([^<]+)</tool-use-id>", _c):
+            _open.pop(_tid, None)
+    if not isinstance(_c, list):
+        continue
+    for _b in _c:
+        if not isinstance(_b, dict):
+            continue
+        if _b.get("type") == "tool_use" and _b.get("name") in ("Agent", "Task") and \
+                str((_b.get("input") or {}).get("subagent_type") or "") in workers:
+            _open[_b.get("id")] = True
+        elif _b.get("type") == "tool_result" and _b.get("tool_use_id") in _open:
+            _r = json.dumps(_b.get("content"), ensure_ascii=False)
+            if not re.search(r"(?i)launched|running in the background|started in the background", _r[:400]):
+                _open.pop(_b.get("tool_use_id"), None)
+_max = int(cfg.get("max_parallel_workers", 3))
+if len(_open) >= _max:
+    deny_tool(f"{len(_open)} workers already run; the limit is {_max}. Wait for one to report, then start this one.")
+if _open and not re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I):
+    deny_tool("Another worker is running. A parallel worker works in its own worktree, so they never edit the same "
+              "files. Make one with 'git worktree add ../<repo>-<group> -b claude/<group>' and add the line "
+              "'Worktree: <folder>' and 'Group: <parallel group from the plan>' to this hand-over.")
+if _open:
+    try:
+        from _common import live_proof
+        live_proof("parallel-workers", {"running": len(_open) + 1})
+    except ImportError:
+        pass
 
 task = re.search(r"^\s*\**Task:\**\s*(\S.*)$", text, re.M | re.I)
 level = re.search(r"^\s*\**Level:\**\s*(Routine|Complex)\b", text, re.M | re.I)
@@ -57,6 +99,10 @@ if not task or not level:
               "layout, docs, a test for an understood change). Complex = finding an unknown cause, design, anything "
               "touching shared data, settings, sync or the data model. When unsure: Complex.")
 lvl = level.group(1).lower()
+# v3.2.0: the stage's size from the plan (S, M, L), so the actual time can be compared with the estimate
+if not re.search(r"^\s*\**Size:\**\s*[SML]\b", text, re.M | re.I) and not os.environ.get("HZ_STAGE_TAGS_OFF"):
+    deny_tool("Add the line 'Size: S', 'Size: M' or 'Size: L' to the hand-over: the stage's size from the plan "
+              "(S about 15 min, M about 45, L about 90). It lets the session see when a stage runs over.")
 # v3.1.28: a worker that reported "Stuck:" is followed by the reviewer, not by another try
 stuck_since_review = False
 uses = {}

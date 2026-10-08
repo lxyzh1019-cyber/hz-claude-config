@@ -44,14 +44,13 @@ def norm(s):
     return re.sub(r"\s+", " ", (s or "").replace("\ufe0f", "")).strip().lower()
 
 
-RESEND_DEFAULT = ("Send only what is missing: do not repeat the rest of the report, which I already see. Your re-send "
-                  "is short: the Completion line if one is required, the validation line, then a line with just --- "
-                  "and the three closing lines last.")
+import formats as F   # v3.2.0: the formats come from the format file
+RESEND_DEFAULT = ("Send only what is missing. Do not repeat the rest of the report; I already see it. Send the "
+                  "Completion line if one is required, the validation line, a line with just ---, and the closing "
+                  "block last.")
 # v3.1.29: everything already on my screen stays there, so a re-send repeats only the part that failed
-RESEND_CLOSING = ("Send only a line with just --- and the three closing lines: do not repeat the validation line or "
-                  "the rest of the report, which I already see.")
-RESEND_LINE = ("Send only the validation line, nothing else: the three closing lines above were right, and I already "
-               "see them.")
+RESEND_CLOSING = ("Send only a line with just --- and the closing block. Do not repeat the rest; I already see it.")
+RESEND_LINE = ("Send only the validation line. The closing block above was right.")
 
 
 def send_back(problems, resend=RESEND_DEFAULT):
@@ -82,15 +81,8 @@ if re.search(cfg["validation_line_pattern"], text):
     labels = cfg["report_top_labels"]
     tail = lines[-len(labels):]
     if len(tail) < len(labels) or not all(norm(l).startswith(norm(lab)) for l, lab in zip(tail, labels)):
-        problems.append("A final answer ends with a quote block of three lines, in everyday words with no file names, "
-                        "commands or code, after a line with just ---. Nothing comes after these three lines:\n"
-                        "---\n"
-                        "> 📌 **Result:** <status only: what works now or what I get — no requests>\n"
-                        "> 👉 **I need from you:** <one action, one short line, or nothing>\n"
-                        "> ➡️ **Next:** <what happens after>\n"
-                        "Above the --- line: the detail, the Completion lines if required, the validation line, then "
-                        "decisions for me in a '❓ Decisions' list, one line each with your recommendation. The icons "
-                        "are part of the labels.")
+        problems.append("A final answer ends with the closing block. Nothing comes after it.\n" + F.CLOSING_SHAPE +
+                        "\n" + F.ANSWER_ORDER + " " + F.CLOSING_WORDS + " The icons are part of the labels.")
     else:
         jargon = sorted({j.strip() for l in tail for j in re.findall(
             r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b\d+(?:\.\d+)?\s?(?:px|pt|rem|em)\b", l)})
@@ -106,17 +98,25 @@ if re.search(cfg["validation_line_pattern"], text):
                                                                  r"instead of|not in the|unlike|changes? from|departs?)\b"), l)]
         has_pictures = re.search(r"https?://\S+|!\[[^\]]*\]\(|\.(png|jpe?g|webp|gif|html)\b", text, re.I)
         if dev_lines and "❓" in text and not has_pictures:
-            problems.append("A difference from the prototype is a question with pictures: show the prototype and the "
-                            "build side by side for each difference, numbered like the '❓ Decisions' list — one "
-                            "published comparison page (made by a worker, once per batch) — and put its link in this "
-                            "reply. Words alone are not enough for me to decide.")
+            problems.append("A difference from the prototype is a question with pictures. Show the prototype and the "
+                            "build side by side for each difference, numbered like the '❓ Decisions' list. A worker "
+                            "makes one comparison page per batch. Put its link in this reply. Words alone are not "
+                            "enough for me to decide.")
+        # v3.2.0: every problem comes with a solution — each line of the decisions list names a recommendation
+        _dec = re.search(r"❓\s*\**\s*Decisions\**\s*\n(.*?)(?:\n\s*---\s*\n|\Z)", text, re.S)
+        if _dec:
+            _items = [l.strip() for l in _dec.group(1).splitlines() if re.match(r"^\s*(\d+[.)]|[-*•])\s+\S", l)]
+            _bare = [l for l in _items if not re.search(cfg.get("recommend_words", r"(?i)recommend"), l)]
+            if _bare:
+                problems.append(f"Each line of the '❓ Decisions' list names your recommendation. {len(_bare)} line(s) "
+                                "have none: " + "; ".join(x[:50] for x in _bare[:3]) + ".")
         need = re.sub(r"^.*?I need from you:\s*", "", tail[1].replace("*", ""), flags=re.I)
         if len(need.split()) > int(cfg["need_line_max_words"]):
             problems.append(f"The 'I need from you' line is one action in at most {cfg['need_line_max_words']} words. "
                             "Move explanations above the --- line and decisions into the '❓ Decisions' list.")
     if problems:
         # only the closing block failed (no time, colour or picture problem in the body) → re-send just that block
-        only_closing = len(problems) == 1 and problems[0].startswith("A final answer ends with a quote block")
+        only_closing = len(problems) == 1 and problems[0].startswith("A final answer ends with the closing block")
         send_back(problems, RESEND_CLOSING if only_closing else RESEND_DEFAULT)
     sys.exit(0)
 
@@ -125,10 +125,9 @@ if is_progress_report(text, records, cfg):
         send_back(problems)
     sys.exit(0)
 if closing_ok(text):   # v3.1.29: the closing block is right; only the validation line is missing or malformed
-    send_back(problems + ["This reply has no valid validation line: 'Confidence: High|Medium|Low · Status: "
-                          "Proposed|Checked|Validated|Uncertain', optionally followed by ' — <short note>' "
-                          "(Validated names what was run)."], RESEND_LINE)
-send_back(problems + ["This reply has no closing line. While a worker runs, send nothing; if I ask for status, reply "
-                      "with one line only: '⏳ Working on: <names> · <n> of <m> done'. Otherwise this is a final answer: "
-                      "include 'Confidence: High|Medium|Low · Status: Proposed|Checked|Validated — <what was run>|"
-                      "Uncertain' with honest values (a short note after ' — ' is fine for any status), and end with --- and the three closing quote lines."])
+    send_back(problems + ["This reply has no valid validation line: '" + F.VALIDATION_SHAPE + "'. You can add ' — "
+                          "<short note>'. Validated names what ran."], RESEND_LINE)
+send_back(problems + ["This reply has no closing block. While a worker runs, send nothing. If I ask for status, reply "
+                      "with one line only: '" + F.WORKING_LINE + "'. Otherwise this is a final answer. Add the "
+                      "validation line with honest values: '" + F.VALIDATION_SHAPE + "'. End with --- and the "
+                      "closing block."])
