@@ -1,6 +1,8 @@
-# hz-claude-config — central working rules (v3.1.22)
+# hz-claude-config — central working rules
 
-Everything central lives here: the rules, the hook logic, the executors' shared instructions and the audit skills (`central/`). Each app repository keeps only a small **stable stub** — `.claude/settings.json`, `.claude/hz-loader.py`, `.claude/agents/opus-worker.md`, `.claude/agents/sonnet-worker.md`, a pointer `CLAUDE.md` — plus its own `FEATURES.md` and `WORKING_RECORD.md`.
+The current version is line 1 of `central/MANIFEST.txt`. This README carries no version number, so it does not go out of date.
+
+Everything central lives here: the rules, the hook logic, the executors' shared instructions and the audit skills (`central/`). Each app repository keeps only a small **stable stub**: `.claude/settings.json`, `.claude/hz-loader.py`, six helper files in `.claude/agents/` and a pointer `CLAUDE.md`. It also keeps its own `FEATURES.md` and `WORKING_RECORD.md`. The six helpers are opus-worker, sonnet-worker, planner, planner-opus, reviewer and explore.
 
 At every session start, cloud or local, the stub's loader fetches the current `central/` from this repository (public raw files) and the session-start hook injects the rules. **Updating = change `central/` here and merge. No app-repo changes.**
 
@@ -12,10 +14,16 @@ These instructions live only here; chat replies point here. This repository must
 | Path | What it is |
 |---|---|
 | `central/` | what the loader fetches; `central/MANIFEST.txt` line 1 is the **only** place the version lives |
-| `stub/` | the stable per-repo files (settings, loader, the four helpers: opus-worker, sonnet-worker, reviewer, Explore) and `install-stub.sh` (one-time install per repo) |
+| `stub/` | the stable per-repo files (settings, loader, the six helpers: opus-worker, sonnet-worker, planner, planner-opus, reviewer, Explore) and `install-stub.sh` (one-time install per repo) |
+| `central/stub-files/` | a copy of the `stub/` files that the loader fetches; the app sessions update their setup from it (Step B) |
 | `tools/build_manifest.py` | rebuilds `central/MANIFEST.txt` after any change under `central/` |
+| `tools/replay_sessions.py` | replays real session files through the checks |
+| `tools/real-harness/` | runs the real Claude Code with a stand-in model, to test the checks live |
+| `tools/ste_check.py` | checks text against the ASD-STE100-lite writing rules |
+| `tools/rules-coverage.txt` | every rule with the phrase that proves it is still in the rules text |
 | `.claude/`, `CLAUDE.md` | this repository's own stub, so the rules apply when editing it too |
-| `docs/` | rules review copy (revision markers), skill-trigger tuning procedure, your claude.ai preferences (`claude-ai-preferences.txt`: paste into claude.ai Settings > Profile when an update says so) |
+| `docs/` | your claude.ai preferences (`claude-ai-preferences.txt`: paste into claude.ai Settings > Profile when an update says so) and the model guidance sources (`model-guidance-sources.md`) |
+| `central/hooks/replay-hooks.sh` | the replay test of every check (run before each package) |
 
 ## B. App repositories update their own setup files (automatic)
 A few setup files live inside each app repository (which helper runs on which model, which checks switch on). They cannot be downloaded at session start like the rules, so the session start **updates them itself**: the first session after a change rewrites them, puts them on a branch named `hz-setup-update-<version>`, opens a pull request, and asks you to merge it. Merge it; the next session there shows `[stub] current`. While that pull request waits, later sessions only remind you — they never open a second one.
@@ -35,11 +43,11 @@ The claude.ai chat builds and tests every update and gives you one **full** pack
 3. Right-click the zip → **Extract All** → set the destination to the repository folder itself → **Replace** when asked.
 4. Commit, **Publish branch**, **Create Pull Request**, merge on github.com.
 
-What you should see: in step 4, GitHub Desktop lists the number of added / changed files the chat told you, and **0 deleted**. After the merge, `central/MANIFEST.txt` on github.com shows the new version. If you see anything else, stop and tell the chat.
+What you should see: in step 4, GitHub Desktop lists the number of added / changed files the chat told you, and **0 deleted**. When the chat names files to remove, the deleted number equals the named files. After the merge, `central/MANIFEST.txt` on github.com shows the new version. If you see anything else, stop and tell the chat.
 
 Never use github.com's **Upload files** for these packages (it flattens folders and skips `.claude`).
 
-**Rollback (v3.1.30).** If a new version causes trouble in the apps:
+**Rollback.** If a new version causes trouble in the apps:
 1. On github.com, open the merged pull request of that version in **hz-claude-config**.
 2. Click **Revert** (unverified button name on your screen), then create and merge the pull request it makes.
 3. Every app loads the previous version at its next session; nothing changes in the app repositories.
@@ -71,6 +79,7 @@ Pass = every test passed or not applicable. The three closing lines at the end o
 |---|---|---|
 | `Central rules NOT loaded … nothing is cached` | fetch failed and no earlier copy | check this repo is public and `central/MANIFEST.txt` exists on `main` |
 | No notice starting `Rules v… · setup …` after the first reply | the checks did not run in this session | tell the chat |
+| The notice says `vX is on GitHub: reopen this session to load it` | the session started before the newer rules were merged | close the session and open it again; it keeps the chat and loads the new rules (unverified in the desktop app) |
 | `offline: using cached vX` | GitHub could not be reached, earlier copy used | usually temporary; start a new session later |
 | `hz-claude-config is incomplete on GitHub … using cached vX` | files are missing in this repository on GitHub | tell the chat; it sends a full package (Step E) |
 | Old version still loaded after an update | raw-file cache | wait a few minutes; start a new session |
