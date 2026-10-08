@@ -16,6 +16,7 @@ export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if t
 export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
 export HZ_PLAN_ROUNDS_OFF=1        # v3.1.33: older plan tests are independent plans; the v3.1.33 tests switch it on
+export HZ_SETUP_PUBLISH_OFF=1      # v3.2.6: older tests check the old setup path (the model commits); the v3.2.6 tests switch publishing on
 export HZ_REPORT_TIMING_OFF=1     # v3.2.2: older tests check other hooks alone; the v3.2.2 tests switch it on
 export HZ_RULES_FIRST_OFF=1        # v3.1.29: older tests run as if the rules were read; the v3.1.29 tests switch it on
 check(){ # name expected_substring actual
@@ -2305,8 +2306,9 @@ check "v3.2.4: the build adds the replaced helper file's hash to the known list"
 rm -rf $SB $SU $BT
 # ---- v3.2.5 ------------------------------------------------------------------------------------------------------
 V5=$(mktemp -d); export V5
+END5=0
 while IFS= read -r l; do
-  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; esac
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END5=1;; esac
 done < <(H="$H" T="$T" V5="$V5" python3 - <<'PYV5'
 import json,os,subprocess,sys,re,datetime as dt
 H=os.environ["H"]; V5=os.environ["V5"]
@@ -2423,9 +2425,93 @@ types=minutes(re.sub(r"\([^)]*\)|\d+%|<1%","",bt.split("By type:")[-1]))
 res("v3.2.5: the type times add up to the worked time (two helpers in parallel, 138 minutes away)",worked>0 and 0.9*worked<=types<=1.1*worked,(worked,types,bt[:200]))
 res("  ...away time is not counted in a type",types<30,(types,))
 res("  ...testing shows in the by-type line",("testing" in bt) or True,bt)
+print("END")
 PYV5
 )
+[ "$END5" = 1 ] && { echo "PASS v3.2.5: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.5: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
 check "v3.2.5: testing always shows in the by-type line" "testing" "$(echo '{"transcript_path":"'$T'/cc.jsonl","session_id":"cc"}' | python3 $H/stats.py | python3 -c "import json,sys;print([l for l in json.load(sys.stdin).get('systemMessage','').splitlines() if 'By type' in l][0])")"
 rm -rf "$V5"
+# ---- v3.2.6 ------------------------------------------------------------------------------------------------------
+V6=$(mktemp -d); export V6
+END6=0
+while IFS= read -r l; do
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END6=1;; esac
+done < <(H="$H" V6="$V6" python3 - <<'PYV6'
+import json,os,subprocess,sys,glob,shutil,stat
+H=os.environ["H"]; V6=os.environ["V6"]; sys.path.insert(0,H)
+def res(name,ok,detail=""): print(("PASS " if ok else "FAIL ")+name+("" if ok else " -> "+str(detail)[:220]))
+def git(cwd,*a): return subprocess.run(["git",*a],cwd=cwd,capture_output=True,text=True)
+def run(script,inp,env=None,cwd=None):
+    e=dict(os.environ); e.update(env or {})
+    return subprocess.run(["python3",os.path.join(H,script)],input=json.dumps(inp),capture_output=True,text=True,env=e,cwd=cwd).stdout
+import _common as C
+# 1. the refusal by the safety check
+den=[{"type":"user","message":{"role":"user","content":"do the setup"}},
+     {"type":"user","toolDenialKind":"automode-blocked","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","is_error":True,"content":"Permission denied [Self-Modification]"}]}}]
+res("v3.2.6: a tool call refused by the auto-mode safety check is recognised",C.refused_by_safety_check(den),"")
+res("  ...a refusal by one of our own checks is not",not C.refused_by_safety_check([{"type":"user","toolDenialKind":"permission-rule","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"PreToolUse hook error: Level: Routine goes to sonnet-worker"}]}}]),"")
+res("  ...and a long text that only mentions the classifier is not",not C.refused_by_safety_check([{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"x "*400+" denied by the auto mode classifier"}]}}]),"")
+# 2. the setup check: one send-back at most, none after a refusal
+proj=os.path.join(V6,"g"); os.makedirs(os.path.join(proj,".claude","state"),exist_ok=True)
+git(proj,"init","-q","-b","main"); git(proj,"config","user.email","t@t"); git(proj,"config","user.name","t")
+open(os.path.join(proj,".claude","settings.json"),"w").write("{}"); git(proj,"add","-A"); git(proj,"commit","-qm","b"); git(proj,"branch","hz-setup-update-9.9.9")
+open(os.path.join(proj,".claude","state","setup-pending.json"),"w").write('{"branch": "hz-setup-update-9.9.9"}')
+open(os.path.join(proj,".claude","state","prompt-number.json"),"w").write('{"session":"s","n":1}')
+reply={"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Could not do it.\n\nConfidence: High · Status: Checked\n\n---\n> 📌 **Result:** Waiting.\n> 👉 **I need from you:** Reply yes.\n> ➡️ **Next:** Send."}]}}
+tr=os.path.join(V6,"t.jsonl"); open(tr,"w").write("\n".join(json.dumps(r) for r in [{"type":"user","message":{"role":"user","content":"hi"}},reply])+"\n")
+outs=[run("setup-guard.py",{"session_id":"s","transcript_path":tr,"stop_hook_active":False},{"CLAUDE_PROJECT_DIR":proj}) for _ in range(3)]
+res("v3.2.6: the setup check sends the session back once, not twice (three replies became two)",bool(outs[0].strip()) and not outs[1].strip() and not outs[2].strip(),[o[:30] for o in outs])
+open(os.path.join(proj,".claude","state","prompt-number.json"),"w").write('{"session":"s","n":2}')
+open(tr,"w").write("\n".join(json.dumps(r) for r in den+[reply])+"\n")
+o=run("setup-guard.py",{"session_id":"s","transcript_path":tr,"stop_hook_active":False},{"CLAUDE_PROJECT_DIR":proj})
+res("  ...and not at all after a refusal by the safety check",not o.strip(),o[:80])
+# 3. the switchboard saves a work send-back after a refusal instead of repeating the reply
+cfgp=os.path.join(H,"config.json")
+open(os.path.join(proj,".claude","state","prompt-number.json"),"w").write('{"session":"s2","n":1}')
+open(os.path.join(proj,".claude","state","setup-pending.json"),"w").write('{"branch": "hz-setup-update-9.9.9"}')
+open(tr,"w").write("\n".join(json.dumps(r) for r in den+[reply])+"\n")
+o=run("dispatch.py",{"hook_event_name":"Stop","session_id":"s2","transcript_path":tr,"stop_hook_active":False},{"CLAUDE_PROJECT_DIR":proj})
+res("  ...the switchboard keeps the answer (no send-back) when the last step was refused by the safety check",'"decision": "block"' not in o,o[:160])
+# 4. the session start makes the setup commit, the push and the pull request itself
+STUB=os.path.join(H,"..","stub-files")
+bare=os.path.join(V6,"remote.git"); app=os.path.join(V6,"app")
+git(V6,"init","-q","--bare",bare); git(V6,"clone","-q",bare,app); git(app,"config","user.email","t@t"); git(app,"config","user.name","t")
+git(app,"switch","-q","-c","main")
+os.makedirs(os.path.join(app,".claude","agents"))
+for f in glob.glob(os.path.join(STUB,"*.md")):
+    if "CLAUDE-pointer" in f: continue
+    t=open(f,encoding="utf-8").read().replace("use the Read tool (never a shell command) to read the file named","read the file named").replace("effort: high","effort: medium")
+    open(os.path.join(app,".claude","agents",os.path.basename(f)),"w",encoding="utf-8").write(t)
+shutil.copy(os.path.join(STUB,"hz-loader.py"),os.path.join(app,".claude","hz-loader.py")); shutil.copy(os.path.join(STUB,"settings.json"),os.path.join(app,".claude","settings.json"))
+shutil.copy(os.path.join(STUB,"CLAUDE-pointer.md"),os.path.join(app,"CLAUDE.md")); open(os.path.join(app,"WORKING_RECORD.md"),"w").write("# WR\n")
+git(app,"add","-A"); git(app,"commit","-qm","base"); git(app,"push","-q","-u","origin","main")
+# a stand-in `gh` so the pull request call can be seen
+fake=os.path.join(V6,"bin"); os.makedirs(fake); gh=os.path.join(fake,"gh")
+open(gh,"w").write('#!/bin/sh\necho "$@" > '+os.path.join(V6,"gh-args.txt")+'\necho https://github.com/o/r/pull/7\n'); os.chmod(gh,0o755)
+env=dict(os.environ,HZ_SETUP_PUBLISH_OFF="",PATH=fake+os.pathsep+os.environ["PATH"],CLAUDE_PROJECT_DIR=app)
+code="import sys;sys.path.insert(0,sys.argv[1]);import _common as C,stubupdate;l,n=stubupdate.update(C.load_config(),sys.argv[2]);print(l);print(n)"
+o=subprocess.run(["python3","-c",code,H,app],capture_output=True,text=True,env=env).stdout
+ver=C.load_config()["stub_expect"]["version"]; br="hz-setup-update-"+ver
+res("v3.2.6: the session start pushes the setup branch itself",br in git(bare,"branch","--list",br).stdout,git(bare,"branch","-a").stdout)
+files=git(bare,"show","--stat","--format=%s",br).stdout
+res("  ...with one commit named 'Setup update (automatic, vX)' that holds the helper files",("Setup update (automatic, v"+ver+")") in files and "reviewer.md" in files and "opus-worker.md" in files,files[:200])
+res("  ...and the reviewer in that commit is at effort high",("effort: high" in git(bare,"show",br+":.claude/agents/reviewer.md").stdout),"")
+res("  ...your working folder is not touched (no changed files, still on main)",git(app,"status","--short").stdout.strip()=="" and git(app,"rev-parse","--abbrev-ref","HEAD").stdout.strip()=="main",git(app,"status","--short").stdout)
+res("  ...and no temporary worktree is left",len(git(app,"worktree","list").stdout.strip().splitlines())==1,git(app,"worktree","list").stdout)
+res("  ...the pull request is opened ready for review (no draft) and its link is given to the session",os.path.exists(os.path.join(V6,"gh-args.txt")) and "--draft" not in open(os.path.join(V6,"gh-args.txt")).read() and "pull/7" in o,(o[-200:]))
+res("  ...the session is told to make no commit and to ask you to merge",("Make no commit" in o) and ("ask me to merge" in o),o[-260:])
+# 5. when the push cannot be made, the old way runs and nothing is left behind
+app2=os.path.join(V6,"app2"); shutil.copytree(app,app2,symlinks=True)
+git(app2,"checkout","-q","main"); git(app2,"branch","-D",br); git(app2,"push","-q","origin",":"+br) if False else None
+git(app2,"remote","set-url","origin",os.path.join(V6,"nowhere.git"))
+env2=dict(env,CLAUDE_PROJECT_DIR=app2)
+o2=subprocess.run(["python3","-c",code,H,app2],capture_output=True,text=True,env=env2).stdout
+res("v3.2.6: when the push cannot be made, the old way runs: files on disk and the session commits",("updated on disk just now" in o2) and "git switch -c" in o2,o2[:200])
+res("  ...and no branch or worktree of the failed try is left",br not in git(app2,"branch","--list",br).stdout and len(git(app2,"worktree","list").stdout.strip().splitlines())==1,git(app2,"branch").stdout)
+print("END")
+PYV6
+)
+[ "$END6" = 1 ] && { echo "PASS v3.2.6: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.6: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
+rm -rf "$V6"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

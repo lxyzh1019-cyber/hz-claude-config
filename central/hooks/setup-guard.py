@@ -26,11 +26,15 @@ if exists():
         pass
     sys.exit(0)
 cfg = load_config()
-text = last_assistant_text(read_transcript(data.get("transcript_path")))
+_records = read_transcript(data.get("transcript_path"))
+from _common import refused_by_safety_check, last_turn
+if refused_by_safety_check(last_turn(_records)):
+    sys.exit(0)   # v3.2.6: the safety check refused the commit; a send-back cannot help and would repeat the reply
+text = last_assistant_text(_records)
 m = re.search(cfg["validation_line_pattern"], text or "")
 if m and m.group(2).split()[0] == "Proposed":
     sys.exit(0)
-r = use_round("setup", data.get("session_id"), 2)
+r = use_round("setup", data.get("session_id"), 1)   # v3.2.6: one send-back at most (two made three replies)
 if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
 block(f"Do the setup update first, as the session start says. Put the updated setup files on the branch {branch} "

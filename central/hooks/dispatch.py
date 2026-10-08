@@ -71,13 +71,24 @@ for e in entries:
 
 # v3.1.31: only "work" problems send the answer back (the work must continue); format, wording and record problems
 # are saved for the next step, so the answer is never shown twice. With a work problem, everything goes back together.
+refusal_note = False
+if reasons and "work" in kinds and event == "Stop":
+    # v3.2.6: after a refusal by the auto-mode safety check a send-back cannot help and would repeat the whole reply
+    try:
+        from _common import refused_by_safety_check, read_transcript, last_turn
+        if refused_by_safety_check(last_turn(read_transcript(data.get("transcript_path")))):
+            kinds = [k for k in kinds if k != "work"]
+            refusal_note = True
+    except Exception:
+        pass
 if reasons and "work" not in kinds:
     # the re-send instructions in a reason make no sense for a saved fix: keep only the problem itself
     save_fixes(sid, [re.split(r"\s+(?:Send only|Your re-send|Do not repeat|Send the |Then send)", r_, maxsplit=1)[0]
                      for r_ in reasons])
     bump_stat(sid, "savedfixes")
     live_proof("saved-fixes", {"saved": len(reasons)})
-    notes.append("Noted for the next step: " + str(len(reasons)) + " format or record fix(es). This answer is not repeated.")
+    notes.append("Noted for the next step: " + str(len(reasons)) + " format or record fix(es). This answer is not repeated."
+                 + (" The safety check refused the last step, so no send-back." if refusal_note else ""))
     log("dispatch", {"event": event, "sent_back": 0, "saved_fixes": len(reasons), "notices": len(notes)})
     out = {"systemMessage": "\n".join(notes)}
     print(json.dumps(out))

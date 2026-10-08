@@ -28,6 +28,11 @@ worker being started); 3.2.1 started all four.
 
 Not reproducible here: helpers get no `SubagentHandback` tool in this harness, so hand-backs are tested as prompts.
 
+  With `HZ_LOCAL_REMOTE=1` (v3.2.6) origin is a local bare copy and `gh` is a stand-in: it prints the branch, the files and the
+  message of the commit that the session start pushed, the pull request call, and the state of the working folder.
+  Older Weekly-Planner main (6e04104): 3.2.5 left 6 changed files in the folder for the model to commit; 3.2.6 pushed the
+  branch itself and left the folder clean.
+
 Result on 2026-10-08 with Claude Code 2.1.293: 3.2.1 — closing lines 2, summaries 2, no text reached the model;
 3.2.2 — the texts reached the model at the helper start and at the finish notice; summaries 1; closing lines 1 when
 the model follows. Also seen: PreToolUse added text reaches the model; SessionStart runs again on `--resume`.

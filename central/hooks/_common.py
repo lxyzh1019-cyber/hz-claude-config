@@ -1588,3 +1588,22 @@ def repo_roots():
 def in_repo(p):
     full = os.path.normcase(os.path.abspath(os.path.join(PROJECT_DIR, str(p or ""))))
     return any(full == r or full.startswith(r + os.sep) for r in repo_roots())
+
+
+# ---- A refusal by the safety check (v3.2.6) ---------------------------------------------------------------------
+# Weekly-Planner 2026-10-08: the auto-mode safety check refused to commit the helper files ("Self-Modification"). The
+# end-of-reply setup check then sent the session back twice, and each send-back became a full reply: 3 replies with the
+# same decisions. Claude Code writes a refused tool call as a user record with `toolDenialKind` "automode-blocked",
+# "automode-unavailable" or "automode-parsing-error" (read from the program). A send-back cannot help then.
+def refused_by_safety_check(turn):
+    for rec in turn or []:
+        if str(rec.get("toolDenialKind") or "").startswith("automode"):
+            return True
+        c = (rec.get("message") or {}).get("content")
+        if rec.get("type") == "user" and isinstance(c, list):
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    t = json.dumps(b.get("content"), ensure_ascii=False)
+                    if len(t) < 700 and ("[Self-Modification]" in t or "denied by the auto mode classifier" in t.lower()):
+                        return True
+    return False
