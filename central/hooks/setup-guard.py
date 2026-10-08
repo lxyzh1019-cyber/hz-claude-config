@@ -16,7 +16,7 @@ def exists():
     # v3.2.4: the branch must hold the update commit. An empty branch (same commit as main) used to release the session
     # (Weekly-Planner 2026-10-08), and the setup then never reached the repository.
     from _common import setup_branch_state
-    return setup_branch_state(PROJECT_DIR, branch) in ("pending", "unknown")
+    return setup_branch_state(PROJECT_DIR, branch) in ("pending", "unknown")   # v3.2.5: a branch not pushed does not count
 
 
 if exists():

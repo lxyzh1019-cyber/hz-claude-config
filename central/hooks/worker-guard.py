@@ -123,8 +123,8 @@ if lvl == "routine" and sub == "opus-worker" and not escalated:
 if lvl == "complex" and sub == "sonnet-worker":
     deny_tool("Level: Complex goes to opus-worker, never to sonnet-worker.")
 if sub == "sonnet-worker":
-    low = text.lower()
-    hits = [w for w in cfg.get("complex_words", []) if w in low]
+    from _common import complex_hits   # v3.2.5: whole lower-case words outside file names (ARCHITECTURE.md, Sister Sync)
+    hits = complex_hits(text, cfg.get("complex_words", []))
     if hits:
         deny_tool("This hand-over mentions complex work (" + ", ".join(hits[:4]) + "), so it is Level: Complex and goes "
                   "to opus-worker.")

@@ -25,7 +25,8 @@ final = bool(m) and m.group(2).split()[0] in ("Checked", "Validated")
 
 def version_line(first=False):
     try:
-        branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_DIR, capture_output=True,
+        from _common import work_dir   # v3.2.5: the branch of the folder where the session works
+        branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=work_dir(), capture_output=True,
                                 text=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip() or "unknown"
     except (OSError, subprocess.SubprocessError, UnicodeError):
         branch = "unknown"
@@ -40,18 +41,19 @@ def version_line(first=False):
         try:   # v3.2.4: waiting only when a setup branch of this version holds changes main lacks (not any old branch)
             from _common import setup_update_target
             kind_, _name = setup_update_target(PROJECT_DIR, str((cfg.get("stub_expect") or {}).get("version", "latest")))
-            stub = "waiting" if kind_ == "waiting" else stub
+            stub = "waiting" if kind_ == "waiting" else "unpushed" if kind_ == "unpushed" else stub
         except Exception:
             pass
     word = ("current on main (this branch is older)" if stub.startswith("current on main") else
             "current" if stub.startswith("current") else "waiting for your merge" if stub.startswith("waiting")
+            else "not pushed yet" if stub.startswith(("unpushed", "committed on this PC"))
             else "needs attention" if stub else "unknown")
     line = f"Rules v{central_version()} · {branch} · setup {word}"
     try:   # v3.2.2: say so when GitHub has newer rules; reopening the session loads them and keeps the chat
         from _common import newer_rules_on_github
         _new = newer_rules_on_github()
         if _new:
-            line += f" · v{_new} is on GitHub: reopen this session to load it"
+            line += f" · v{_new} is on GitHub: start a new session to load it"
     except Exception:
         pass
     # v3.1.30: the main session runs on the main-session model; the planner helper plans on the first-choice model
@@ -122,6 +124,9 @@ def ts(rec):
 
 def is_prompt(rec):
     if rec.get("type") != "user":
+        return False
+    from _common import is_notice_record   # v3.2.5: a helper's hand-back message is not a prompt
+    if is_notice_record(rec):
         return False
     c = (rec.get("message") or {}).get("content")
     return isinstance(c, str) or (isinstance(c, list) and not any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c))
@@ -270,14 +275,16 @@ def add_file(recs, source="main", key=None):
             _act_now = activity_of(rec, blocks_by_id.get(msg.get("id"), content))
             if t is not None and last_t is not None:
                 seconds[lab] = seconds.get(lab, 0) + min(max(t - last_t, 0), CAP)
-                act_secs[_act_now] = act_secs.get(_act_now, 0) + min(max(t - last_t, 0), CAP)
+                if t - last_t <= int(cfg.get("away_minutes", 60)) * 60:     # v3.2.5: away time belongs to no type
+                    act_secs[_act_now] = act_secs.get(_act_now, 0) + min(max(t - last_t, 0), CAP)
             last_model, waiting_on_helper, last_act = lab, helper_call, _act_now
         elif t is not None and last_t is not None and last_model and not is_prompt(rec) and not waiting_on_helper:
             seconds[last_model] = seconds.get(last_model, 0) + min(max(t - last_t, 0), CAP)   # tool time
             _c = (rec.get("message") or {}).get("content")
             _tr = isinstance(_c, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in _c)
             _k = last_act if _tr else "waiting"   # v3.2.0: only a tool's own run counts for its type; other gaps wait
-            act_secs[_k] = act_secs.get(_k, 0) + min(max(t - last_t, 0), CAP)
+            if t - last_t <= int(cfg.get("away_minutes", 60)) * 60:       # v3.2.5: away time belongs to no type
+                act_secs[_k] = act_secs.get(_k, 0) + min(max(t - last_t, 0), CAP)
         elif rec.get("type") == "user":
             waiting_on_helper = False   # the helper's own records carry that time
         if t is not None:
@@ -510,6 +517,8 @@ def big(n):
 
 
 def mins(sec):
+    if sec < 120:     # v3.2.5: a short time shows in seconds ("0 min" hid it)
+        return f"{int(round(sec))} s"
     m = int(round(sec / 60))
     return f"{m // 60} h {m % 60} min" if m >= 60 else f"{m} min"
 
@@ -562,8 +571,16 @@ act_total = sum(activity.values())
 if act_total:
     ACT = ("planning", "coding", "testing", "waiting", "git & pull requests", "talking", "other")
     NAME = {"coding": "building", "git & pull requests": "git"}
-    lines.append("  By type: " + " · ".join(f"{NAME.get(k, k)} {pct(activity[k], act_total)} ({big(activity[k])}) "
-                                           f"{mins(act_secs.get(k, 0))}" for k in ACT if activity.get(k)))
+    # v3.2.5: the type times share the session clock. Parallel helpers each add their own time (3 helpers = 3 times the
+    # clock) and helper files carry waits; scale them to the worked time so that they add up (real Stage 3 session:
+    # types 5 h 5 min against 3 h 48 min actual and 2 h 19 min worked). Testing always shows, also at 0.
+    _sess = session_time(main)
+    _worked = _sess["active"] if _sess else 0
+    _sum = sum(act_secs.values())
+    _scale = min(1.0, _worked / _sum) if _worked and _sum else 1.0
+    lines.append("  By type: " + " · ".join(f"{NAME.get(k, k)} {pct(activity.get(k, 0), act_total)} ({big(activity.get(k, 0))}) "
+                                           f"{mins(act_secs.get(k, 0) * _scale)}" for k in ACT
+                                           if activity.get(k) or k == "testing"))
 st_ = session_time(main)
 if st_:
     lines.append(f"Session time: {mins(st_['wall'])} actual · {mins(st_['active'])} worked"

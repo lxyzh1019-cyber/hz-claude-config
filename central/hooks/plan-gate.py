@@ -112,8 +112,9 @@ if prompt.lstrip().startswith("<task-notification>") and not os.environ.get("HZ_
                                   line=_F.WORKING_LINE) if _left else _RT)
     except Exception as _e:
         log("plan-gate", {"timing_error": str(_e)[:200]})
-if prompt.lstrip().startswith("<task-notification>"):
-    log("plan-gate", {"skipped": "task notification", "fixes": len(_fixes)})
+from _common import is_notice_text as _is_notice
+if _is_notice(prompt):   # v3.2.5: also a helper's hand-back message ("Another Claude session sent a message")
+    log("plan-gate", {"skipped": "task notification" if prompt.lstrip().startswith("<task-notification>") else "hand-back", "fixes": len(_fixes)})
     _ctx_txt = "\n".join(x for x in (FIX_TEXT, TEST_TEXT, STOP_TEXT, MEM_TEXT, TIMING_TEXT) if x)
     if _ctx_txt:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": _ctx_txt}}))

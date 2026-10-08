@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.2.1",
+        "version": "3.2.5",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -75,14 +75,15 @@ DEFAULT_CONFIG = {
         "settings_absent": {"model": "account default model (the stub must not set a session model)",
                             "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},
         # text each stub file must contain
-        "file_text": {".claude/agents/opus-worker.md": ["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"],
+        "file_text": {".claude/agents/opus-worker.md": [["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
                       ".claude/hz-loader.py": ["incomplete on GitHub", "loader that reports an incomplete rules repository"],
-                      ".claude/agents/sonnet-worker.md": ["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"],
+                      ".claude/agents/sonnet-worker.md": [["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
                       ".claude/agents/reviewer.md": [["tools: Read, Grep, Glob", "reviewer that only reads"],
-                                                     ["effort: high", "reviewer at high effort (v3.2.1)"]],
-                      ".claude/agents/explore.md": ["model: claude-sonnet-5-5", "explorer pinned to Sonnet 5.5"],
-                      ".claude/agents/planner.md": ["model: claude-fable-5-1", "planner pinned to Fable 5.1"],
-                      ".claude/agents/planner-opus.md": ["model: claude-opus-5-5", "planner fallback pinned to Opus 5.5"]},
+                                                     ["effort: high", "reviewer at high effort (v3.2.1)"],
+                                                     ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
+                      ".claude/agents/explore.md": [["model: claude-sonnet-5-5", "explorer pinned to Sonnet 5.5"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
+                      ".claude/agents/planner.md": [["model: claude-fable-5-1", "planner pinned to Fable 5.1"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
+                      ".claude/agents/planner-opus.md": [["model: claude-opus-5-5", "planner fallback pinned to Opus 5.5"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]]},
         "events": {"UserPromptSubmit": "prompt checks", "PreToolUse": "safety checks before commands and edits",
                    "Stop": "report checks (completion, top lines)",
                    "PostToolUse": "notice after a pull request opens (v3.1.31)",
@@ -113,15 +114,20 @@ def load_config():
 def read_hook_input():
     """Hook input is UTF-8 JSON; read bytes so a non-UTF-8 system default (e.g. gbk on Chinese Windows)
     cannot garble or drop it."""
+    global _TRANSCRIPT
     try:
-        return json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
+        d = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
     except ValueError:
         return {}
+    if isinstance(d, dict):
+        _TRANSCRIPT = str(d.get("transcript_path") or "")   # v3.2.5: the work folder is found from the session's own edits
+    return d
 
 
-def run_text(args, timeout=10):
-    """subprocess.run for text output, always decoded as UTF-8 (never the system default)."""
-    return subprocess.run(args, cwd=PROJECT_DIR, capture_output=True, text=True, encoding="utf-8",
+def run_text(args, timeout=10, cwd=None):
+    """subprocess.run for text output, always decoded as UTF-8 (never the system default).
+    v3.2.5: git commands run in the work folder (where the session edits the record), not only the start folder."""
+    return subprocess.run(args, cwd=cwd or work_dir(), capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=timeout)
 
 
@@ -237,8 +243,8 @@ def last_turn(records):
         blocks = _content_blocks(rec)
         if any(b.get("type") == "tool_result" for b in blocks):
             continue
-        if any(str(b.get("text") or "").lstrip().startswith("<task-notification>") for b in blocks):
-            continue   # a worker's notice continues the same turn
+        if any(is_notice_text(b.get("text")) for b in blocks):
+            continue   # a worker's notice or a helper's hand-back (v3.2.5) continues the same turn
         start = i
     return records[start:]
 
@@ -369,7 +375,7 @@ def _int(cell):
 
 def hotspot_alerts(cfg):
     """Return one alert string per area that has reached a redesign threshold and is not yet reviewed."""
-    path = os.path.join(PROJECT_DIR, cfg["record_file"])
+    path = os.path.join(work_dir(), cfg["record_file"])
     try:
         lines = open(path, encoding="utf-8").read().splitlines()
     except OSError:
@@ -545,9 +551,9 @@ def use_round(name, session_id, cap):
 
 # ---- Deliverable ledger (WORKING_RECORD.md) ------------------------------------------------------
 def record_text(cfg):
-    """The working record as it is in the checkout; None when it cannot be read."""
+    """The working record as it is in the work folder (v3.2.5); None when it cannot be read."""
     try:
-        return open(os.path.join(PROJECT_DIR, cfg["record_file"]), encoding="utf-8").read()
+        return open(os.path.join(work_dir(), cfg["record_file"]), encoding="utf-8").read()
     except OSError:
         return None
 
@@ -774,6 +780,7 @@ def newest_plan_version():
 
 
 def current_branch():
+    """Branch of the work folder (v3.2.5): where the session edits the record, which can be a worktree."""
     try:
         return run_text(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5).stdout.strip() or "unknown"
     except (OSError, subprocess.SubprocessError):
@@ -1072,6 +1079,14 @@ def test_speed_note(cfg, minutes, cmd, stopped=False):
     return msg
 
 
+# v3.2.5: a command is "in the background" in two ways. Started with run_in_background, the result says "Command running
+# in background with ID: X". Started in the foreground, Claude Code moves it after its time limit (120 s) and says "Command
+# did not complete within its 120s timeout and was moved to the background (ID: X)". Only the first was known: in the
+# Weekly-Planner Stage 7 session a Sonnet worker's command was moved, ran for 47 minutes, and its helper handed back
+# without any refusal.
+BG_START_RE = re.compile(r"(?:running in background with ID:|moved to the background \(ID:)\s*([A-Za-z0-9_-]+)")
+
+
 def background_test_results(records):
     """Finished background test runs in a transcript: [(task id, command, minutes, exit code or None)].
     Start: the tool result 'Command running in background with ID: X'; end: the notice with <task-id>X</task-id>."""
@@ -1087,13 +1102,12 @@ def background_test_results(records):
         c = (r.get("message") or {}).get("content")
         if r.get("type") == "assistant" and isinstance(c, list):
             for b in c:
-                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash" and \
-                        (b.get("input") or {}).get("run_in_background"):
-                    cmds[b.get("id")] = str((b.get("input") or {}).get("command") or "")
+                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash":
+                    cmds[b.get("id")] = str((b.get("input") or {}).get("command") or "")   # v3.2.5: also commands moved later
         if r.get("type") == "user" and isinstance(c, list):
             for b in c:
                 if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in cmds:
-                    m = re.search(r"running in background with ID: ([A-Za-z0-9_-]+)", json.dumps(b.get("content")))
+                    m = BG_START_RE.search(json.dumps(b.get("content")))
                     if m:
                         started[m.group(1)] = (cmds[b["tool_use_id"]], _t(r))
         # v3.2.1: the finish notice can be a queue-operation, an attachment or a user message (real 2.1.293 files)
@@ -1237,13 +1251,12 @@ def open_background_runs(records):
         c = (r.get("message") or {}).get("content")
         if r.get("type") == "assistant" and isinstance(c, list):
             for b in c:
-                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash" and \
-                        (b.get("input") or {}).get("run_in_background"):
-                    cmds[b.get("id")] = str((b.get("input") or {}).get("command") or "")
+                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash":
+                    cmds[b.get("id")] = str((b.get("input") or {}).get("command") or "")   # v3.2.5: also commands moved later
         if r.get("type") == "user" and isinstance(c, list):
             for b in c:
                 if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in cmds:
-                    m = re.search(r"running in background with ID: ([A-Za-z0-9_-]+)", json.dumps(b.get("content")))
+                    m = BG_START_RE.search(json.dumps(b.get("content")))
                     if m:
                         started[m.group(1)] = cmds[b["tool_use_id"]]
         if r.get("type") != "assistant" and started:
@@ -1332,7 +1345,8 @@ def _g(project_dir, args, timeout=10):
 
 def setup_branch_state(project_dir, branch, fetch=True):
     """'none' (no such branch), 'settled' (it holds nothing main lacks: empty or already merged), 'pending' (it holds
-    setup changes main lacks: a pull request can be merged), or 'unknown' (GitHub could not be read: treated as waiting)."""
+    setup changes main lacks: a pull request can be merged), 'unpushed' (v3.2.5: those changes exist only on this PC), or
+    'unknown' (GitHub could not be read: treated as waiting)."""
     remote = _g(project_dir, ["ls-remote", "--heads", "origin", branch], timeout=8)
     remote_ok = bool(remote and remote.returncode == 0)
     has_remote = remote_ok and bool(remote.stdout.strip())
@@ -1341,9 +1355,10 @@ def setup_branch_state(project_dir, branch, fetch=True):
     if not has_remote and not has_local:
         return "none"
     if has_remote and fetch:
-        f = _g(project_dir, ["fetch", "-q", "origin", "main", branch], timeout=25)
+        f = _g(project_dir, ["fetch", "-q", "origin", branch], timeout=25)
         if not f or f.returncode != 0:
             return "unknown"
+        _g(project_dir, ["fetch", "-q", "origin", "main"], timeout=25)    # best effort; a repository may use master
     tips = []
     if has_remote:
         tips.append(f"refs/remotes/origin/{branch}")
@@ -1357,6 +1372,7 @@ def setup_branch_state(project_dir, branch, fetch=True):
             break
     if not main:
         return "unknown"
+    pend = {}
     for tip in tips:
         ahead = _g(project_dir, ["rev-list", "--count", f"{main}..{tip}"], timeout=8)
         if not ahead or ahead.returncode != 0:
@@ -1374,12 +1390,17 @@ def setup_branch_state(project_dir, branch, fetch=True):
         if own is None or same is None:
             return "unknown"
         if own.returncode == 1 and same.returncode == 1:
-            return "pending"
+            pend[tip] = True
+    if pend.get(f"refs/remotes/origin/{branch}"):
+        return "pending"
+    if pend.get(f"refs/heads/{branch}"):
+        return "unpushed"      # v3.2.5: the update is committed on this PC only: no pull request exists
     return "settled"
 
 
 def setup_update_target(project_dir, version, fetch=True):
-    """('waiting', branch) when a real setup pull request waits, else ('new', branch): the first unused branch name.
+    """('waiting', branch) when a real setup pull request waits, ('unpushed', branch) when the update is committed but not
+    pushed, else ('new', branch): the first unused branch name.
     A settled branch is never reused and never deleted: the next name is hz-setup-update-<version>-2, -3, ..."""
     base = f"hz-setup-update-{version}"
     for n in range(1, 10):
@@ -1387,6 +1408,183 @@ def setup_update_target(project_dir, version, fetch=True):
         st = setup_branch_state(project_dir, name, fetch=fetch)
         if st in ("pending", "unknown"):
             return "waiting", name
+        if st == "unpushed":
+            return "unpushed", name
         if st == "none":
             return "new", name
     return "waiting", f"{base}-9"
+
+
+# ---- Complex-work words in a hand-over (v3.2.5) -------------------------------------------------------------------
+# The Weekly-Planner Stage 7 session had 2 hand-overs refused for "architecture" and "sync": the file names
+# ARCHITECTURE.md and AUDIT-SYNC.md and the screen name "Sister Sync". Both went to Opus. A word counts only when it
+# stands alone in the text, in lower case (a name or a file name does not count), outside file names and backticks.
+_FILE_LIKE = re.compile(r"`[^`]*`|\S*[/\\]\S*|\b[\w.-]+\.(?:md|js|css|html|json|txt|py|sh|ya?ml|tsx?|jsx|png|jpe?g)\b")
+
+
+def complex_hits(text, words):
+    stripped = _FILE_LIKE.sub(" ", str(text or ""))
+    hits = []
+    for w in words:
+        tail = r"(?![A-Za-z])" if len(w) <= 5 else ""      # short words ("sync") must stand alone; stems ("diagnos") may not
+        for m in re.finditer(r"(?<![A-Za-z0-9])" + re.escape(w) + tail, stripped, re.I):
+            tok = stripped[m.start():m.start() + len(w)]
+            if len(tok) > 1 and tok.isupper():
+                continue                                  # ALL CAPS is a name or a file name
+            if tok[:1].isupper():                         # Capitalised after a Capitalised word is a name ("Sister Sync")
+                prev = re.search(r"([A-Za-z][\w-]*)\s+$", stripped[:m.start()])
+                if prev and prev.group(1)[:1].isupper():
+                    continue
+            hits.append(w)
+            break
+    return hits
+
+
+# ---- Notices that are not requests (v3.2.5) -----------------------------------------------------------------------
+# Claude Code 2.1.293 delivers a helper's final report as a user message: "Another Claude session sent a message:
+# <agent-message from="<id>"> [Subagent hand-back] …" (7 of 7 helpers in the Weekly-Planner Stage 7 session, 6 of 6 in
+# Stage 3). The prompt checks took each one for a request: a false "Full Plan vN is required … Do not edit files before
+# approval" (14 records in two sessions), router hints, a new turn, and "waiting for you" time. Version 3.1.30 had fixed
+# this only for <task-notification>.
+_NOTICE_RE = re.compile(r"^\s*(?:<task-notification>|Another Claude session sent a message:\s*<agent-message\b)")
+
+
+def is_notice_text(text):
+    return bool(_NOTICE_RE.match(str(text or "")))
+
+
+def is_notice_record(rec):
+    c = (rec.get("message") or {}).get("content")
+    if isinstance(c, str):
+        return is_notice_text(c)
+    return isinstance(c, list) and any(isinstance(b, dict) and is_notice_text(b.get("text")) for b in c)
+
+
+def notice_agent_id(text):
+    """The helper id named by a hand-back message, or ''."""
+    m = re.search(r'<agent-message\s+from=\\?"([A-Za-z0-9_-]+)', str(text or ""))
+    return m.group(1) if m else ""
+
+
+# ---- The work folder (v3.2.5) -----------------------------------------------------------------------------------
+# Weekly-Planner Stage 7: the session started in the main folder (all 340 records show that folder and branch main) and
+# did its work in worktrees, reaching them with "cd <folder> &&" inside each command. The checks read the record and the
+# branch of the main folder, which holds the closed plan "Money fit and logic": a false "Build 7 of 7" and three demands
+# for a restart line of the wrong plan on the wrong branch. The hook's own "cwd" cannot help (it stays the main folder),
+# so the work folder is the folder where the session itself edits or reads the record, newest first.
+_TRANSCRIPT = ""
+_WD = None
+
+
+def _win_path(p):
+    p = str(p or "").strip().strip('"')
+    if os.name == "nt":
+        m = re.match(r"^/([A-Za-z])/(.*)$", p)
+        if m:
+            p = m.group(1).upper() + ":/" + m.group(2)
+    return p
+
+
+def _git_common(d):
+    try:
+        r = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=d, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=5)
+        out = r.stdout.strip()
+        return os.path.normcase(os.path.realpath(os.path.join(d, out))) if r.returncode == 0 and out else ""
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return ""
+
+
+def _record_dirs(path, rec_name):
+    """Folders where the main session edited or read the record, in the order of the session."""
+    out = []
+    try:
+        data = open(path, "rb").read().decode("utf-8", "replace")
+    except OSError:
+        return out
+    for line in data.splitlines():
+        if rec_name not in line or '"tool_use"' not in line:
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if r.get("type") != "assistant" or r.get("isSidechain"):
+            continue
+        c = (r.get("message") or {}).get("content")
+        for b in c if isinstance(c, list) else []:
+            if not (isinstance(b, dict) and b.get("type") == "tool_use"):
+                continue
+            inp = b.get("input") or {}
+            fp = str(inp.get("file_path") or "")
+            if b.get("name") in ("Edit", "Write", "MultiEdit", "NotebookEdit") and fp.replace("\\", "/").endswith(rec_name):
+                out.append(os.path.dirname(_win_path(fp)))
+            elif b.get("name") == "Bash":
+                cmd = str(inp.get("command") or "")
+                if rec_name not in cmd:
+                    continue
+                m = re.search(r'cd\s+"?([^"&;|\n]+?)"?\s*(?:&&|;|\n)', cmd)
+                if m:
+                    out.append(_win_path(m.group(1)))
+                else:
+                    m = re.search(r'([A-Za-z]:[/\\][^\s"\']*?|/[^\s"\']*?)[/\\]' + re.escape(rec_name), cmd)
+                    if m:
+                        out.append(_win_path(m.group(1)))
+    return out
+
+
+def work_dir():
+    """The folder whose record and branch the checks use: the newest folder of this repository where the session worked
+    on a record that holds plan stage rows; else the start folder."""
+    global _WD
+    if _WD is not None:
+        return _WD
+    _WD = PROJECT_DIR
+    forced = os.environ.get("HZ_WORK_DIR")
+    if forced and os.path.isdir(forced):
+        _WD = forced
+        return _WD
+    if not _TRANSCRIPT or not os.path.isfile(_TRANSCRIPT):
+        return _WD
+    rec_name = DEFAULT_CONFIG.get("record_file", "WORKING_RECORD.md")
+    try:
+        rec_name = load_config().get("record_file", rec_name)
+    except Exception:
+        pass
+    home = _git_common(PROJECT_DIR)
+    seen = set()
+    for d in reversed(_record_dirs(_TRANSCRIPT, rec_name)):
+        key = os.path.normcase(os.path.abspath(d))
+        if key in seen:
+            continue
+        seen.add(key)
+        rp = os.path.join(d, rec_name)
+        if not os.path.isfile(rp):
+            continue
+        try:
+            has_plan = bool(re.search(r"(?m)^\|[^|\n]*·\s*Stage\s+\d+[a-z]?\s+of\s+\d+", open(rp, encoding="utf-8", errors="replace").read()))
+        except OSError:
+            continue
+        if has_plan and (not home or _git_common(d) == home):
+            _WD = d
+            break
+    return _WD
+
+
+def repo_roots():
+    """The start folder and every worktree of the same repository: edits there are edits of this project."""
+    roots = [PROJECT_DIR]
+    try:
+        r = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=PROJECT_DIR, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=5)
+        for l in r.stdout.splitlines():
+            if l.startswith("worktree "):
+                roots.append(l[len("worktree "):].strip())
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        pass
+    return [os.path.normcase(os.path.abspath(x)) for x in roots]
+
+
+def in_repo(p):
+    full = os.path.normcase(os.path.abspath(os.path.join(PROJECT_DIR, str(p or ""))))
+    return any(full == r or full.startswith(r + os.sep) for r in repo_roots())

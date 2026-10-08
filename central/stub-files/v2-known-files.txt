@@ -38,3 +38,7 @@ d8234304a2fff02543ea3b064e3ddbba22a8578dd9b2a5458985890f01dbaaa1
 d8234304a2fff02543ea3b064e3ddbba22a8578dd9b2a5458985890f01dbaaa1
 # v3.2.4: reviewer.md as published in v3.1.28-v3.2.0 (effort medium). It was missing, so the v3.2.1 setup update skipped it as 'local edits'.
 53e6bd0b2a9c65faf33844cf1d60a3f86ff212b8a0d774709488a660aa5b4171
+4ab4c60cf8a6a7c935f64046f1f5bf7b0810509ad1f8d10ce60fec29dcd34ba6  # reviewer.md, published before this build
+4f08f14b019167cb63692b54436701741b83c6638635ef189390c4ca52e7d2d8  # explore.md, published before this build
+de2f3afc865ad1e50aadc4d9b0586a70f5f1eae3b55190c8fc0219b5045749ad  # planner.md, published before this build
+d4513233f304cdb6c3727b39a8e55e1cf2db8b4c2a2956d8d7d204ff74a09399  # planner-opus.md, published before this build

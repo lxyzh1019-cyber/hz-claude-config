@@ -20,6 +20,14 @@ worker being started); 3.2.1 started all four.
   session-start setup check of the served version runs for real. Prints what the session was told and whether
   `reviewer.md` changed on disk. Weekly-Planner main on 2026-10-08: 3.2.3 left it at effort medium; 3.2.4 wrote effort high.
 
+- `scenario_v325.sh <hooks dir> <label>` (v3.2.5) — a worktree holds the real plan, a command is moved to the background after
+  its time limit, and the session ends with a restart line for the real plan. Prints the program's own message for the
+  moved command, whether the Stop check noticed it, and what the hand-off check saved for the next step.
+- `scenario_handback_prompt.sh <hooks dir> <label>` (v3.2.5) — a helper's hand-back text arrives as the prompt; prints the
+  log of the prompt check (3.2.4: tier full and a planner suggestion; 3.2.5: skipped as a hand-back).
+
+Not reproducible here: helpers get no `SubagentHandback` tool in this harness, so hand-backs are tested as prompts.
+
 Result on 2026-10-08 with Claude Code 2.1.293: 3.2.1 — closing lines 2, summaries 2, no text reached the model;
 3.2.2 — the texts reached the model at the helper start and at the finish notice; summaries 1; closing lines 1 when
 the model follows. Also seen: PreToolUse added text reaches the model; SessionStart runs again on `--resume`.

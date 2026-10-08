@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.4: the setup update of an app now works when its helper files are an older published version. In Weekly-Planner the reviewer file was skipped as 'local edits', so the high-effort reviewer never arrived. A setup branch counts as waiting only when it holds changes main lacks: an empty or merged branch no longer shows 'waiting for your merge' and no longer releases the session. Every published helper version now stays known automatically. Weekly-Planner opens one setup pull request at its next session: merge it. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.5: fixes from the Weekly-Planner Stage 7 session. A helper's final report is no longer taken for your request (it caused false plan demands). The checks read the record and branch of the folder where the session works, so they stop demanding the restart line of a closed plan. A command that Claude Code moves to the background counts as running; a helper cannot hand back until it is stopped. File names and screen names no longer make a hand-over Complex. One-time worker warnings no longer waste a step. The summary type times add up. The helper files now say: read with the Read tool. Every app opens one setup pull request at its next session: merge it. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

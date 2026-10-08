@@ -97,6 +97,12 @@ def update(cfg, project_dir):
     # not); then the update goes on a new branch name (-2, -3, ...). Nothing is deleted.
     from _common import setup_update_target
     kind, branch = setup_update_target(project_dir, version)
+    if kind == "unpushed":   # v3.2.5: committed on this PC, never pushed: there is no pull request to merge
+        return ("committed on this PC but not pushed (branch " + branch + ")",
+                f"[setup-update] This repository's setup update is committed on branch {branch} on this PC, but it was never "
+                f"pushed, so no pull request exists. Before any other work: push the branch (`git push -u origin {branch}`), "
+                "open a pull request ready for review, then switch back to the branch you started on. If the switch is "
+                "refused, stop and tell me. In your first reply's 'I need from you' line, ask me to merge that pull request.")
     if kind == "waiting":
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
