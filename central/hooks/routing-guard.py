@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse hook on Edit/Write: log every edit attempt; in enforce mode, block source edits that
 do not come from the executor subagent unless the main session is explicitly authorized.
-observe mode only logs — run ROUTING-TEST.md (hz-claude-config) to learn which input fields mark a subagent
-before switching to enforce."""
+observe mode only logs. Enforce has been the setting since the measured test (its notes are in git history)."""
 import os, sys
 from _common import read_hook_input, load_config, is_governance_path, deny_tool, log, STATE_DIR
 

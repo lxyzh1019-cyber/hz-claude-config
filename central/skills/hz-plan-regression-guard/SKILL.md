@@ -20,6 +20,7 @@ A **manifest** is the list of locked, non-negotiable features the current versio
 1. Locate the manifest if one exists (see "Where the manifest lives" below).
 2. If no manifest exists yet, BUILD one by reading the current version end-to-end and listing every distinct feature, behavior, rule, section, or capability. State this list to the user and ask them to confirm/correct it before proceeding. This one-time cost prevents every future regression.
 3. Hold the manifest as the checklist for this edit.
+4. Build or update the **content ledger** (v3.2.2, from the current hz-change-guard skill). The manifest says what the artifact *does*; the ledger says what it must *say*: every agreed point, each with a search phrase that must appear in the artifact. Sweep the plan, its `## Design decisions`, the hand-over and the earlier version, never only the latest summary. Format and placement: `references/content-ledger.md`.
 
 A feature is anything a future reader would miss if it vanished: a scoring rule, a UI tab, a section, a formula, a constraint, a phase of the plan, a special case ("Chinese restricted to parent-reference only"), a data field, an export option.
 
@@ -27,9 +28,13 @@ A feature is anything a future reader would miss if it vanished: a scoring rule,
 
 Apply exactly what the user asked for. If the change intentionally *removes* a manifest feature, that's fine — but call it out explicitly in Phase 3 as an intentional removal, not a silent one. Update the manifest to reflect intentional additions and removals.
 
+When condensing or simplifying, list every ledger item you cut under **Left out — OK?** in your report. Never drop an agreed point silently; a cut is the owner's decision, not a side effect of shortening.
+
 ### Phase 3 — Verify against the manifest (BEFORE delivering)
 
 Walk the manifest item by item against the new version. For each item, confirm it is present and intact. Then report using the regression table format below. NEVER deliver a new version without this check.
+
+Then run the coverage gate on the content ledger: `python3 <this skill folder>/scripts/coverage_gate.py <artifact-file> [ledger-file]`. It prints every ledger phrase missing from the artifact and exits with an error if any is missing. Any MISSING line means STOP — fix it or list it under "Left out — OK?". Tests showing the artifact works are not proof it is complete; only the gate is.
 
 ## Output format
 
@@ -45,6 +50,15 @@ End every edit with this block:
 | {feature 4} | ⚠️ intentionally removed (you asked to drop X) |
 | {feature 5} | ❌ MISSING — was this meant to go? |
 ```
+
+Under the table, add two lines:
+
+```
+Content ledger: {present}/{total} present (coverage gate)
+Left out — OK?: {cut items for the owner to confirm, or "none"}
+```
+
+A missing ledger item counts exactly like a `❌ MISSING` feature.
 
 Any `❌ MISSING` line means STOP — surface it to the user and fix or confirm before considering the edit done. A `⚠️` line is allowed only if the user explicitly asked to remove that feature this turn.
 
@@ -69,3 +83,8 @@ Always label versions explicitly (v1, v2, v28b — match whatever scheme the use
 - Do not assume a feature is unimportant because the current edit doesn't touch it. Untouched features are exactly the ones that vanish.
 - Do not skip the check on "trivial" edits.
 - Do not silently improve or "clean up" features the user didn't ask you to change.
+- Do not build a new version from the latest source alone (a summary, a hand-over). Points agreed earlier live elsewhere; the ledger sweep finds them.
+- Do not treat "it renders" or "the tests pass" as proof the content is complete.
+
+## Evidence before "done"
+A version is "done" only when the proof is shown, not claimed: the regression table with every item ticked, the artifact-specific proof (test output, a rendered page), and the coverage gate output. No proof, no "done"; say what is still unproven.

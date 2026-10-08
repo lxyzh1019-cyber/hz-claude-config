@@ -16,6 +16,7 @@ export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if t
 export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
 export HZ_PLAN_ROUNDS_OFF=1        # v3.1.33: older plan tests are independent plans; the v3.1.33 tests switch it on
+export HZ_REPORT_TIMING_OFF=1     # v3.2.2: older tests check other hooks alone; the v3.2.2 tests switch it on
 export HZ_RULES_FIRST_OFF=1        # v3.1.29: older tests run as if the rules were read; the v3.1.29 tests switch it on
 check(){ # name expected_substring actual
   if grep -q -- "$2" <<<"$3"; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 -> ${3:0:${HZ_FAIL_CHARS:-200}}"; fail=$((fail+1)); fi; }
@@ -2129,5 +2130,106 @@ sed 's/^Technical details: none\.$/## ❓ Decisions\n1. Test parts repeat the ea
 o=$(HZ_QUESTIONS_CHECK_OFF= pg "$T/q_open.md"); check "v3.2.1: a plan that still holds an open question is sent back: ask in chat first" "This plan still holds open questions" "$o"
 sed 's/^1. Test parts repeat.*$/Decided: test parts repeat the earlier tests (D17, you: yes)./' "$T/q_open.md" > "$T/q_done.md"
 o=$(HZ_QUESTIONS_CHECK_OFF= pg "$T/q_done.md"); check "  ...with the answers written in as decided, it passes" "clean" "$(echo "$o" | grep -c 'open questions' | sed 's/^0$/clean/')"
+# v3.2.2: the first word of the State cell decides (Weekly-Planner 2026-10-08: a note "else SUPERSEDED" dropped Stage 38)
+cat > "$T/lead.md" <<'R'
+## Deliverable ledger
+| Deliverable | State | Evidence |
+|---|---|---|
+| Lead test · Stage 1 of 5 — PR 1 | COMPLETE — fixed one blocked test on the way | run 1 |
+| Lead test · Stage 2 of 5 — Merge PR 1 (Check) | QUEUED — after Stage 1 | |
+| Lead test · Stage 3 of 5 — PR 2 | COMPLETE | run 2 |
+| Lead test · Stage 4 of 5 — PR 3 only if needed | QUEUED — after Stage 3 (only if the run is slow; else SUPERSEDED) | |
+| Lead test · Stage 5 of 5 — Merge PR 3 (Check) | QUEUED — after Stage 4 | |
+| Old note row | 6b COMPLETE; 6c COMPLETE | review |
+| Dropped row | SUPERSEDED — moved to central | |
+R
+o=$(cd $H && python3 -c "
+import _common as C
+L={i['name'].split(' — ')[0]:i for i in C.deliverable_ledger(C.load_config(), open('$T/lead.md').read())}
+r=L['Lead test · Stage 4 of 5']; print('S4', r['queued'], r['superseded'], r['blocked'])
+r=L['Lead test · Stage 1 of 5']; print('S1', r['complete'], r['blocked'])
+print('OLD', L['Old note row']['complete'], 'DROP', L['Dropped row']['superseded'], L['Dropped row']['blocked'])")
+check "v3.2.2: a queued row with 'else SUPERSEDED' in its note stays queued and counted" "S4 True False False" "$o"
+check "  ...a COMPLETE row whose note says 'blocked' is complete, not blocked" "S1 True False" "$o"
+check "  ...a cell that does not start with a state still reads the words (old rule)" "OLD True" "$o"
+check "  ...a cell that starts with SUPERSEDED is still superseded" "DROP True True" "$o"
+python3 - "$T/lead.md" "$T/lead2.md" <<'PYL'
+import sys
+s=open(sys.argv[1],encoding="utf-8").read().replace("| Old note row | 6b COMPLETE; 6c COMPLETE | review |\n","").replace("| Dropped row | SUPERSEDED — moved to central | |\n","")
+open(sys.argv[2],"w",encoding="utf-8").write("# WORKING RECORD\n\n## Where we are\n- x\n\n"+s)
+PYL
+o=$(mkdir -p "$T/leadp" && cp "$T/lead2.md" "$T/leadp/WORKING_RECORD.md" && cd $H && CLAUDE_PROJECT_DIR="$T/leadp" python3 -c "
+import _common as C
+r=C.completion_summary(C.load_config()); print(r['line'], 'build_done=%s' % r['build_done'])")
+check "  ...so Build is not 100% while the conditional stage waits (no false 'build is done' hand-off)" "Build 2 of 3 done (67%).*build_done=False" "$o"
+check "v3.2.2: the README title carries no version (MANIFEST.txt line 1 is the only place)" "clean" "$(head -1 $H/../../README.md | grep -c 'v[0-9]\+\.[0-9]' | sed 's/^0$/clean/')"
+# v3.2.2: a plan stage row must start its State cell with the state
+re_in(){ python3 -c "import json,sys;print(json.dumps({'tool_name':'Edit','session_id':'s','tool_input':{'file_path':'$PROJ/WORKING_RECORD.md','old_string':'x','new_string':sys.argv[1]}}))" "$1"; }
+o=$(re_in '| Lead test · Stage 4 of 5 — PR 3 | after Stage 3; else SUPERSEDED | |' | python3 $H/record-edit-guard.py)
+check "v3.2.2: a stage row whose State cell does not start with a state is refused" "Start the State cell" "$o"
+o=$(re_in '| Lead test · Stage 4 of 5 — PR 3 | QUEUED — after Stage 3 (else SUPERSEDED) | |' | python3 $H/record-edit-guard.py)
+check "  ...with the state first it is allowed" "clean" "$(echo "$o" | grep -c 'Start the State cell' | sed 's/^0$/clean/')"
+o=$(re_in '| 53 | R8 2026-09-26 | run the installer | done | note |' | python3 $H/record-edit-guard.py)
+check "  ...rows of other tables are not checked" "clean" "$(echo "$o" | grep -c 'Start the State cell' | sed 's/^0$/clean/')"
+check "v3.2.2: the ⏳ line shows the Build count" "Build <n> of <m> done" "$(cd $H && python3 -c 'import formats;print(formats.WORKING_LINE)')"
+check "  ...and the rules say the same" "Build <n> of <m> done" "$(cat $H/../rules/CLAUDE-rules.md)"
+G=$H/../skills/hz-plan-regression-guard
+check "v3.2.2: the workers' regression guard carries the content ledger" "Content ledger: {present}/{total}" "$(cat $G/SKILL.md)"
+printf 'Refund window is 30 days.\n' > "$T/art.txt"; printf 'L01 Refund | 30 days\nL02 Contact | Email us\n' > "$T/led.md"
+o=$(python3 $G/scripts/coverage_gate.py "$T/art.txt" "$T/led.md"; echo "rc=$?")
+check "  ...and its coverage gate names a missing phrase and fails" "MISSING L02.*rc=1" "$(echo $o)"
+# v3.2.2: one report per piece of work (real harness: scenario_early_report.sh)
+rt(){ python3 -c "import json,sys;print(json.dumps({'session_id':'s','tool_name':sys.argv[1],'tool_input':json.loads(sys.argv[2]),**json.loads(sys.argv[3])}))" "$1" "$2" "${3:-{\}}" | HZ_REPORT_TIMING_OFF= python3 $H/report-timing.py; }
+check "v3.2.2: starting a helper tells the main session to wait with the one line" "Still running in the background: the helper" "$(rt Agent '{"subagent_type":"opus-worker"}')"
+check "  ...a background command too" "the command you are starting" "$(rt Bash '{"command":"gh run watch 1","run_in_background":true}')"
+check "  ...a normal command says nothing" "clean" "$(rt Bash '{"command":"ls"}' | grep -c report | sed 's/^0$/clean/')"
+check "  ...a helper's own tools say nothing" "clean" "$(rt Agent '{"subagent_type":"x"}' '{"agent_id":"a1"}' | grep -c report | sed 's/^0$/clean/')"
+cat > "$T/rt.jsonl" <<'J'
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_r1","name":"Agent","input":{"subagent_type":"reviewer"}},{"type":"tool_use","id":"toolu_b1","name":"Bash","input":{"command":"gh run watch 37788688047","run_in_background":true}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_r1","content":[{"type":"text","text":"Async agent launched successfully.\nagentId: a6c2db1703c92c39e"}]},{"type":"tool_result","tool_use_id":"toolu_b1","content":"Command running in background with ID: bx91"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Report.\n\nConfidence: High · Status: Checked\n\n---\n> 📌 **Result:** Still being worked on.\n> 👉 **I need from you:** Nothing.\n> ➡️ **Next:** More."}]}}
+J
+o=$(cd $H && python3 -c "
+import json,_common as C
+R=[json.loads(l) for l in open('$T/rt.jsonl')]
+print(len(C.still_running(R)))
+R.append({'type':'queue-operation','content':'<task-notification><task-id>a6c2db1703c92c39e</task-id><tool-use-id>toolu_r1</tool-use-id><status>completed</status></task-notification>'})
+print(C.still_running(R))
+R.append({'type':'user','message':{'role':'user','content':'<task-notification><task-id>bx91</task-id><status>completed</status></task-notification>'}})
+print(len(C.still_running(R)))")
+check "  ...the reviewer and a GitHub run both count as still running" "^2" "$o"
+check "  ...after the reviewer's notice only the command is left" "command gh run watch" "$o"
+check "  ...after both notices nothing is left" "0$" "$o"
+rm -f "$PROJ/.claude/state/pending-fixes.json" "$PROJ/.claude/state/report-early.jsonl"
+o=$(echo "{\"session_id\":\"s\",\"transcript_path\":\"$T/rt.jsonl\",\"stop_hook_active\":false}" | python3 $H/report-early.py)
+check "v3.2.2: a full report while helpers run is not sent back (a send-back shows it twice)" "clean" "$(echo "$o" | grep -c block | sed 's/^0$/clean/')"
+check "  ...it is saved as a fix for the next step" "while helper" "$(cat $PROJ/.claude/state/pending-fixes.json 2>/dev/null)"
+o=$(echo "{\"session_id\":\"s\",\"transcript_path\":\"$T/rt.jsonl\",\"stop_hook_active\":false}" | python3 $H/stats.py; tail -1 $PROJ/.claude/state/stats.jsonl)
+check "  ...and the session summary waits for the one full report" "still running" "$o"
+check "v3.2.2: the summary counts early reports" "early reports" "$(cat $H/stats.py)"
+o=$(echo "{\"session_id\":\"s\",\"hook_event_name\":\"UserPromptSubmit\",\"transcript_path\":\"$T/rt.jsonl\",\"prompt\":\"<task-notification><task-id>a6c2db1703c92c39e</task-id><tool-use-id>toolu_r1</tool-use-id><status>completed</status></task-notification>\"}" | HZ_REPORT_TIMING_OFF= python3 $H/plan-gate.py)
+check "v3.2.2: at a finish notice, the session hears what still runs" "Still running in the background: command gh run watch" "$o"
+o=$(cd $H && HZ_LATEST_VERSION=9.9.9 python3 -c "import _common as C; print(C.newer_rules_on_github())"; cd $H && HZ_LATEST_VERSION=0.1.0 python3 -c "import _common as C; print('none' if not C.newer_rules_on_github() else 'x')")
+check "v3.2.2: newer rules on GitHub are named in the version line" "9.9.9" "$o"
+check "  ...older or equal rules are not" "none" "$o"
+check "  ...the version line says how to load them" "reopen this session to load it" "$(cat $H/stats.py)"
+check "v3.2.2: the split-stage request first measures setup versus tests (browser install case)" "That stage first measures where the" "$(cat $H/_common.py)"
+# v3.2.2: the size check leaves out waiting for GitHub runs (Weekly-Planner Stage 3a round 2: stop at 30 min, size S)
+rm -f "$PROJ/.claude/state/stop-signals.json" "$PROJ/.claude/state/worker-steps.json"
+python3 - "$WB/sess/subagents/agent-w322.jsonl" <<'PYS'
+import json,sys,datetime as dt
+f=sys.argv[1]; now=dt.datetime.utcnow()
+T=lambda m:(now-dt.timedelta(minutes=m)).isoformat()+"Z"
+R=[{"type":"user","timestamp":T(31),"message":{"role":"user","content":"Task: x\nSize: S\nLevel: Complex"}},
+   {"type":"assistant","timestamp":T(25),"message":{"id":"a1","role":"assistant","content":[{"type":"tool_use","id":"g1","name":"Bash","input":{"command":"gh run watch 37786454837 --exit-status"}}]}},
+   {"type":"user","timestamp":T(16),"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"g1","content":"run completed"}]}},
+   {"type":"assistant","timestamp":T(14),"message":{"id":"a2","role":"assistant","content":[{"type":"tool_use","id":"g2","name":"Bash","input":{"command":"timeout 1200 gh run watch 37788688047","run_in_background":True}}]}},
+   {"type":"user","timestamp":T(14),"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"g2","content":"Command running in background with ID: bq1"}]}},
+   {"type":"queue-operation","timestamp":T(1),"content":"<task-notification><task-id>bq1</task-id><status>completed</status></task-notification>"}]
+open(f,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+json.dump({"agentType":"opus-worker"},open(f[:-6]+".meta.json","w"))
+PYS
+o=$(wb32 w322 Read)
+check "v3.2.2: a size-S stage of 31 min with 22 min of GitHub waits gives no stop for a plan" "clean" "$(cat "$PROJ/.claude/state/stop-signals.json" 2>/dev/null | grep -c 'over twice' | sed 's/^0$/clean/')"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

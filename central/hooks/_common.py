@@ -593,6 +593,24 @@ PLAN_ROW = re.compile(r"^(?P<plan>.+?)\s*·\s*Stage\s+(?P<k>\d+[a-z]?)\s+of\s+(?
 BLOCKED_WORDS = ("blocked", "cannot", "won't fix", "wont fix", "dropped", "superseded", "deferred")
 
 
+# v3.2.2: the State cell starts with the state; words in the note after it do not count
+LEAD_STATES = (("complete", "complete"), ("done", "complete"), ("✅", "complete"), ("partial", "partial"),
+               ("not started", "not started"), ("in progress", "in progress"), ("open", "open"),
+               ("queued", "queued"), ("waiting on you", "waiting"), ("waiting for you", "waiting"),
+               ("your step", "waiting"), ("blocked", "blocked"), ("superseded", "superseded"),
+               ("dropped", "blocked"), ("deferred", "blocked"), ("won't fix", "blocked"),
+               ("wont fix", "blocked"))
+
+
+def row_lead_state(state):
+    """The state named at the start of a State cell, or None when the cell does not start with a known state."""
+    low = re.sub(r"^[\s*_`]+", "", state or "").lower()
+    for word, kind in LEAD_STATES:
+        if low.startswith(word) and (len(low) == len(word) or not low[len(word)].isalnum()):
+            return kind
+    return None
+
+
 def deliverable_ledger(cfg, text=None):
     """List of {name, state, blocked, complete, evidence, row} from the deliverable ledger; template rows skipped."""
     rows = _record_table(cfg, r"deliverable", text)
@@ -612,17 +630,37 @@ def deliverable_ledger(cfg, text=None):
         low = state.lower()
         # v3.1.27: a stage that only waits for the user's approval of the plan is queued — not blocked, not a check
         for_approval = bool(re.search(r"\bapprov", low)) and not any(w in low for w in COMPLETE_WORDS)
+        lead = row_lead_state(state)
+        if lead:
+            # v3.2.2: the first word of the State cell decides. A note after it ("QUEUED — after Stage 37 (only if
+            # needed; else SUPERSEDED)") no longer changes the state: 3.2.1 dropped that row from the Build count.
+            # a stage that only waits for the plan approval stays queued, whatever its first word (v3.1.27)
+            for_approval = for_approval and lead != "complete"
+            waiting = not for_approval and (lead == "waiting" or (lead in ("partial", "open", "not started",
+                                                                          "in progress", "blocked")
+                                                                  and any(w in low for w in WAITING_WORDS)))
+            flags = {"complete": lead == "complete", "waiting": waiting,
+                     "queued": lead == "queued" or for_approval,
+                     "blocked": lead in ("blocked", "superseded") and not waiting and not for_approval,
+                     "superseded": lead == "superseded"}
+        else:
+            flags = {"complete": any(w in low for w in COMPLETE_WORDS)
+                     and not any(w in low for w in ("incomplete", "not complete")),
+                     "waiting": any(w in low for w in WAITING_WORDS) and not for_approval,
+                     "queued": any(w in low for w in QUEUED_WORDS) or for_approval,
+                     "blocked": (any(w in low for w in BLOCKED_WORDS) and not any(w in low for w in WAITING_WORDS)
+                                 and not for_approval),
+                     "superseded": "superseded" in low and not any(w in low for w in COMPLETE_WORDS if w != "✅")}
         out.append({"name": name, "state": state,
-                    "complete": any(w in low for w in COMPLETE_WORDS) and not any(w in low for w in ("incomplete", "not complete")),
-                    "waiting": any(w in low for w in WAITING_WORDS) and not for_approval,
-                    "queued": any(w in low for w in QUEUED_WORDS) or for_approval,
+                    "complete": flags["complete"],
+                    "waiting": flags["waiting"],
+                    "queued": flags["queued"],
                     "plan": (PLAN_ROW.match(name).group("plan").strip() if PLAN_ROW.match(name) else None),
-                    "blocked": (any(w in low for w in BLOCKED_WORDS) and not any(w in low for w in WAITING_WORDS)
-                                and not for_approval),
-                    "superseded": "superseded" in low and not any(w in low for w in COMPLETE_WORDS if w != "✅"),
+                    "blocked": flags["blocked"],
+                    "superseded": flags["superseded"],
                     # v3.1.24: a Check stage (confirming the work: merges, live check, device check) — labelled
                     # "(Check)" in its name, or a stage waiting on the user
-                    "check": bool(CHECK_TAG.search(name)) or (any(w in low for w in WAITING_WORDS) and not for_approval),
+                    "check": bool(CHECK_TAG.search(name)) or flags["waiting"],
                     "evidence": (r[ei] if ei is not None and ei < len(r) else "").strip(),
                     "row": " | ".join(c.strip() for c in r)})
     return out
@@ -1017,8 +1055,10 @@ def test_speed_note(cfg, minutes, cmd, stopped=False):
                if stopped else f"took {round(minutes, 1)} minutes")
         msg = (f"[test speed] The full test run {how}. The aim is {int(limit)} minutes or less. Do not run the full "
                "suite locally again until it is split; use the fast loop, and run the full suite on GitHub. Show the "
-               "next Rev of the plan with a stage before the other build stages. That stage splits the test suite "
-               "into parts that run side by side, each under the aim. When it is done, add 'Test speed: full run <n> min in <k> parts' to "
+               "next Rev of the plan with a stage before the other build stages. That stage first measures where the "
+               "time goes: the tests, or the setup before them (install, download, start). It fixes the slow part: a "
+               "slow setup runs once and the jobs reuse it; slow tests are split into parts that run side by side, "
+               "each under the aim (v3.2.2: Weekly-Planner, 14 of 20 minutes were a browser install). When it is done, add 'Test speed: full run <n> min in <k> parts' to "
                "FEATURES.md ## References.")
         try:
             sp = os.path.join(STATE_DIR, "stop-signals.json")
@@ -1183,3 +1223,91 @@ def open_workers(records, kinds, transcript_path=None, max_minutes=150, exclude_
                 except OSError:
                     pass
     return started
+
+# ---- Report timing (v3.2.2) ----------------------------------------------------------------------------------------
+# Weekly-Planner 2026-10-08, and real Claude Code 2.1.293 in tools/real-harness (scenario_early_report.sh): the session
+# wrote its full report while the reviewer and a GitHub run still went in the background. Each finish notice then
+# started a new turn, and the session wrote a second full report. You saw the decisions and closing lines twice.
+def open_background_runs(records):
+    """Background shell commands of the main session that have no finish notice yet: {task id: command}."""
+    cmds, started = {}, {}
+    for r in records:
+        if r.get("isSidechain"):
+            continue
+        c = (r.get("message") or {}).get("content")
+        if r.get("type") == "assistant" and isinstance(c, list):
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash" and \
+                        (b.get("input") or {}).get("run_in_background"):
+                    cmds[b.get("id")] = str((b.get("input") or {}).get("command") or "")
+        if r.get("type") == "user" and isinstance(c, list):
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in cmds:
+                    m = re.search(r"running in background with ID: ([A-Za-z0-9_-]+)", json.dumps(b.get("content")))
+                    if m:
+                        started[m.group(1)] = cmds[b["tool_use_id"]]
+        if r.get("type") != "assistant" and started:
+            raw = json.dumps(r, ensure_ascii=False)
+            if "task-notification" in raw:
+                for tid in re.findall(r"<task-id>([A-Za-z0-9_-]+)</task-id>", raw.replace("\\n", "\n")):
+                    started.pop(tid, None)
+    return started
+
+
+def still_running(records, transcript_path=None):
+    """Names of the main session's helpers and background commands that still run (empty list: none)."""
+    kinds = set()
+    for b in tool_uses(records, {"Agent", "Task"}):
+        kinds.add(str((b.get("input") or {}).get("subagent_type") or ""))
+    out = []
+    if kinds:
+        for k, v in open_workers(records, sorted(kinds), transcript_path, exclude_id="-").items():
+            out.append("helper " + str(v.get("agent") or k)[:12])
+    for tid, cmd in open_background_runs(records).items():
+        out.append("command " + cmd.strip().split("\n")[0][:40])
+    return out
+
+
+WAIT_TEXT = ("[report timing] Still running in the background: {what}. End this turn with one line only: '{line}'. "
+             "Write no report and no closing lines yet. When the last one has finished, write one full report.")
+REPORT_TEXT = ("[report timing] Every helper and background command has finished. Write the one full report now, "
+               "with the closing lines. Do not repeat an earlier report: give only what is new.")
+
+
+# ---- Newer rules on GitHub (v3.2.2) --------------------------------------------------------------------------------
+# A session keeps the rules it started with. The Weekly-Planner session of 2026-10-08 started on 3.2.0 and still ran
+# it after 3.2.1 was merged, so a fixed problem (the false "build is done" message) went on. The real Claude Code
+# (tools/real-harness, 2.1.293) runs the session-start check again when a session is resumed, so reopening loads the
+# new rules and keeps the chat.
+def _vkey(v):
+    return tuple(int(x) if x.isdigit() else 0 for x in re.findall(r"\d+", v or ""))
+
+
+def newer_rules_on_github(timeout=3, max_age_s=1200):
+    """The version on GitHub when it is newer than the one this session runs, else "". Checked at most every 20 min."""
+    now_v = central_version()
+    latest = os.environ.get("HZ_LATEST_VERSION", "")
+    if not latest:
+        path = os.path.join(STATE_DIR, "rules-latest.json")
+        try:
+            c = json.load(open(path, encoding="utf-8"))
+        except (OSError, ValueError):
+            c = {}
+        if c.get("v") and time.time() - float(c.get("t") or 0) < max_age_s:
+            latest = c["v"]
+        else:
+            try:
+                import urllib.request
+                base = os.environ.get("HZ_BASE_URL") or \
+                    "https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude-config/main"
+                with urllib.request.urlopen(base + "/central/MANIFEST.txt", timeout=timeout) as r:
+                    first = r.readline().decode("utf-8", "replace").strip()
+                latest = first.split(":", 1)[1].strip() if first.lower().startswith("version:") else ""
+            except Exception:
+                latest = c.get("v") or ""
+            try:
+                os.makedirs(STATE_DIR, exist_ok=True)
+                json.dump({"t": time.time(), "v": latest}, open(path, "w", encoding="utf-8"))
+            except OSError:
+                pass
+    return latest if latest and now_v != "unknown" and _vkey(latest) > _vkey(now_v) else ""

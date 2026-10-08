@@ -28,7 +28,7 @@ VALIDATION_MEANING = ("Proposed = not checked enough. Checked = checked against 
 DECISIONS_HEADER = "❓ Decisions"   # each line names a recommendation (checked)
 COMPLETION_SHAPE = "Completion: n of m done (p%)  or  Completion: Build n of m done (p%) · Check c of d"
 COMPLETION_PATTERN = r"Completion:\s*(?:Build\s+)?(\d+)\s+of\s+(\d+)"
-WORKING_LINE = "⏳ Working on: <names> · <n> of <m> done"
+WORKING_LINE = "⏳ Working on: <names> · Build <n> of <m> done"
 WORKING_PATTERN = r"^\s*⏳\s*Working on:\s*\S.*$"
 
 # ---- order of a final answer ----

@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.1: each app opens one setup pull request at its next session; merge it (the reviewer now runs at high effort). Fixed: finished background workers are counted as finished again, so new workers start. Plans show only the changed words, and ask open questions in chat before the plan. Test runs in the background are measured; a slow or stopped full suite asks for a split stage. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.2: one full report per piece of work — when a helper or background command starts, and at each finish notice, the session is told what still runs and to wait with the ⏳ line; the session summary comes once. The stage-size stop counts worked time, not waits for GitHub runs. The split stage measures setup versus tests first. The notice names newer rules on GitHub (reopen the session to load them). Progress count reads the first word of each State cell; a stage row must start with its state; the ⏳ line shows the Build count. Workers' regression guard adds the content ledger. Old files removed; README updated. No setup pull request. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -43,6 +43,10 @@
         "tools": "Agent|Task"
       },
       {
+        "script": "report-timing.py",
+        "tools": "Agent|Task|Bash"
+      },
+      {
         "script": "record-edit-guard.py",
         "tools": "Edit|Write|MultiEdit"
       },
@@ -63,6 +67,7 @@
       "pr-ready-guard.py",
       "validation-line.py",
       "qc-guard.py",
+      "report-early.py",
       "stats.py"
     ],
     "PostToolUse": [

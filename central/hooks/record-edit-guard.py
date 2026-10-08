@@ -25,6 +25,18 @@ for line in "\n".join(texts).splitlines():
             words = {w for w in re.findall(r"[a-z0-9][a-z0-9_.:-]{3,}", m.group(1).lower()) if w not in STOP}
             if words and not any(w in cells[2].lower() for w in words):
                 unproven.append(f"{cells[0][:60]} (planned proof: {m.group(1)[:60]})")
+# v3.2.2: a plan stage row starts its State cell with the state (COMPLETE, PARTIAL, QUEUED, BLOCKED, SUPERSEDED, …).
+# The count reads only that first word, so a cell such as "after Stage 37; else SUPERSEDED" would count wrong.
+from _common import row_lead_state, PLAN_ROW
+no_state = []
+for line in "\n".join(texts).splitlines():
+    cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.strip().startswith("|") else []
+    if len(cells) >= 2 and PLAN_ROW.match(cells[0]) and cells[1] and not row_lead_state(cells[1]):
+        no_state.append(f"{cells[0][:60]} (State: {cells[1][:40]})")
+if no_state:
+    deny_tool("Start the State cell of each plan stage row with its state: COMPLETE, PARTIAL, NOT STARTED, IN PROGRESS, "
+              "OPEN, QUEUED, WAITING ON YOU, BLOCKED or SUPERSEDED. Put any note after it (\"QUEUED — after Stage 37\"). "
+              "Rows: " + "; ".join(no_state[:3]) + ". Make the edit again.")
 if unproven:
     deny_tool("The evidence must show the proof the plan named for the stage. Name what ran and its result for: " +
               "; ".join(unproven[:3]) + ".")

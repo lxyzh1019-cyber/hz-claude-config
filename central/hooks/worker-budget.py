@@ -185,9 +185,58 @@ try:
 except (OSError, ValueError):
     pass
 _budget = {"S": 15, "M": 45, "L": 90}.get(_size or "", None)
-if _budget and minutes > 2 * _budget and not a.get("over_signalled"):
+
+
+# v3.2.2: the size check counts worked time. Waiting for GitHub runs and for the worker's own background commands is
+# left out: in the Weekly-Planner Stage 3a round 2 (size S, two GitHub runs of about 9 minutes each) the stop for a plan
+# came at 30 minutes, while the worker waited for the second run, just before its proof.
+_GH_WAIT = _re.compile(r"\bgh\s+(run\s+watch|pr\s+checks\b.*--watch|run\s+view\b.*--exit-status)")
+
+
+def _waited_minutes(path):
+    from datetime import datetime as _d2
+
+    def _t(r):
+        try:
+            return _d2.fromisoformat(str(r.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return None
+    total, prev, fg = 0.0, None, {}
+    try:
+        lines = open(path, encoding="utf-8", errors="replace").read().splitlines()
+    except OSError:
+        return 0.0
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        t = _t(r)
+        c = (r.get("message") or {}).get("content")
+        if r.get("type") == "assistant" and isinstance(c, list):
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash":
+                    inp = b.get("input") or {}
+                    if not inp.get("run_in_background") and _GH_WAIT.search(str(inp.get("command") or "")):
+                        fg[b.get("id")] = t
+        if isinstance(c, list):
+            for b in c:
+                if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in fg:
+                    t0 = fg.pop(b["tool_use_id"])
+                    if t0 and t:
+                        total += t - t0     # a GitHub wait in the foreground
+        if r.get("type") != "assistant" and "task-notification" in line and prev and t:
+            total += t - prev               # idle until the worker's own background command finished
+        if t:
+            prev = t
+    return max(total, 0.0) / 60
+
+
+_worked = minutes - (_waited_minutes(rf) if rf else 0.0)
+if _budget and _worked > 2 * _budget and not a.get("over_signalled"):
     a["over_signalled"] = True
-    _signal(f"a stage sized {_size} (about {_budget} min) has run {round(minutes)} min, over twice its size")
+    _signal(f"a stage sized {_size} (about {_budget} min) has worked {round(_worked)} min, over twice its size "
+            f"({round(minutes - _worked)} min of waiting for GitHub or background commands left out)")
 if say in ("time stop", "tests stop", "stop") and not a.get("stop_signalled"):
     a["stop_signalled"] = True
     _signal({"time stop": "a worker reached its time limit", "tests stop": "a worker reached its test-run limit",

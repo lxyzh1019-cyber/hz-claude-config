@@ -1,4 +1,4 @@
-import json, sys, os, http.server, threading, itertools, re
+import json, sys, os, http.server, threading, itertools, re, time
 LOG=open(os.environ.get('HARNESS_LOG','requests.log'),'a')
 SCRIPT=json.load(open(sys.argv[2])) if len(sys.argv)>2 else []
 counter=itertools.count()
@@ -21,8 +21,13 @@ class H(http.server.BaseHTTPRequestHandler):
         m=re.search(r"Task: (W\d)", ftxt)
         if m:
             step={"text":"Finished "+m.group(1)+"."}
+            time.sleep(float(os.environ.get('SUBAGENT_DELAY','0')))   # v3.2.2: a helper that takes time
             LOG.write(f"  -> subagent {m.group(1)}\n"); LOG.flush()
         else:
+            # v3.2.2: log what the main session's last user message carries (notices and hook text)
+            last=req.get('messages',[{}])[-1].get('content')
+            ltxt=last if isinstance(last,str) else " ".join(x.get('text','') or json.dumps(x.get('content',''))[:300] for x in (last or []) if isinstance(x,dict))
+            LOG.write("  LAST: "+ltxt.replace("\n"," | ")[:1500]+"\n"); LOG.flush()
             step = SCRIPT.pop(0) if SCRIPT else {"text":"all done"}
             LOG.write(f"  -> main step {json.dumps(step)[:120]}\n"); LOG.flush()
         content=[]

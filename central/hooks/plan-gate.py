@@ -99,9 +99,22 @@ STOP_TEXT = stop_notice()
 # v3.1.30: a worker or background-command notice is not a request of mine. In the Weekly-Planner money session 79 of
 # 106 plan-gate texts went to such notices ("Full Plan vN is required (90 bullets)"), 128,000 characters re-read on
 # every later step.
+# v3.2.2: report timing — at each finish notice, say whether anything still runs (one full report at the end)
+TIMING_TEXT = ""
+if prompt.lstrip().startswith("<task-notification>") and not os.environ.get("HZ_REPORT_TIMING_OFF"):
+    try:
+        from _common import still_running as _sr, read_transcript as _rt3, WAIT_TEXT as _WT, REPORT_TEXT as _RT
+        import formats as _F
+        # the notice itself may not be in the session file yet when this check runs: count it as read
+        _recs = _rt3(data.get("transcript_path")) + [{"type": "user", "message": {"role": "user", "content": prompt}}]
+        _left = _sr(_recs, data.get("transcript_path"))
+        TIMING_TEXT = (_WT.format(what=", ".join(_left[:3]) + (f" and {len(_left) - 3} more" if len(_left) > 3 else ""),
+                                  line=_F.WORKING_LINE) if _left else _RT)
+    except Exception as _e:
+        log("plan-gate", {"timing_error": str(_e)[:200]})
 if prompt.lstrip().startswith("<task-notification>"):
     log("plan-gate", {"skipped": "task notification", "fixes": len(_fixes)})
-    _ctx_txt = "\n".join(x for x in (FIX_TEXT, TEST_TEXT, STOP_TEXT, MEM_TEXT) if x)
+    _ctx_txt = "\n".join(x for x in (FIX_TEXT, TEST_TEXT, STOP_TEXT, MEM_TEXT, TIMING_TEXT) if x)
     if _ctx_txt:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": _ctx_txt}}))
     sys.exit(0)

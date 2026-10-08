@@ -48,6 +48,13 @@ def version_line(first=False):
             "current" if stub.startswith("current") else "waiting for your merge" if stub.startswith("waiting")
             else "needs attention" if stub else "unknown")
     line = f"Rules v{central_version()} · {branch} · setup {word}"
+    try:   # v3.2.2: say so when GitHub has newer rules; reopening the session loads them and keeps the chat
+        from _common import newer_rules_on_github
+        _new = newer_rules_on_github()
+        if _new:
+            line += f" · v{_new} is on GitHub: reopen this session to load it"
+    except Exception:
+        pass
     # v3.1.30: the main session runs on the main-session model; the planner helper plans on the first-choice model
     main = (cfg.get("main_session_model") or {}) if isinstance(cfg, dict) else {}
     used = ""
@@ -79,6 +86,16 @@ def mark_shown():
         pass
 
 
+# v3.2.2: the summary comes once, with the one full report — not while a helper or background command still runs
+# (real harness: 3.2.1 showed it after the early report and again after the finish notice)
+try:
+    from _common import still_running as _sr
+    _left = _sr(records, tp) if final else []
+except Exception:
+    _left = []
+if final and _left:
+    log("stats", {"shown": "nothing", "why": "still running: " + ", ".join(_left[:3])})
+    sys.exit(0)
 if not final:
     if sid and not shown.get(sid):
         mark_shown()
@@ -655,7 +672,8 @@ lines.append(f"Counts: hand-overs {ho}" + (f" (escalated {escalated})" if escala
              + (f" · worker steps {helper_steps['tool']} (one tool per step {round(100 * helper_steps['one'] / helper_steps['tool'])}%)"
                 if helper_steps["tool"] else "")
              + f" · refused: planner edits {st.get('refused:routing-guard', 0)}, hand-overs {st.get('refused:worker-guard', 0)},"
-             f" plans {st.get('refused:plan-guard', 0)} · send-backs {st.get('sendbacks', 0)}{sb} · saved fixes {st.get('savedfixes', 0)}")
+             f" plans {st.get('refused:plan-guard', 0)} · send-backs {st.get('sendbacks', 0)}{sb} · saved fixes {st.get('savedfixes', 0)}"
+             f" · early reports {st.get('early_reports', 0)}")
 if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
     lines.append("This session is long: it carries on, hands stages to fresh workers, and keeps a restart line in the record in case you close it.")
 mark_shown()
