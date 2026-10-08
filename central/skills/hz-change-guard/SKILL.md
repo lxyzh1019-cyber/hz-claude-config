@@ -1,5 +1,5 @@
 ---
-name: hz-plan-regression-guard
+name: hz-change-guard
 description: Prevent silent feature loss when editing a plan, document, app, or spreadsheet from one version to the next. Use this skill WHENEVER the user asks to edit, revise, update, refactor, or produce a new version of an existing exercise plan, training plan, design doc, app, or any artifact that has accumulated features across versions — even if they don't say "regression" or "don't lose anything." Trigger on phrases like "update the plan", "v3 of this", "add X to the training plan", "revise this", "make these changes", or any version-to-version edit where features could quietly disappear. Especially trigger when the user has a history of features getting lost between versions.
 ---
 
@@ -20,9 +20,9 @@ A **manifest** is the list of locked, non-negotiable features the current versio
 1. Locate the manifest if one exists (see "Where the manifest lives" below).
 2. If no manifest exists yet, BUILD one by reading the current version end-to-end and listing every distinct feature, behavior, rule, section, or capability. State this list to the user and ask them to confirm/correct it before proceeding. This one-time cost prevents every future regression.
 3. Hold the manifest as the checklist for this edit.
-4. Build or update the **content ledger** (v3.2.2, from the current hz-change-guard skill). The manifest says what the artifact *does*; the ledger says what it must *say*: every agreed point, each with a search phrase that must appear in the artifact. Sweep the plan, its `## Design decisions`, the hand-over and the earlier version, never only the latest summary. Format and placement: `references/content-ledger.md`.
+4. Build or update the **content ledger** (v3.2.2: this copy carries the name and the content ledger of the account skill hz-change-guard). The manifest says what the artifact *does*; the ledger says what it must *say*: every agreed point, each with a search phrase that must appear in the artifact. Sweep the plan, its `## Design decisions`, the hand-over and the earlier version, never only the latest summary. Format and placement: `references/content-ledger.md`.
 
-A feature is anything a future reader would miss if it vanished: a scoring rule, a UI tab, a section, a formula, a constraint, a phase of the plan, a special case ("Chinese restricted to parent-reference only"), a data field, an export option.
+A feature is anything a future reader would miss if it vanished: a scoring rule, a UI tab, a section, a formula, a constraint, a phase of the plan, a special case ("export only for admins"), a data field, an export option.
 
 ### Phase 2 — Make the requested change
 
@@ -67,7 +67,7 @@ Any `❌ MISSING` line means STOP — surface it to the user and fix or confirm 
 The discipline is identical across formats; only the storage location changes.
 
 - **Text/markdown/Word doc** → an HTML comment block or a "Locked Features" section pinned at the top. See `references/manifest-formats.md`.
-- **App / code** → a header comment block at the top of the main file, e.g. `<!-- FEATURE MANIFEST v28b: persistent CRQ_DB cache; SELECT INTO; post-materialization indexes; ... -->`.
+- **App / code** → a header comment block at the top of the main file, e.g. `<!-- FEATURE MANIFEST v3: offline cache; weekly reset; parent PIN; ... -->`.
 - **Spreadsheet** → a frozen top block or a dedicated `_Manifest` sheet.
 - **Pasted-in-chat plan with no file** → there's nowhere to pin it, so hold the manifest in the conversation, restate it at the top of each new version, and run the regression check in chat every turn.
 
@@ -75,7 +75,7 @@ Read `references/manifest-formats.md` for the exact template per format and for 
 
 ## Versioning
 
-Always label versions explicitly (v1, v2, v28b — match whatever scheme the user already uses). The regression table header references the old and new version numbers so the user can trace what changed when.
+Always label versions explicitly (v1, v2, v3b — match whatever scheme the user already uses). The regression table header references the old and new version numbers so the user can trace what changed when.
 
 ## What NOT to do
 

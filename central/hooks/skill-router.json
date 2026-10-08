@@ -40,7 +40,7 @@
       ],
       "note": "whole thing first, grade, then the point; checklists: web-app, app-screens, sql-excel, prompts"
     },
-    "hz-plan-regression-guard": {
+    "hz-change-guard": {
       "keywords": [
         "update the plan",
         "revise",
@@ -51,7 +51,7 @@
         "v2 of",
         "v3 of"
       ],
-      "note": "local copy until PR 2 renames it hz-change-guard; manifest before edit, kept/changed/removed after"
+      "note": "central copy of hz-change-guard; manifest and content ledger before the edit, kept/changed/removed and the coverage gate after"
     },
     "hz-planner": {
       "keywords": [
@@ -74,6 +74,21 @@
         "continue elsewhere"
       ],
       "note": ""
+    },
+    "hz-designer": {
+      "keywords": [
+        "mock up",
+        "mockup",
+        "wireframe",
+        "design options",
+        "critique this",
+        "what do you think of this design",
+        "make it bold",
+        "layout options",
+        "how should this flow",
+        "redesign the screen"
+      ],
+      "note": "design and critique of app screens and flows; three bold directions, then one design; use it instead of design-critique"
     }
   }
 }

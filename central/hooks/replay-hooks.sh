@@ -118,7 +118,7 @@ mv FEATURES.md F.bak
 o=$(echo '{}' | python3 $H/session-start.py); check "missing per-repo file reported" "Missing files in this repository: FEATURES.md" "$o"
 o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard points to seed templates" "seed" "$o"
 mv F.bak FEATURES.md
-o=$(echo '{"prompt":"update the plan to v3"}' | python3 $H/skill-router.py); check "router points to central skill file" "hz-plan-regression-guard.*read .*skills/hz-plan-regression-guard/SKILL.md" "$o"
+o=$(echo '{"prompt":"update the plan to v3"}' | python3 $H/skill-router.py); check "router points to central skill file" "hz-change-guard.*read .*skills/hz-change-guard/SKILL.md" "$o"
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "router prefixes account skill" "anthropic-skills:hz-reviewer" "$o"
 # --- Loader (only in the hz-claude-config checkout)
 L="$CENTRAL/../stub/hz-loader.py"
@@ -1123,9 +1123,9 @@ o=$(pg "$T/p_long_ok.md"); check "long detail under Technical details is fine" "
 o=$(echo '{}' | python3 $H/session-start.py); check "the plan shape at session start names the 7,200 limit for a new plan" "at most 7,200 characters" "$o"
 # --- v3.1.26d: fewer re-reads and send-backs
 # 1 rules read by shell -> refused with the Read path; setup allows Read on the rules copy
-o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"v=$(cat ~/.cache/hz-rules/current); cat ~/.cache/hz-rules/$v/skills/hz-plan-regression-guard/SKILL.md"}}' | python3 $H/dispatch.py)
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"v=$(cat ~/.cache/hz-rules/current); cat ~/.cache/hz-rules/$v/skills/hz-change-guard/SKILL.md"}}' | python3 $H/dispatch.py)
 check "a shell command reading the rules is refused before the Allow prompt" "Read the central rules with the Read tool" "$o"
-check "  ...with the exact skill file to read" "hz-plan-regression-guard/SKILL.md" "$o"
+check "  ...with the exact skill file to read" "hz-change-guard/SKILL.md" "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | python3 $H/rules-read-guard.py)
 check "other shell commands are untouched" "^$" "$o"
 check "the setup allows the Read tool on the rules copy" "Read(~/.cache/hz-rules/\*\*)" "$(cat $H/../../stub/settings.json)"
@@ -2173,7 +2173,7 @@ o=$(re_in '| 53 | R8 2026-09-26 | run the installer | done | note |' | python3 $
 check "  ...rows of other tables are not checked" "clean" "$(echo "$o" | grep -c 'Start the State cell' | sed 's/^0$/clean/')"
 check "v3.2.2: the ⏳ line shows the Build count" "Build <n> of <m> done" "$(cd $H && python3 -c 'import formats;print(formats.WORKING_LINE)')"
 check "  ...and the rules say the same" "Build <n> of <m> done" "$(cat $H/../rules/CLAUDE-rules.md)"
-G=$H/../skills/hz-plan-regression-guard
+G=$H/../skills/hz-change-guard
 check "v3.2.2: the workers' regression guard carries the content ledger" "Content ledger: {present}/{total}" "$(cat $G/SKILL.md)"
 printf 'Refund window is 30 days.\n' > "$T/art.txt"; printf 'L01 Refund | 30 days\nL02 Contact | Email us\n' > "$T/led.md"
 o=$(python3 $G/scripts/coverage_gate.py "$T/art.txt" "$T/led.md"; echo "rc=$?")
@@ -2231,5 +2231,14 @@ json.dump({"agentType":"opus-worker"},open(f[:-6]+".meta.json","w"))
 PYS
 o=$(wb32 w322 Read)
 check "v3.2.2: a size-S stage of 31 min with 22 min of GitHub waits gives no stop for a plan" "clean" "$(cat "$PROJ/.claude/state/stop-signals.json" 2>/dev/null | grep -c 'over twice' | sed 's/^0$/clean/')"
+check "v3.2.3: no central file names the old skill hz-plan-regression-guard" "clean" "$(grep -rl hz-plan-regression-guard $H/../agents $H/../skills $H/*.py $H/skill-router.json $H/../rules 2>/dev/null | grep -c . | sed 's/^0$/clean/')"
+check "v3.2.3: the central skill copies carry no personal examples" "clean" "$(grep -rl 'CRQ_DB\|Chinese restricted' $H/../skills | grep -c . | sed 's/^0$/clean/')"
+check "v3.2.3: no central file names the removed hz-guarantee-audit" "clean" "$(grep -rl hz-guarantee-audit $H/../agents $H/../skills $H/*.py $H/skill-router.json $H/../rules 2>/dev/null | grep -c . | sed 's/^0$/clean/')"
+o=$(echo '{"prompt":"mock up the My plants screen with three design options"}' | python3 $H/skill-router.py)
+check "v3.2.3: a mock-up request names hz-designer" "anthropic-skills:hz-designer" "$o"
+o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py)
+check "  ...a review request does not" "clean" "$(echo "$o" | grep -c hz-designer | sed 's/^0$/clean/')"
+o=$(echo '{"prompt":"## Design decisions\n- [agreed] header colour"}' | python3 $H/skill-router.py)
+check "  ...a plan's Design decisions section does not" "clean" "$(echo "$o" | grep -c hz-designer | sed 's/^0$/clean/')"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

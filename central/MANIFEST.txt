@@ -1,4 +1,4 @@
-version: 3.2.2
+version: 3.2.3
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -43,13 +43,10 @@ hooks/worker-guard.py
 rules/CLAUDE-rules.md
 seed/FEATURES.md
 seed/WORKING_RECORD.md
-skills/hz-guarantee-audit/SKILL.md
-skills/hz-guarantee-audit/references/grading-scale.md
-skills/hz-guarantee-audit/references/handoffs.md
-skills/hz-plan-regression-guard/SKILL.md
-skills/hz-plan-regression-guard/references/content-ledger.md
-skills/hz-plan-regression-guard/references/manifest-formats.md
-skills/hz-plan-regression-guard/scripts/coverage_gate.py
+skills/hz-change-guard/SKILL.md
+skills/hz-change-guard/references/content-ledger.md
+skills/hz-change-guard/references/manifest-formats.md
+skills/hz-change-guard/scripts/coverage_gate.py
 stub-files/CLAUDE-pointer.md
 stub-files/explore.md
 stub-files/hz-loader.py
