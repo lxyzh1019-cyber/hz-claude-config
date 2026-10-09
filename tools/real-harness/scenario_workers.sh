@@ -1,7 +1,7 @@
 #!/bin/bash
 # usage: scenario.sh <hooks dir> <label>
 HOOKS=$1; LABEL=$2; HERE=$(cd "$(dirname "$0")" && pwd); B=${HARNESS_DIR:-/tmp/hz-harness}/$LABEL
-rm -rf $B && mkdir -p $B/home $B/proj/.claude/agents && cp "$HERE/../../stub/opus-worker.md" $B/proj/.claude/agents/
+rm -rf $B && mkdir -p $B/home $B/proj/.claude/agents && cp "${OW:-$HERE/../../stub/opus-worker.md}" $B/proj/.claude/agents/opus-worker.md
 ( cd $B/proj && git init -q && printf '# FEATURES — harness\n- a\n' > FEATURES.md && printf '# WORKING RECORD\n' > WORKING_RECORD.md \
   && git add -A && git -c user.email=t@t -c user.name=t commit -qm init && git checkout -qb claude/harness )
 cd $B

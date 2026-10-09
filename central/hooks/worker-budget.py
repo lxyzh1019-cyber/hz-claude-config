@@ -300,3 +300,51 @@ if say == "batch reads":
 if say == "screenshot":
     _advise("PreToolUse", "[worker budget] Opening a screenshot costs many tokens. Compare pictures in code (compare "
             "instructions); open one only when the task is a visual check.")
+
+# v3.2.7: slow test runs repeated after small changes. Weekly-Planner 8 Oct: one Sonnet worker ran the same one-test smoke
+# run 6 times in a row, each about 3 minutes, with one debug line changed between runs (17 of its 26 minutes). Advice
+# once, before the third slow run: gather every debug print in one change, change once, run once, run it in the background.
+def _slow_runs(path, limit=120):
+    from datetime import datetime as _dt
+    def _t(r):
+        try:
+            return _dt.fromisoformat(str(r.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return None
+    out, pend = [], {}
+    try:
+        lines = open(path, encoding="utf-8", errors="replace").read().splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        if '"tool_' not in line:
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        c = (r.get("message") or {}).get("content")
+        for b in c if isinstance(c, list) else []:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_use" and b.get("name") == "Bash" and _is_test(str((b.get("input") or {}).get("command") or "")):
+                pend[b.get("id")] = _t(r)
+            elif b.get("type") == "tool_result" and b.get("tool_use_id") in pend:
+                t0, t1 = pend.pop(b["tool_use_id"]), _t(r)
+                if t0 and t1 and t1 - t0 >= limit:
+                    out.append(t1 - t0)
+    return out
+
+
+if tool == "Bash" and rf and not a.get("slow_tests_advised") and _is_test(str((data.get("tool_input") or {}).get("command") or "")):
+    _sr = _slow_runs(rf)
+    if len(_sr) >= 2:
+        a["slow_tests_advised"] = True
+        try:
+            json.dump(state, open(path, "w", encoding="utf-8"))
+        except (OSError, NameError):
+            pass
+        log("worker-budget", {"agent": aid, "said": "slow tests", "runs": len(_sr)})
+        _advise("PreToolUse", f"[worker budget] Your last {len(_sr)} test runs took about {round(sum(_sr) / len(_sr) / 60, 1)} "
+                "min each. Before the next one: put every debug print you need into one change, make one change, and run "
+                "once. Run a long test in the background (run_in_background with a timeout) and read the code meanwhile.")

@@ -16,22 +16,15 @@ if any(data.get(f) for f in (cfg.get("subagent_marker_fields") or ["agent_id"]))
 if not os.path.exists(RULES_PATH):
     sys.exit(0)                       # nothing to read: session start already said "NOT loaded"
 sid = str(data.get("session_id") or "")
-mark = os.path.join(STATE_DIR, "rules-read.json")
-try:
-    if json.load(open(mark, encoding="utf-8")).get("session") == sid:
-        sys.exit(0)
-except (OSError, ValueError, AttributeError):
-    pass
+from _common import sess_get, sess_set   # v3.2.7: one mark per session (two sessions in one folder blocked each other)
+if sess_get("rules-read.json", sid):
+    sys.exit(0)
 tool = str(data.get("tool_name") or "")
 inp = data.get("tool_input") or {}
 path = str(inp.get("file_path") or inp.get("path") or "").replace("\\", "/").lower()
 own = RULES_PATH.replace("\\", "/").lower()
 if tool == "Read" and (path == own or ("hz-rules" in path and path.endswith("rules/claude-rules.md"))):
-    try:
-        os.makedirs(STATE_DIR, exist_ok=True)
-        json.dump({"session": sid}, open(mark, "w", encoding="utf-8"))
-    except OSError:
-        pass
+    sess_set("rules-read.json", sid, True)
     log("rules-first-guard", {"rules_read": True})
     sys.exit(0)
 if tool in set(cfg.get("rules_first_allowed_tools") or ["Read", "Glob", "Grep", "LS", "TodoWrite"]):

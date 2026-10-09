@@ -10,6 +10,12 @@ Scripts run one after another with the same input. Combining their answers:
   "block"; exit code 2) wins at once and later scripts do not run;
 - added context (UserPromptSubmit and others) from every script is joined into one answer."""
 import json, os, re, subprocess, sys
+# v3.2.7: keep the compiled checks. Every hook call used to start one python process per check, and each one compiled
+# the large shared module again (bytecode caching was off). In your sessions a Read or Grep call took 1.2 s instead of
+# milliseconds (Weekly-Planner 433 calls, Figure-Skate 228). Now the checks run in this one process and their compiled
+# form is kept in __pycache__ of the rules cache. HZ_DISPATCH_SUBPROCESS=1 restores the old way (tests compare both).
+sys.dont_write_bytecode = False
+import io, importlib.util, traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -26,6 +32,54 @@ cfg = load_config()
 entries = (cfg.get("dispatch") or {}).get(event, [])
 
 JOIN_BLOCKS = event in ("Stop", "SubagentStop")   # every check runs; all reasons go back in one message
+class _R:
+    def __init__(self, code, out, err):
+        self.returncode, self.stdout, self.stderr = code, out, err
+
+
+def _run(path, raw):
+    """Run one check in this process with its own stdin, stdout and stderr; its exit code comes back as before."""
+    if os.environ.get("HZ_DISPATCH_SUBPROCESS"):
+        return subprocess.run([sys.executable, "-B", path], input=raw, capture_output=True, env=os.environ)
+    bout, berr = io.BytesIO(), io.BytesIO()
+    old = (sys.stdin, sys.stdout, sys.stderr, sys.argv)
+    tin = io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8")
+    tout = io.TextIOWrapper(bout, encoding="utf-8", write_through=True)
+    terr = io.TextIOWrapper(berr, encoding="utf-8", write_through=True)
+    sys.stdin, sys.stdout, sys.stderr = tin, tout, terr
+    sys.argv = [path]
+    code = 0
+    try:
+        name = "hzcheck_" + re.sub(r"\W", "_", os.path.basename(path)[:-3])
+        spec = importlib.util.spec_from_file_location(name, path)
+        code_obj = spec.loader.get_code(name)       # compiled once, then read from __pycache__
+        exec(code_obj, {"__name__": "__main__", "__file__": path, "__builtins__": __builtins__})
+    except SystemExit as e:
+        if e.code is None:
+            code = 0
+        elif isinstance(e.code, int):
+            code = e.code
+        else:
+            sys.stderr.write(str(e.code) + "\n")
+            code = 1
+    except Exception:
+        traceback.print_exc()
+        code = 1
+    finally:
+        try:
+            tout.flush(); terr.flush()
+        except Exception:
+            pass
+        out, err = bout.getvalue(), berr.getvalue()
+        sys.stdin, sys.stdout, sys.stderr, sys.argv = old
+        for w in (tin, tout, terr):      # detach, so the wrappers do not close the buffers when they are freed
+            try:
+                w.detach()
+            except Exception:
+                pass
+    return _R(code, out, err)
+
+
 contexts, passthrough, reasons, notes, kinds = [], None, [], [], []
 sid = data.get("session_id")
 for e in entries:
@@ -37,7 +91,7 @@ for e in entries:
     path = os.path.join(HERE, e["script"])
     if not os.path.isfile(path):
         continue
-    r = subprocess.run([sys.executable, "-B", path], input=raw, capture_output=True, env=os.environ)
+    r = _run(path, raw)
     if r.stderr:
         sys.stderr.buffer.write(r.stderr)
     if r.returncode == 2:

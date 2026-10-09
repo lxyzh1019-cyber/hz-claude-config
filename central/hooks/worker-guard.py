@@ -101,14 +101,15 @@ for rec in read_transcript(data.get("transcript_path")):
         if b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task"):
             st = str((b.get("input") or {}).get("subagent_type") or "")
             uses[b.get("id")] = st
-            if st == "reviewer":
+            if st in ("reviewer", "reviewer-light"):
                 stuck_since_review = False
         elif b.get("type") == "tool_result" and uses.get(b.get("tool_use_id")) in workers:
             res = b.get("content")
             res = res if isinstance(res, str) else json.dumps(res, ensure_ascii=False)
             if re.search(r'(^|\n|\\n|")\s*\**Stuck:', res):
                 stuck_since_review = True
-if stuck_since_review:
+from _common import small_job as _sj7, agent_on_pc as _aop7
+if stuck_since_review and not _sj7(cfg) and _aop7("reviewer"):   # v3.2.7: a small job lets the main session decide
     deny_tool("A worker reported 'Stuck:'. Send the reviewer first (subagent 'reviewer', moment: Stuck - with the "
               "error, the check and the changed files), then give the next worker its advice as 'Reviewer advice: ...'. "
               "Another try without it repeats the same failing test runs.")

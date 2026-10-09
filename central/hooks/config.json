@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.6: the setup update no longer needs the model to commit. The session start makes the commit on a new branch in a temporary folder, pushes it and opens the pull request; your own folder is not touched. If that fails, the old way runs. The safety check of auto mode refused the model's commit in Weekly-Planner and the session answered 3 times; after a refusal there is no send-back, and the setup check sends back once at most. No setup pull request for the apps from this version. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.7: faster hooks (the checks run in one process and stay compiled; 2 to 4 times faster in the sandbox). Workers get a tool list (about 40 k fewer tokens per worker step on your PC). Small job lane: no reviewer on Stuck, reviewer-light before the pull request. The record is written at approval, stage end and pull request only. Slow test runs get advice. Two sessions in one folder no longer block each other. A setup merged on GitHub but not yet pulled makes no new branch: Pull origin and start a new session. Each app opens one setup pull request (helper files frozen after this). claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -81,12 +81,7 @@
       }
     ]
   },
-  "read_only_helpers": [
-    "Explore",
-    "reviewer",
-    "planner",
-    "planner-opus"
-  ],
+  "read_only_helpers": ["Explore", "reviewer", "planner", "planner-opus", "reviewer-light"],
   "sonnet_max_tries": 2,
   "complex_words": [
     "root cause",

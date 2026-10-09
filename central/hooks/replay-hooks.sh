@@ -144,10 +144,13 @@ cat > "$T/shellrec.jsonl" <<J
 {"type":"user","timestamp":"2000-01-01T00:00:00Z","message":{"role":"user","content":"fix it"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"$PROJ/js/app.js"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"cat >> WORKING_RECORD.md"}}]}}
+{"type":"user","message":{"role":"user","content":"<task-notification><task-id>w1</task-id><status>completed</status></task-notification>"}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done.\n\n| Feature | Status |\n| login | kept |"}]}}
 J
 touch -d '1999-01-01' WORKING_RECORD.md
-o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record not touched this turn still blocks" "update WORKING_RECORD.md" "$o"
+o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record not touched this turn still blocks (v3.2.7: at a stage end)" "update WORKING_RECORD.md" "$o"
+grep -v "task-notification" "$T/shellrec.jsonl" > "$T/shellrec_nostage.jsonl"; touch -d '1999-01-01' WORKING_RECORD.md
+o=$(echo "{\"transcript_path\":\"$T/shellrec_nostage.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "v3.2.7: without a stage end, plan approval or pull request the record is not demanded" "clean" "$(echo "$o" | grep -c 'update WORKING_RECORD' | sed 's/^0$/clean/')"
 touch WORKING_RECORD.md
 o=$(echo "{\"transcript_path\":\"$T/shellrec.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record updated by a shell command counts" "^$" "$o"
 rec "$NEWH" "$NEWS" '| Pocket money | 3 | 0 | 0 | 0 | x | **yes** 2026-09-20 |'
@@ -177,7 +180,9 @@ touch WORKING_RECORD.md
 o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "progress turn needs no regression table" "^$" "$o"
 touch -d '1999-01-01' WORKING_RECORD.md
 python3 - "$T/prog_earlier.jsonl" <<'PY'
-import sys; p=sys.argv[1]; l=open(p).read().replace('"content":"show me the status"}','"content":"show me the status"},"timestamp":"2000-01-01T00:00:00Z"',1); open(p,"w").write(l)
+import sys; p=sys.argv[1]; l=open(p).read().replace('"content":"show me the status"}','"content":"show me the status"},"timestamp":"2000-01-01T00:00:00Z"',1)
+L=l.rstrip("\n").split("\n"); L.insert(len(L)-1,'{"type":"user","message":{"role":"user","content":"<task-notification><task-id>w1</task-id><status>completed</status></task-notification>"}}')
+open(p,"w").write("\n".join(L)+"\n")   # v3.2.7: a stage ended in this turn
 PY
 o=$(echo "{\"transcript_path\":\"$T/prog_earlier.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "progress turn still needs the record update" "update WORKING_RECORD.md" "$o"
 touch WORKING_RECORD.md
@@ -361,7 +366,7 @@ o=$(echo '{}' | python3 $H/session-start.py); check "stub outdated is reported i
 check "stub report names the missing pieces" "Sonnet worker" "$o"
 S="$T/stubrepo"; rm -rf "$S"; mkdir -p "$S/.claude/agents"
 cp "$H/../../stub/settings.json" "$S/.claude/settings.json"
-cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S/.claude/agents/"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$H/../../stub/reviewer-light.md" "$S/.claude/agents/"
 cp "$H/../../stub/CLAUDE-pointer.md" "$S/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S/.claude/"
 o2=$(cd "$H" && python3 -c "
 import sys; sys.path.insert(0,'.')
@@ -391,7 +396,7 @@ check "the stub sets no model key" "yes" "$(python3 -c "import json;print('no' i
 check "opus-worker is pinned to Opus 5.5" "yes" "$(grep -qx 'model: claude-opus-5-5' "$H/../../stub/opus-worker.md" && echo yes)"
 check "sonnet-worker is pinned to the exact Sonnet 5.5 ID" "yes" "$(grep -qx 'model: claude-sonnet-5-5' "$H/../../stub/sonnet-worker.md" && echo yes)"
 M="$T/modelrepo"; rm -rf "$M"; mkdir -p "$M/.claude/agents"
-cp "$H/../../stub/settings.json" "$M/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$M/.claude/agents/"
+cp "$H/../../stub/settings.json" "$M/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$H/../../stub/reviewer-light.md" "$M/.claude/agents/"
 cp "$H/../../stub/CLAUDE-pointer.md" "$M/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$M/.claude/"
 check "a stub with the new model setup is current" "^current" "$(stub_says "$M")"
 python3 -c "
@@ -502,7 +507,7 @@ check "installer removes the idle hook events (v3.1.31: PostToolUse added for th
 printf '{"advisorModel":"opus"}' > "$M/own.json"; python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$M/own.json" "hz-loader.py"
 check "installer keeps an advisor the repository chose itself" "opus" "$(cat "$M/own.json")"
 S2="$T/stubadv"; rm -rf "$S2"; mkdir -p "$S2/.claude/agents"
-cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S2/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S2/CLAUDE.md"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$H/../../stub/reviewer-light.md" "$S2/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S2/CLAUDE.md"
 python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['advisorModel']='fable';json.dump(s,open('$S2/.claude/settings.json','w'))"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S2'))")
 check "a repository still on the Fable advisor shows OUTDATED" "OUTDATED.*advisor off" "$o"
@@ -510,6 +515,7 @@ check "a repository still on the Fable advisor shows OUTDATED" "OUTDATED.*adviso
 o=$(echo "{\"transcript_path\":\"$T/norecord.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; })
 check "record check shows the four-row table shape" "Intentionally removed" "$o"
 # --- v3.1.18: plan check at Approve, foreground workers, "waiting on you" stages, Opus helper pinned
+rm -f "$PROJ/.claude/state/plan-review.json"   # v3.2.7: per session now; clear what earlier tests left for session ""
 pg(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'ExitPlanMode','tool_input':{'plan':open(sys.argv[1],encoding='utf-8').read()}}))" "$1" | python3 $H/dispatch.py; }
 cat > "$T/plan_good.md" <<'P'
 # Plan v2 — Four new lessons — Awaiting approval
@@ -587,14 +593,14 @@ check "a stage of mine is listed by name" "Waiting on you: Merge the changes" "$
 check "a stage of mine is not treated as the session's open work" "open= \[\]" "$o"
 # the stub expects the pinned Opus helper and the plan check
 S3="$T/stub18"; rm -rf "$S3"; mkdir -p "$S3/.claude/agents"
-cp "$H/../../stub/settings.json" "$S3/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S3/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"
+cp "$H/../../stub/settings.json" "$S3/.claude/settings.json"; cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$H/../../stub/reviewer-light.md" "$S3/.claude/agents/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "the new stub reads current" "^current" "$o"
 sed -i 's/^model: claude-opus-5-5$/model: inherit/' "$S3/.claude/agents/opus-worker.md"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "an unpinned Opus helper shows OUTDATED" "OUTDATED.*Opus helper pinned" "$o"
 # --- v3.1.20: app repositories update their own setup files
-for n in settings.json opus-worker.md sonnet-worker.md reviewer.md explore.md planner.md planner-opus.md hz-loader.py CLAUDE-pointer.md merge_settings.py v2-known-files.txt; do
+for n in settings.json opus-worker.md sonnet-worker.md reviewer.md reviewer-light.md explore.md planner.md planner-opus.md hz-loader.py CLAUDE-pointer.md merge_settings.py v2-known-files.txt; do
   cmp -s "$H/../../stub/$n" "$H/../stub-files/$n" || echo "stub-files out of step: $n"
 done > "$T/stubsync.txt"
 check "the central copies of the setup files match stub/" "^$" "$(cat "$T/stubsync.txt")"
@@ -603,8 +609,8 @@ U="$T/selfupd"; rm -rf "$U" "$T/selfupd.git"; mkdir -p "$U/.claude/agents"; git 
 ( cd "$U" && git init -q -b main . && git config user.email t@t && git config user.name t \
   && printf '# Repository rules\n\nold pointer hz-loader.py\n\nRepository-specific files: `FEATURES.md` and `WORKING_RECORD.md`.\n\n## Project Architecture\nkeep me\n' > CLAUDE.md \
   && python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s['permissions']['allow'].append('Bash(npm test)');[g.__setitem__('matcher',g['matcher'].replace('ExitPlanMode|','')) for g in s['hooks']['PreToolUse']];json.dump(s,open('.claude/settings.json','w'),indent=2)" \
-  && sed 's/^model: claude-opus-5-5$/model: inherit/; s/Always runs on Opus 5.5, whichever model the main session plans on. //; s/use the Read tool (never a shell command) to read the file named/read the file named/' "$H/../../stub/opus-worker.md" > .claude/agents/opus-worker.md \
-  && cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" .claude/agents/ && cp "$H/../../stub/hz-loader.py" .claude/ \
+  && sed 's/^model: claude-opus-5-5$/model: inherit/; s/Always runs on Opus 5.5, whichever model the main session plans on. //; s/use the Read tool (never a shell command) to read the file named/read the file named/; /^tools: Read, Grep, Glob, Edit, Write/d' "$H/../../stub/opus-worker.md" > .claude/agents/opus-worker.md \
+  && cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$H/../../stub/reviewer-light.md" .claude/agents/ && cp "$H/../../stub/hz-loader.py" .claude/ \
   && printf '# WR\n\n## Hotspot counter\n| Area / feature | Fix rounds | Recurrences | Last symptom | Rewrite-vs-repair reviewed? |\n|---|---|---|---|---|\n| Quiz | 1 | 0 | swaps | no |\n' > WORKING_RECORD.md \
   && git add -A && git commit -qm base && git remote add origin "$T/selfupd.git" && git push -q origin main )
 su(){ ( cd "$H" && CLAUDE_PROJECT_DIR="$U" python3 -c "
@@ -780,13 +786,13 @@ check "a new request gets its own record send-back" "record is incomplete" "$o"
 rm -f "$PROJ/.claude/state/prompt-number.json" "$PROJ/.claude/state/record-rounds.json"; touch WORKING_RECORD.md
 check "the stub writes plan files into the repository" '"plansDirectory": "./plans"' "$(cat "$H/../../stub/settings.json")"
 S3="$T/stubplans"; rm -rf "$S3"; mkdir -p "$S3/.claude/agents"
-cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$S3/.claude/agents/"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"
+cp "$H/../../stub/sonnet-worker.md" "$H/../../stub/opus-worker.md" "$H/../../stub/reviewer.md" "$H/../../stub/explore.md" "$H/../../stub/planner.md" "$H/../../stub/planner-opus.md" "$H/../../stub/reviewer-light.md" "$S3/.claude/agents/"; cp "$H/../../stub/hz-loader.py" "$S3/.claude/"; cp "$H/../../stub/CLAUDE-pointer.md" "$S3/CLAUDE.md"
 python3 -c "import json;s=json.load(open('$H/../../stub/settings.json'));s.pop('plansDirectory');json.dump(s,open('$S3/.claude/settings.json','w'))"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.5)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.7)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "The plan file goes into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -1375,6 +1381,7 @@ cat > "$T/stuck.jsonl" <<J
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"Stuck: smoke test money — still fails — tried two fixes"}]}}
 J
 wgs(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'st9','transcript_path':sys.argv[1],'tool_input':{'subagent_type':'opus-worker','prompt':'Task: a\nLevel: Complex\nMap: js/a.js'}}))" "$1" | python3 $H/dispatch.py; }
+mkdir -p "$PROJ/.claude/agents"; for _a in reviewer planner planner-opus; do cp "$H/../stub-files/$_a.md" "$PROJ/.claude/agents/"; done   # v3.2.7: helpers present here
 o=$(wgs "$T/stuck.jsonl"); check "after 'Stuck:' the next worker is refused until the reviewer ran" "Send the reviewer first" "$o"
 cp "$T/stuck.jsonl" "$T/stuck2.jsonl"
 echo '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"r1","name":"Agent","input":{"subagent_type":"reviewer","prompt":"Moment: Stuck"}}]}}' >> "$T/stuck2.jsonl"
@@ -1708,7 +1715,7 @@ o=$(nr mcp__github__create_pull_request '{"title":"x"}' '{"number":121}'); check
 o=$(python3 -c "import json;print(json.dumps({'hook_event_name':'PostToolUse','tool_name':'Bash','agent_id':'w1','tool_input':{'command':'gh pr create --fill'},'tool_response':{'stdout':'ok'}}))" | python3 $H/notice-reminder.py); check "v3.1.31: a worker never gets the notice request" "^$" "$o"
 o=$(python3 -c "import json;print(json.dumps({'hook_event_name':'PostToolUse','tool_name':'Bash','tool_input':{'command':'gh pr create --fill'},'tool_response':{'stdout':'https://github.com/a/b/pull/121'}}))" | python3 $H/dispatch.py); check "v3.1.31: the switchboard runs the notice reminder after a tool" "PushNotification" "$o"
 check "v3.1.31: the app setup sends PostToolUse to the switchboard" '"PostToolUse"' "$(cat $H/../../stub/settings.json)"
-P4=$(mktemp -d); mkdir -p "$P4/.claude/agents"; cp "$ST/sonnet-worker.md" "$ST/opus-worker.md" "$ST/reviewer.md" "$ST/explore.md" "$ST/planner.md" "$ST/planner-opus.md" "$P4/.claude/agents/"; cp "$ST/hz-loader.py" "$P4/.claude/"; cp "$ST/CLAUDE-pointer.md" "$P4/CLAUDE.md"
+P4=$(mktemp -d); mkdir -p "$P4/.claude/agents"; cp "$ST/sonnet-worker.md" "$ST/opus-worker.md" "$ST/reviewer.md" "$ST/explore.md" "$ST/planner.md" "$ST/planner-opus.md" "$ST/reviewer-light.md" "$P4/.claude/agents/"; cp "$ST/hz-loader.py" "$P4/.claude/"; cp "$ST/CLAUDE-pointer.md" "$P4/CLAUDE.md"
 python3 -c "import json;d=json.load(open('$ST/settings.json'));d['hooks'].pop('PostToolUse');json.dump(d,open('$P4/.claude/settings.json','w'))"
 o=$(cd "$H" && python3 -c "import sys;from stubcheck import stub_status;from _common import load_config;print(stub_status(load_config(), sys.argv[1]))" "$P4")
 check "v3.1.31: an app on the 3.1.30 setup is told to update (one setup pull request)" "OUTDATED" "$o"
@@ -2437,7 +2444,7 @@ END6=0
 while IFS= read -r l; do
   case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END6=1;; esac
 done < <(H="$H" V6="$V6" python3 - <<'PYV6'
-import json,os,subprocess,sys,glob,shutil,stat
+import json,os,subprocess,sys,glob,shutil,stat,re
 H=os.environ["H"]; V6=os.environ["V6"]; sys.path.insert(0,H)
 def res(name,ok,detail=""): print(("PASS " if ok else "FAIL ")+name+("" if ok else " -> "+str(detail)[:220]))
 def git(cwd,*a): return subprocess.run(["git",*a],cwd=cwd,capture_output=True,text=True)
@@ -2479,8 +2486,8 @@ git(V6,"init","-q","--bare",bare); git(V6,"clone","-q",bare,app); git(app,"confi
 git(app,"switch","-q","-c","main")
 os.makedirs(os.path.join(app,".claude","agents"))
 for f in glob.glob(os.path.join(STUB,"*.md")):
-    if "CLAUDE-pointer" in f: continue
-    t=open(f,encoding="utf-8").read().replace("use the Read tool (never a shell command) to read the file named","read the file named").replace("effort: high","effort: medium")
+    if "CLAUDE-pointer" in f or "reviewer-light" in f: continue          # the 3.2.6 setup: no light reviewer yet
+    t=re.sub(r"(?m)^tools: Read, Grep, Glob, Edit, Write[^\n]*\n","",open(f,encoding="utf-8").read())   # and no worker tool lists
     open(os.path.join(app,".claude","agents",os.path.basename(f)),"w",encoding="utf-8").write(t)
 shutil.copy(os.path.join(STUB,"hz-loader.py"),os.path.join(app,".claude","hz-loader.py")); shutil.copy(os.path.join(STUB,"settings.json"),os.path.join(app,".claude","settings.json"))
 shutil.copy(os.path.join(STUB,"CLAUDE-pointer.md"),os.path.join(app,"CLAUDE.md")); open(os.path.join(app,"WORKING_RECORD.md"),"w").write("# WR\n")
@@ -2494,9 +2501,9 @@ o=subprocess.run(["python3","-c",code,H,app],capture_output=True,text=True,env=e
 ver=C.load_config()["stub_expect"]["version"]; br="hz-setup-update-"+ver
 res("v3.2.6: the session start pushes the setup branch itself",br in git(bare,"branch","--list",br).stdout,git(bare,"branch","-a").stdout)
 files=git(bare,"show","--stat","--format=%s",br).stdout
-res("  ...with one commit named 'Setup update (automatic, vX)' that holds the helper files",("Setup update (automatic, v"+ver+")") in files and "reviewer.md" in files and "opus-worker.md" in files,files[:200])
-res("  ...and the reviewer in that commit is at effort high",("effort: high" in git(bare,"show",br+":.claude/agents/reviewer.md").stdout),"")
-res("  ...your working folder is not touched (no changed files, still on main)",git(app,"status","--short").stdout.strip()=="" and git(app,"rev-parse","--abbrev-ref","HEAD").stdout.strip()=="main",git(app,"status","--short").stdout)
+res("  ...with one commit named 'Setup update (automatic, vX)' that holds the helper files",("Setup update (automatic, v"+ver+")") in files and "reviewer-light.md" in files and "opus-worker.md" in files,files[:200])
+res("  ...and the workers in that commit have their tool list (v3.2.7)",("tools: Read, Grep, Glob, Edit, Write" in git(bare,"show",br+":.claude/agents/opus-worker.md").stdout),"")
+res("  ...your working folder is not touched (no changed files, still on main)",[x for x in git(app,"status","--short").stdout.splitlines() if ".claude/state" not in x]==[] and git(app,"rev-parse","--abbrev-ref","HEAD").stdout.strip()=="main",git(app,"status","--short").stdout)
 res("  ...and no temporary worktree is left",len(git(app,"worktree","list").stdout.strip().splitlines())==1,git(app,"worktree","list").stdout)
 res("  ...the pull request is opened ready for review (no draft) and its link is given to the session",os.path.exists(os.path.join(V6,"gh-args.txt")) and "--draft" not in open(os.path.join(V6,"gh-args.txt")).read() and "pull/7" in o,(o[-200:]))
 res("  ...the session is told to make no commit and to ask you to merge",("Make no commit" in o) and ("ask me to merge" in o),o[-260:])
@@ -2513,5 +2520,112 @@ PYV6
 )
 [ "$END6" = 1 ] && { echo "PASS v3.2.6: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.6: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
 rm -rf "$V6"
+# ---- v3.2.7 ------------------------------------------------------------------------------------------------------
+V7=$(mktemp -d); export V7; END7=0
+while IFS= read -r l; do
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END7=1;; esac
+done < <(H="$H" V7="$V7" python3 - <<'PYV7'
+import json,os,subprocess,sys,shutil,time,re
+H=os.environ["H"]; V7=os.environ["V7"]; sys.path.insert(0,H)
+def res(name,ok,detail=""): print(("PASS " if ok else "FAIL ")+name+("" if ok else " -> "+str(detail)[:220]))
+def git(cwd,*a): return subprocess.run(["git",*a],cwd=cwd,capture_output=True,text=True)
+def run(script,inp,proj,env=None):
+    e=dict(os.environ,CLAUDE_PROJECT_DIR=proj); e.pop("HZ_RULES_FIRST_OFF",None); e.update(env or {})
+    return subprocess.run(["python3",os.path.join(H,script)],input=json.dumps(inp),capture_output=True,text=True,env=e).stdout
+P=os.path.join(V7,"p"); os.makedirs(os.path.join(P,".claude","state")); git(P,"init","-q","-b","main")
+import _common as C
+RP=C.RULES_PATH
+pre=lambda sid,tool,inp: run("rules-first-guard.py",{"session_id":sid,"tool_name":tool,"tool_input":inp},P)
+# 1. two sessions in one folder
+pre("A","Read",{"file_path":RP}); pre("B","Read",{"file_path":RP})
+oa=pre("A","Bash",{"command":"ls"}); ob=pre("B","Bash",{"command":"gh pr create"})
+res("v3.2.7: two sessions in one folder keep their own 'rules read' mark (A then B read, both may work)","deny" not in oa and "deny" not in ob,(oa[:60],ob[:60]))
+run("session-start.py",{"session_id":"B","hook_event_name":"SessionStart","source":"startup"},P)
+oa=pre("A","Bash",{"command":"ls"}); ob=pre("B","Bash",{"command":"ls"})
+res("  ...a new start of B clears only B's mark",("deny" not in oa) and ("deny" in ob),(oa[:60],ob[:60]))
+code="import sys;sys.path.insert(0,sys.argv[1]);import _common as C;print([C.bump_prompt_number(x) for x in 'AABAB'])"
+o=subprocess.run(["python3","-c",code,H],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout.strip()
+res("  ...and each session counts its own prompts",o=="[1, 2, 1, 3, 2]",o)
+# 2. a helper that is not on this PC is not demanded
+plan="# Plan v1 — Title — Awaiting approval\n| Summary |\n|---|\n| What changes for you: x |\nStages to finish\n2 stages: 1 by Claude, 1 by you.\n1. Do it · Claude · Build\n2. Merge · You · Check\n"
+tr=os.path.join(V7,"pl.jsonl"); open(tr,"w").write(json.dumps({"type":"user","message":{"role":"user","content":"make a plan"}})+"\n")
+o=run("plan-guard.py",{"session_id":"A","tool_name":"ExitPlanMode","tool_input":{"plan":plan},"transcript_path":tr},P,{"HZ_PLANNER_CHECK_OFF":""})
+res("v3.2.7: with no planner helper on this PC the plan check does not demand it (Figure-Skate 8 Oct)","planner helper writes" not in o,o[:160])
+os.makedirs(os.path.join(P,".claude","agents"),exist_ok=True); shutil.copy(os.path.join(H,"..","stub-files","planner.md"),os.path.join(P,".claude","agents","planner.md"))
+code="import sys;sys.path.insert(0,sys.argv[1]);import _common as C;print(C.agent_on_pc('planner'),C.agent_on_pc('reviewer-light'))"
+o=subprocess.run(["python3","-c",code,H],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout.strip()
+res("  ...with the planner file here the check knows it is there",o=="True False",o)
+# 3. small job: no reviewer demanded after Stuck, the light reviewer counts before the pull request
+rec="# WR\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n| Fix · Stage 1 of 3 — a | COMPLETE | t |\n| Fix · Stage 2 of 3 — b | QUEUED — after Stage 1 | |\n| Fix · Stage 3 of 3 — merge (Check) | QUEUED — after Stage 2 | |\n"
+open(os.path.join(P,"WORKING_RECORD.md"),"w").write(rec)
+code="import sys;sys.path.insert(0,sys.argv[1]);import _common as C;print(C.small_job(C.load_config()))"
+o=subprocess.run(["python3","-c",code,H],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout.strip()
+res("v3.2.7: a plan of up to 3 build stages is a small job",o=="True",o)
+shutil.copy(os.path.join(H,"..","stub-files","reviewer.md"),os.path.join(P,".claude","agents","reviewer.md"))
+st=os.path.join(V7,"st.jsonl")
+open(st,"w").write("\n".join(json.dumps(r) for r in [
+ {"type":"user","message":{"role":"user","content":"go"}},
+ {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Agent","input":{"subagent_type":"opus-worker","prompt":"Task: a"}}]}},
+ {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"Stuck: test x — fails — tried y"}]}}])+"\n")
+o=run("worker-guard.py",{"session_id":"A","tool_name":"Agent","transcript_path":st,"tool_input":{"subagent_type":"opus-worker","prompt":"Task: b\nSize: S\nLevel: Complex\nMap: not needed - test"}},P,{"HZ_STAGE_TAGS_OFF":"1"})
+res("  ...after 'Stuck:' in a small job the main session decides (no reviewer demanded)","Send the reviewer first" not in o,o[:160])
+code="import sys;sys.path.insert(0,sys.argv[1]);import _common as C;import json;print(C.pr_timeline([{'type':'assistant','message':{'content':[{'type':'tool_use','id':'r1','name':'Agent','input':{'subagent_type':'reviewer-light'}}]}}])[0])"
+o=subprocess.run(["python3","-c",code,H],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout.strip()
+res("  ...the light reviewer counts as the review before the pull request","reviewer" in o,o)
+res("  ...and the light reviewer may start (read-only helper list)","reviewer-light" in json.load(open(os.path.join(H,"config.json")))["read_only_helpers"],"")
+# 4. setup already merged on GitHub, this PC behind: no branch, a pull request note
+bare=os.path.join(V7,"r.git"); app=os.path.join(V7,"app"); git(V7,"init","-q","--bare",bare); git(V7,"clone","-q",bare,app)
+git(app,"config","user.email","t@t"); git(app,"config","user.name","t"); git(app,"switch","-q","-c","main")
+STUB=os.path.join(H,"..","stub-files"); os.makedirs(os.path.join(app,".claude","agents"))
+for f in ("opus-worker.md","explore.md"): shutil.copy(os.path.join(STUB,f),os.path.join(app,".claude","agents",f))
+shutil.copy(os.path.join(STUB,"hz-loader.py"),os.path.join(app,".claude","hz-loader.py")); shutil.copy(os.path.join(STUB,"settings.json"),os.path.join(app,".claude","settings.json")); shutil.copy(os.path.join(STUB,"CLAUDE-pointer.md"),os.path.join(app,"CLAUDE.md"))
+git(app,"add","-A"); git(app,"commit","-qm","old setup"); git(app,"push","-q","-u","origin","main")
+up=os.path.join(V7,"up"); git(V7,"clone","-q","-b","main",bare,up); git(up,"config","user.email","t@t"); git(up,"config","user.name","t")
+for f in os.listdir(STUB):
+    if f.endswith(".md") and f!="CLAUDE-pointer.md": shutil.copy(os.path.join(STUB,f),os.path.join(up,".claude","agents",f))
+git(up,"add","-A"); git(up,"commit","-qm","setup merged"); git(up,"push","-q","origin","HEAD:main")
+code="import sys;sys.path.insert(0,sys.argv[1]);import _common as C,stubupdate,stubcheck;print(stubupdate.update(C.load_config(),sys.argv[2]));print(stubcheck.stub_status(C.load_config(),sys.argv[2]))"
+o=subprocess.run(["python3","-c",code,H,app],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=app,HZ_SETUP_PUBLISH_OFF="")).stdout
+res("v3.2.7: a setup already merged on GitHub makes no new setup branch (Weekly-Planner 8 Oct)","hz-setup-update" not in git(bare,"branch","-a").stdout,git(bare,"branch","-a").stdout)
+res("  ...writes nothing in the folder",git(app,"status","--short","--",".claude/agents").stdout.strip()=="",git(app,"status","--short").stdout)
+res("  ...and asks you to Pull origin and start a new session, naming the missing helpers","Pull origin" in o and "planner" in o,o[:300])
+# 5. the slow-test advice
+wb=os.path.join(V7,"wb"); sd=os.path.join(wb,"sess","subagents"); os.makedirs(sd)
+open(os.path.join(wb,"sess.jsonl"),"w").write("")
+import datetime as dt
+T0=dt.datetime.utcnow()-dt.timedelta(minutes=20); stamp=lambda m:(T0+dt.timedelta(minutes=m)).isoformat()+"Z"
+recs=[{"type":"user","timestamp":stamp(0),"message":{"role":"user","content":"Task: x"}}]
+for i in range(2):
+    recs.append({"type":"assistant","timestamp":stamp(i*4),"message":{"id":"m%d"%i,"role":"assistant","content":[{"type":"tool_use","id":"t%d"%i,"name":"Bash","input":{"command":"SMOKE_ONLY=x npm run test:smoke"}}]}})
+    recs.append({"type":"user","timestamp":stamp(i*4+3),"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t%d"%i,"content":"ok"}]}})
+f=os.path.join(sd,"agent-ws1.jsonl"); open(f,"w").write("\n".join(json.dumps(r) for r in recs)+"\n"); json.dump({"agentType":"sonnet-worker"},open(f[:-6]+".meta.json","w"))
+WP=os.path.join(V7,"wbp"); os.makedirs(os.path.join(WP,".claude","state"))
+inp={"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"sess","agent_id":"ws1","agent_type":"sonnet-worker","transcript_path":os.path.join(wb,"sess.jsonl"),"tool_input":{"command":"SMOKE_ONLY=x npm run test:smoke"}}
+o=run("worker-budget.py",inp,WP)
+res("v3.2.7: before a third slow test run (3 min each) the worker gets advice, not a refusal","test runs took about" in o and "deny" not in o,o[:200])
+o2=run("worker-budget.py",inp,WP)
+res("  ...only once",("test runs took about" not in o2),o2[:120])
+# 6. the switchboard runs the checks in one process and answers like the old way
+cases=[{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"s","tool_input":{"command":"git commit -m x"}},
+       {"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"s","tool_input":{"file_path":"x"}},
+       {"hook_event_name":"UserPromptSubmit","session_id":"s","prompt":"redesign the whole architecture and data model"},
+       {"hook_event_name":"PreToolUse","tool_name":"Agent","session_id":"s","tool_input":{"subagent_type":"general-purpose","prompt":"do it"}}]
+same=True; t_in=t_sub=0.0
+for c in cases:
+    outs=[]
+    for mode in ("","1"):
+        e=dict(os.environ,CLAUDE_PROJECT_DIR=P,HZ_RULES_FIRST_OFF="1",HZ_DISPATCH_SUBPROCESS=mode)
+        t=time.time(); r=subprocess.run(["python3",os.path.join(H,"dispatch.py")],input=json.dumps(c),capture_output=True,text=True,env=e); d=time.time()-t
+        if mode: t_sub+=d
+        else: t_in+=d
+        outs.append((r.returncode,r.stdout.strip()))
+    if outs[0]!=outs[1]: same=False; print("  differs for",c["hook_event_name"],c.get("tool_name"),outs[0][1][:80],"|",outs[1][1][:80])
+res("v3.2.7: the switchboard in one process answers exactly like the old one (4 kinds of events)",same,"")
+res("  ...and faster here (in one process %.2f s against %.2f s for the 4 events)"%(t_in,t_sub),t_in<t_sub,(t_in,t_sub))
+print("END")
+PYV7
+)
+[ "$END7" = 1 ] && { echo "PASS v3.2.7: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.7: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
+rm -rf "$V7"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

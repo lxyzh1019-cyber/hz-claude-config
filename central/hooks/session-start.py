@@ -20,9 +20,14 @@ parts = []
 # the rules (about 25,000) are no longer sent here. The short facts are sent, and the session reads the rules file
 # itself before any other tool (rules-first-guard.py).
 loaded = os.path.exists(RULES_PATH)
-try:
-    os.remove(os.path.join(STATE_DIR, "rules-read.json"))   # every start (also after /compact) reads the rules again
-except OSError:
+try:   # v3.2.7: clear only this session's mark; another session in the same folder keeps its own
+    import json as _j7
+    from _common import sess_del
+    _sid7 = (data.get("session_id") if isinstance(data, dict) else "") if "data" in globals() else ""
+    if not _sid7:
+        _sid7 = str(_j7.loads(os.environ.get("HZ_HOOK_INPUT", "{}") or "{}").get("session_id") or "")
+    sess_del("rules-read.json", _sid7)
+except Exception:
     pass
 
 note = os.environ.get("HZ_LOADER_NOTE", "")

@@ -2,7 +2,7 @@
 """Stop hook: if this turn changed the repository's files (directly, or through a dispatched worker), the working
 record must be updated and a regression table produced. Governance-only edits are exempt; files outside the
 repository (for example Claude Code's own plan files) never count."""
-import os, re, subprocess, sys
+import json, os, re, subprocess, sys
 from _common import (PROJECT_DIR, SEED_DIR, work_dir, in_repo, is_progress_report, read_hook_input, load_config, read_transcript, last_turn, last_assistant_text,
                      tool_uses, is_governance_path, block, use_round)
 
@@ -98,7 +98,21 @@ if features_is_template:
           f"Before you finish: if it is missing, make it and {cfg['record_file']} from the templates in {SEED_DIR}. "
           "Then put the app's current locked features into it (hz-change-guard). Make the regression "
           f"table and update {cfg['record_file']}.")
-if not record_touched:
+# v3.2.7: the record is written at plan approval, at a stage end and before the pull request, not at every event
+# (Figure-Skate 8 Oct: 24 main steps, 4.5 min on record, feature list and plan bookkeeping in a 53-minute session)
+_stage_event = False
+for _r in turn:
+    _c = (_r.get("message") or {}).get("content")
+    for _b in _c if isinstance(_c, list) else []:
+        if not isinstance(_b, dict):
+            continue
+        if _b.get("type") == "tool_use" and (_b.get("name") in ("ExitPlanMode", "SubagentHandback")
+                                             or re.search(r"gh pr create|create_pull_request", json.dumps(_b.get("input"))) or
+                                             "create_pull_request" in str(_b.get("name"))):
+            _stage_event = True
+    if _r.get("type") == "user" and re.search(r"Subagent hand-back|<task-notification>", json.dumps(_r)[:4000]):
+        _stage_event = True
+if not record_touched and _stage_event:
     problems.append(f"update {cfg['record_file']} (request ledger, hotspot counter, deliverable ledger)")
 progress = is_progress_report(text, records_all, cfg)
 if not progress and not re.search(cfg["regression_table_pattern"], text):

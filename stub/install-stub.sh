@@ -7,7 +7,7 @@ set -euo pipefail
 BASE="${HZ_BASE_URL:-https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude-config/main}"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 get(){ curl -fsSL "$BASE/$1" -o "$T/$(basename "$1")"; }
-for f in stub/hz-loader.py stub/settings.json stub/opus-worker.md stub/sonnet-worker.md stub/reviewer.md stub/explore.md stub/planner.md stub/planner-opus.md stub/CLAUDE-pointer.md stub/retired.txt \
+for f in stub/hz-loader.py stub/settings.json stub/opus-worker.md stub/sonnet-worker.md stub/reviewer.md stub/reviewer-light.md stub/explore.md stub/planner.md stub/planner-opus.md stub/CLAUDE-pointer.md stub/retired.txt \
          stub/merge_settings.py stub/unmerge_settings.py stub/v2-managed-settings.json stub/split_claude_md.py stub/v2-known-files.txt stub/retired-permissions.json \
          central/seed/FEATURES.md central/seed/WORKING_RECORD.md; do get "$f"; done
 [ -d .git ] || { echo "Run this from the repository root."; exit 1; }
@@ -72,6 +72,7 @@ cp "$T/hz-loader.py" .claude/hz-loader.py
 cp "$T/opus-worker.md" .claude/agents/opus-worker.md
 cp "$T/sonnet-worker.md" .claude/agents/sonnet-worker.md
 cp "$T/reviewer.md" .claude/agents/reviewer.md
+cp "$T/reviewer-light.md" .claude/agents/reviewer-light.md
 cp "$T/explore.md" .claude/agents/explore.md
 cp "$T/planner.md" .claude/agents/planner.md
 cp "$T/planner-opus.md" .claude/agents/planner-opus.md

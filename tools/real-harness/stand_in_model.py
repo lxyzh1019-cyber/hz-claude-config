@@ -12,7 +12,7 @@ class H(http.server.BaseHTTPRequestHandler):
         try: req=json.loads(body)
         except Exception: req={}
         i=next(counter)
-        LOG.write(f"POST {self.path} #{i} model={req.get('model')} stream={req.get('stream')} msgs={len(req.get('messages',[]))} tools={[t.get('name') for t in req.get('tools',[])][:60]}\n"); LOG.flush()
+        LOG.write(f"POST {self.path} #{i} model={req.get('model')} stream={req.get('stream')} msgs={len(req.get('messages',[]))} tools={[t.get('name') for t in req.get('tools',[])][:60]} toolchars={len(json.dumps(req.get('tools',[])))} systemchars={len(json.dumps(req.get('system','')))}\n"); LOG.flush()
         if not self.path.startswith('/v1/messages') or self.path.endswith('count_tokens'):
             self.send_response(200); self.send_header('content-type','application/json'); self.end_headers(); self.wfile.write(b'{"input_tokens":10}'); return
         # pick scripted reply: by order among main requests; default end_turn text

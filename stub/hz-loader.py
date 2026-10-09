@@ -114,8 +114,11 @@ def main():
     path = os.path.join(CACHE, version, "hooks", script)
     if not safe(script) or not os.path.isfile(path):
         return 0
-    env = dict(os.environ, HZ_LOADER_NOTE=note, PYTHONDONTWRITEBYTECODE="1")
-    r = subprocess.run([sys.executable, "-B", path], input=stdin, capture_output=True, env=env)
+    # v3.2.7: the loader keeps compiled checks (no -B): the checks' compiled form stays in the rules cache, so a hook
+    # call no longer compiles the large shared module again (a Read or Grep call took 1.2 s in the real sessions).
+    env = dict(os.environ, HZ_LOADER_NOTE=note)
+    env.pop("PYTHONDONTWRITEBYTECODE", None)
+    r = subprocess.run([sys.executable, path], input=stdin, capture_output=True, env=env)
     sys.stdout.buffer.write(r.stdout)
     sys.stderr.buffer.write(r.stderr)
     return r.returncode

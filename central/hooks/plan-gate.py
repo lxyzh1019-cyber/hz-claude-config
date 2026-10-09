@@ -173,9 +173,8 @@ if msgs and not skip and (bullets >= 3 or triggers):
     if why:
         log("plan-gate", {"planner": "fable suggested", "why": why})
         try:   # v3.1.28: the plan check asks for the reviewer before this plan goes out
-            os.makedirs(STATE_DIR, exist_ok=True)
-            json.dump({"session": str(data.get("session_id") or ""), "n": prompt_number(data.get("session_id")),
-                       "why": "; ".join(why)}, open(os.path.join(STATE_DIR, "plan-review.json"), "w", encoding="utf-8"))
+            from _common import sess_set   # v3.2.7: kept per session
+            sess_set("plan-review.json", data.get("session_id"), {"n": prompt_number(data.get("session_id")), "why": "; ".join(why)})
         except (OSError, ValueError, TypeError):
             pass
         msgs.append("[reviewer] Big or risky plan: before presenting it, send the reviewer (moment: Before a plan) "
