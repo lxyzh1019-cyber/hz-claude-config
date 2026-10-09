@@ -84,6 +84,15 @@ def _hotspot_columns(text):
     return "\n".join(out)
 
 
+def _log7(entry):
+    """v3.2.7: every setup publish step is logged (.claude/state/setup-publish.jsonl), so a failure shows its cause."""
+    try:
+        from _common import log as _l
+        _l("setup-publish", entry)
+    except Exception:
+        pass
+
+
 def _publish(project_dir, branch, version, staged):
     """v3.2.6: commit the staged files on a new branch from origin/main in a temporary worktree, push it, and open a
     pull request when `gh` is available. The working folder is never touched. Returns {"pr": url or ""}, or None when
@@ -118,7 +127,9 @@ def _publish(project_dir, branch, version, staged):
             return None
         r = _git(wt, "push", "-q", "-u", "origin", branch, timeout=left(25))
         if not r or r.returncode != 0:
+            _log7({"step": "push", "ok": False, "error": ((r.stderr if r else "timeout") or "")[-300:]})
             return None
+        _log7({"step": "push", "ok": True, "branch": branch})
         ok = True
         pr = ""
         gh = shutil.which("gh")
@@ -131,8 +142,12 @@ def _publish(project_dir, branch, version, staged):
                                    encoding="utf-8", errors="replace", timeout=left(20))
                 lines = [x for x in p.stdout.splitlines() if x.startswith("http")]
                 pr = lines[-1].strip() if p.returncode == 0 and lines else ""
-            except (OSError, subprocess.SubprocessError):
+                _log7({"step": "gh pr create", "ok": bool(pr), "error": "" if pr else (p.stderr or p.stdout)[-300:]})
+            except (OSError, subprocess.SubprocessError) as e:
                 pr = ""
+                _log7({"step": "gh pr create", "ok": False, "error": type(e).__name__})
+        else:
+            _log7({"step": "gh pr create", "ok": False, "error": "gh not found" if not gh else "no time left"})
         return {"pr": pr}
     except Exception:
         return None
@@ -169,8 +184,10 @@ def update(cfg, project_dir):
                 "Do not make another one. In your first reply's 'I need from you' line, ask me to merge it.")
 
     changed, skipped, staged = [], [], {}    # v3.2.6: staged = new file texts by path; written to disk only as a fallback
+    _git(project_dir, "fetch", "-q", "origin", "main", timeout=15)   # v3.2.7: decide on fresh GitHub facts
     known = _known_hashes()
-    for name in ("opus-worker.md", "sonnet-worker.md", "reviewer.md", "explore.md", "planner.md", "planner-opus.md"):
+    for name in ("opus-worker.md", "sonnet-worker.md", "reviewer.md", "reviewer-light.md", "explore.md", "planner.md",
+                 "planner-opus.md"):
         dst = os.path.join(project_dir, ".claude", "agents", name)
         new = _read(os.path.join(STUB, name))
         old = _read(dst)
@@ -232,6 +249,19 @@ def update(cfg, project_dir):
     # safety check refused the model's commit of the helper files ("Self-Modification") in the Weekly-Planner session of
     # 2026-10-08, and the end-of-reply check then made the session answer 3 times. Only when this fails does the old way
     # run: the files are written on disk and the session is told to commit them.
+    # v3.2.7: the update is already merged on GitHub and this PC is only behind (Weekly-Planner 8 Oct: a second setup
+    # branch was demanded for a merged update, 10.5 minutes and 4 send-backs)
+    def _on_main(rel):
+        r = _git(project_dir, "show", "origin/main:" + rel, timeout=10)
+        return r.stdout if r and r.returncode == 0 else None
+    if staged and all((_on_main(rel) or "").replace("\r\n", "\n") == text.replace("\r\n", "\n") for rel, text in staged.items()):
+        gone = [os.path.basename(r)[:-3] for r in staged if r.startswith(".claude/agents/") and not os.path.isfile(os.path.join(project_dir, r))]
+        _log7({"behind": True, "files": len(staged)})
+        return ("current on GitHub main, but this PC's main is behind",
+                "[setup-update] The setup update is already merged on GitHub; this PC's folder is behind"
+                + (" (helpers missing here: " + ", ".join(gone) + ")" if gone else "") + ". Make no setup branch and "
+                "no commit. In your first reply's 'I need from you' line, ask me to click Pull origin in GitHub Desktop "
+                "and start a new session. Until then call no missing helper; plans are written in the main session.")
     done = _publish(project_dir, branch, version, staged)
     if done:
         pr = done.get("pr")

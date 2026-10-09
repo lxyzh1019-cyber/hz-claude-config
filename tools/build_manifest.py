@@ -17,7 +17,7 @@ for _l in open(_known, encoding="utf-8"):
     if _l and not _l.startswith("#"):
         _have.add(_l.split()[0])
 _add = []
-for n in ("opus-worker.md", "sonnet-worker.md", "reviewer.md", "explore.md", "planner.md", "planner-opus.md"):
+for n in ("opus-worker.md", "sonnet-worker.md", "reviewer.md", "reviewer-light.md", "explore.md", "planner.md", "planner-opus.md"):
     _old = os.path.join(stub_dst, n)
     if os.path.isfile(_old):
         _h = hashlib.sha256(open(_old, encoding="utf-8").read().replace("\r\n", "\n").encode("utf-8")).hexdigest()
@@ -29,7 +29,7 @@ if _add:
     with open(_known, "a", encoding="utf-8") as _f:
         _f.write("\n".join(_add) + "\n")
     print(f"known helper-file versions added: {len(_add)}")
-for n in ("settings.json", "opus-worker.md", "sonnet-worker.md", "reviewer.md", "explore.md", "planner.md", "planner-opus.md", "hz-loader.py",
+for n in ("settings.json", "opus-worker.md", "sonnet-worker.md", "reviewer.md", "reviewer-light.md", "explore.md", "planner.md", "planner-opus.md", "hz-loader.py",
           "CLAUDE-pointer.md",
           "merge_settings.py", "v2-known-files.txt"):
     shutil.copyfile(os.path.join(stub_src, n), os.path.join(stub_dst, n))

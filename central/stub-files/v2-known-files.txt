@@ -42,3 +42,5 @@ d8234304a2fff02543ea3b064e3ddbba22a8578dd9b2a5458985890f01dbaaa1
 4f08f14b019167cb63692b54436701741b83c6638635ef189390c4ca52e7d2d8  # explore.md, published before this build
 de2f3afc865ad1e50aadc4d9b0586a70f5f1eae3b55190c8fc0219b5045749ad  # planner.md, published before this build
 d4513233f304cdb6c3727b39a8e55e1cf2db8b4c2a2956d8d7d204ff74a09399  # planner-opus.md, published before this build
+5f3d463f03543db90ae12256ff49abc82a52fd2c05b9b1315884338c5fbf5ccf  # opus-worker.md, published before this build
+98add12647521a0ac44fbe8b8a4cd87bd2e73ca7e043d1543ba788f333690a25  # sonnet-worker.md, published before this build

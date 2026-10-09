@@ -22,12 +22,13 @@ inp = data.get("tool_input") or {}
 # v3.1.28: a big or risky plan (the plan gate's strong signals) is checked by the reviewer before I see it
 try:
     from _common import STATE_DIR, prompt_number, last_turn
-    _st = json.load(open(os.path.join(STATE_DIR, "plan-review.json"), encoding="utf-8"))
+    from _common import sess_get as _sg7
     _sid = str(data.get("session_id") or "")
-    if _st.get("session") == _sid and _st.get("n") == prompt_number(_sid):
+    _st = _sg7("plan-review.json", _sid) or {}
+    if isinstance(_st, dict) and _st.get("n") == prompt_number(_sid):
         _turn = last_turn(read_transcript(data.get("transcript_path")))
         _reviewed = any(isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task")
-                        and str((b.get("input") or {}).get("subagent_type") or "") == "reviewer"
+                        and str((b.get("input") or {}).get("subagent_type") or "") in ("reviewer", "reviewer-light")
                         for r in _turn if r.get("type") == "assistant"
                         for b in (((r.get("message") or {}).get("content")) or [])
                         if isinstance(((r.get("message") or {}).get("content")), list))
@@ -219,11 +220,14 @@ if _first_showing and (_ver or 1) == 1:
 _big = False
 try:
     from _common import STATE_DIR as _SD, prompt_number as _pn
-    _pr = json.load(open(os.path.join(_SD, "plan-review.json"), encoding="utf-8"))
-    _big = _pr.get("session") == str(data.get("session_id") or "") and _pr.get("n") == _pn(data.get("session_id"))
+    from _common import sess_get as _sg7b
+    _pr = _sg7b("plan-review.json", data.get("session_id")) or {}
+    _big = isinstance(_pr, dict) and _pr.get("n") == _pn(data.get("session_id"))
 except (OSError, ValueError, ImportError):
     pass
+from _common import agent_on_pc as _aop
 if (re.search(r"(?m)^#*\s*Plan v\d+", text) and (_first_showing or _big)
+        and any(_aop(x) for x in (cfg_.get("planner_helpers") or ["planner", "planner-opus"]))   # v3.2.7: only if it exists here
         and not os.environ.get("HZ_PLANNER_CHECK_OFF")):   # test switch only
     _planners = cfg_.get("planner_helpers") or ["planner", "planner-opus"]
     _turn = last_turn(read_transcript(data.get("transcript_path")))

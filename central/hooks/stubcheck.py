@@ -32,6 +32,19 @@ def stub_status(cfg, project_dir):
     missing = _missing(cfg, project_dir, _reader_disk(project_dir))
     want = (cfg.get("stub_expect") or {}).get("version", "?")
     if missing and not _missing(cfg, project_dir, _reader_main(project_dir)):
+        import subprocess as _sp7
+        try:
+            _br = _sp7.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=project_dir, capture_output=True, text=True,
+                           encoding="utf-8", timeout=5).stdout.strip()
+        except (OSError, _sp7.SubprocessError):
+            _br = ""
+        _gone = [os.path.basename(f)[:-3] for f in (cfg.get("stub_expect") or {}).get("files", {})
+                 if f.startswith(".claude/agents/") and not os.path.isfile(os.path.join(project_dir, f))]
+        if _br in ("main", "master"):   # v3.2.7: this PC's main is behind GitHub (Figure-Skate 8 Oct: no planner here)
+            return (f"current on GitHub main (v{want}), but this PC's main is behind"
+                    + (" — helpers missing here: " + ", ".join(_gone) if _gone else "")
+                    + ". In your first reply's 'I need from you' line, ask me to click Pull origin in GitHub Desktop and "
+                    "start a new session. Until then call no missing helper; plans are written in the main session")
         return (f"current on main (v{want}); this branch was made before the setup merge and gets it when main is "
                 "merged in — nothing to do")
     if not missing:

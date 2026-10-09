@@ -235,3 +235,7 @@ Night: build on the recommendation when reversible (v3.2.1) | R | A new question
 One report per piece of work, after the last helper or background command (new v3.2.2) | R | write the full report when the last one finished
 Slow run: measure setup versus tests first (new v3.2.2) | R | first measures where the time goes
 Stage size counts worked time, not waits (new v3.2.2) | R | Waiting for GitHub runs and background commands does not count as work.
+Small job lane: no reviewer on Stuck, light reviewer before the pull request (new v3.2.7) | R | A plan of up to 3 build stages is a small job
+Never demand a helper missing in this folder (new v3.2.7) | R | A helper that is not in this folder is never demanded
+Record writes at approval, stage end, pull request only (new v3.2.7) | R | Write the record at plan approval, at each stage end and before the pull request
+Slow tests: one change, one run (new v3.2.7) | R | do not run it again after a one-line change

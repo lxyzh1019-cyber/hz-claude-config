@@ -1,4 +1,4 @@
-version: 3.2.6
+version: 3.2.7
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -54,6 +54,7 @@ stub-files/merge_settings.py
 stub-files/opus-worker.md
 stub-files/planner-opus.md
 stub-files/planner.md
+stub-files/reviewer-light.md
 stub-files/reviewer.md
 stub-files/settings.json
 stub-files/sonnet-worker.md

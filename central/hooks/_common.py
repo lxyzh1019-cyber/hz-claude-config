@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.2.5",
+        "version": "3.2.7",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -75,9 +75,11 @@ DEFAULT_CONFIG = {
         "settings_absent": {"model": "account default model (the stub must not set a session model)",
                             "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},
         # text each stub file must contain
-        "file_text": {".claude/agents/opus-worker.md": [["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
-                      ".claude/hz-loader.py": ["incomplete on GitHub", "loader that reports an incomplete rules repository"],
-                      ".claude/agents/sonnet-worker.md": [["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
+        "file_text": {".claude/agents/opus-worker.md": [["model: claude-opus-5-5", "Opus helper pinned to Opus 5.5"], ["tools: Read, Grep, Glob, Edit, Write", "worker tool list, fewer tokens per step (v3.2.7)"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
+                      ".claude/hz-loader.py": [["incomplete on GitHub", "loader that reports an incomplete rules repository"],
+                                               ["keeps compiled checks", "loader that keeps the compiled checks, faster hooks (v3.2.7)"]],
+                      ".claude/agents/reviewer-light.md": [["effort: medium", "light reviewer for small jobs (v3.2.7)"]],
+                      ".claude/agents/sonnet-worker.md": [["model: claude-sonnet-5-5", "Sonnet worker pinned to Sonnet 5.5"], ["tools: Read, Grep, Glob, Edit, Write", "worker tool list, fewer tokens per step (v3.2.7)"], ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
                       ".claude/agents/reviewer.md": [["tools: Read, Grep, Glob", "reviewer that only reads"],
                                                      ["effort: high", "reviewer at high effort (v3.2.1)"],
                                                      ["use the Read tool (never a shell command)", "helper reads its instructions with the Read tool (v3.2.5)"]],
@@ -157,24 +159,18 @@ def _prompt_state():
 
 
 def bump_prompt_number(session_id):
-    """Count this user prompt; restarts at 1 in a new session. Returns the new number."""
-    st = _prompt_state()
-    n = int(st.get("n", 0)) + 1 if st.get("session") == (session_id or "") else 1
-    try:
-        os.makedirs(STATE_DIR, exist_ok=True)
-        with open(PROMPT_STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump({"session": session_id or "", "n": n}, f)
-    except OSError:
-        pass
+    """Count this user prompt, per session (v3.2.7: two sessions in one folder no longer reset each other's count)."""
+    n = int(sess_get("prompt-number.json", session_id) or 0) + 1
+    sess_set("prompt-number.json", session_id, n)
     return n
 
 
 def prompt_number(session_id):
-    """The current prompt's number, or 0 when it is unknown (no UserPromptSubmit hook has run here)."""
-    st = _prompt_state()
-    if st.get("session") == (session_id or "") and int(st.get("n", 0)) > 0:
-        return int(st["n"])
-    return 0
+    """The current prompt's number in this session, or 0 when it is unknown (no UserPromptSubmit hook has run here)."""
+    try:
+        return int(sess_get("prompt-number.json", session_id) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def read_transcript(path):
@@ -466,7 +462,7 @@ def pr_timeline(records):
                 st = str(inp.get("subagent_type") or "")
                 if st in BUILD_WORKERS:
                     events.append(("worker", st)); started[b.get("id")] = st
-                elif st == "reviewer":
+                elif st in ("reviewer", "reviewer-light"):     # v3.2.7: the light reviewer of a small job counts
                     events.append(("reviewer", st)); started[b.get("id")] = st
             elif name == "Bash":
                 cmd = str(inp.get("command") or "")
@@ -1607,3 +1603,66 @@ def refused_by_safety_check(turn):
                     if len(t) < 700 and ("[Self-Modification]" in t or "denied by the auto mode classifier" in t.lower()):
                         return True
     return False
+
+
+# ---- State kept per session (v3.2.7) ----------------------------------------------------------------------------
+# Two Claude sessions in one app folder share .claude/state. A file that held one session id ("rules-read.json",
+# "prompt-number.json", "plan-review.json") was overwritten by the other session: each read of the rules blocked the
+# other session's next step (reproduced: A reads, B reads, A blocked, A reads, B blocked), and the prompt counter
+# restarted at 1. Now each such file keeps one entry per session; an old single-session file still reads.
+def _sess_load(name):
+    try:
+        d = json.load(open(os.path.join(STATE_DIR, name), encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if isinstance(d, dict) and isinstance(d.get("sessions"), dict):
+        return d["sessions"]
+    if isinstance(d, dict) and "session" in d:                      # the old one-session format
+        v = {k: x for k, x in d.items() if k != "session"}
+        return {str(d.get("session") or ""): (v.get("n") if set(v) == {"n"} else (v or True))}
+    return {}
+
+
+def sess_get(name, sid):
+    return _sess_load(name).get(str(sid or ""))
+
+
+def sess_set(name, sid, value, keep=40):
+    s = _sess_load(name)
+    s.pop(str(sid or ""), None)
+    s[str(sid or "")] = value
+    while len(s) > keep:
+        s.pop(next(iter(s)))
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(os.path.join(STATE_DIR, name), "w", encoding="utf-8") as f:
+            json.dump({"sessions": s}, f)
+    except OSError:
+        pass
+
+
+def sess_del(name, sid):
+    s = _sess_load(name)
+    if s.pop(str(sid or ""), None) is not None:
+        try:
+            with open(os.path.join(STATE_DIR, name), "w", encoding="utf-8") as f:
+                json.dump({"sessions": s}, f)
+        except OSError:
+            pass
+
+
+# ---- Helpers that exist on this PC, and the small job (v3.2.7) --------------------------------------------------
+# Figure-Skate 8 Oct: the setup with the planner was merged on GitHub 3 minutes before the session, but the PC folder had
+# not pulled it. The plan check demanded the planner anyway, refused the plan twice, and the session stayed in plan mode
+# (about 9 minutes lost). A check never demands a helper that Claude Code cannot start here.
+def agent_on_pc(name):
+    return os.path.isfile(os.path.join(PROJECT_DIR, ".claude", "agents", name + ".md"))
+
+
+def small_job(cfg):
+    """A plan of up to 3 build stages (v3.2.7): one light review before the pull request, no review on "Stuck"."""
+    try:
+        comp = completion_summary(cfg)
+        return bool(comp.get("plan")) and int(comp.get("total") or 0) <= int(cfg.get("small_job_build_stages", 3))
+    except Exception:
+        return False

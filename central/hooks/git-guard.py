@@ -27,7 +27,8 @@ def pr_last_check():
     kinds = [k for k, _ in events]
     if "worker" in kinds:
         last_worker = max(i for i, k in enumerate(kinds) if k == "worker")
-        if "reviewer" not in kinds[last_worker + 1:]:
+        from _common import agent_on_pc as _aop7
+        if "reviewer" not in kinds[last_worker + 1:] and (_aop7("reviewer") or _aop7("reviewer-light")):   # v3.2.7
             deny_tool("git-guard: open the pull request last. Send the reviewer first (moment: Before the pull "
                       "request) — it checks the tests and the picture and figure comparison against their "
                       "references, and every agreed point of the plan. Fix what it blocks, then open the pull request.")
