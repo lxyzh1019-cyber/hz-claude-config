@@ -90,6 +90,16 @@ if stub.startswith("OUTDATED"):
 facts.append("[stub] " + stub)
 if setup_note:
     facts.append(setup_note)
+    import re as _re8
+    _m8 = _re8.search(r"gh pr (?:create --base main --head|edit) (hz-setup-update-[\w.-]+)", setup_note)
+    if _m8:   # v3.2.8: the end-of-reply check sees that the session opened or linked the setup pull request
+        try:
+            import json as _j8
+            os.makedirs(os.path.join(PROJECT_DIR, ".claude", "state"), exist_ok=True)
+            _j8.dump({"branch": _m8.group(1), "session": str(data.get("session_id") or "")},
+                     open(os.path.join(PROJECT_DIR, ".claude", "state", "setup-pr.json"), "w", encoding="utf-8"))
+        except OSError:
+            pass
     if "were updated on disk just now" in setup_note:
         try:
             import json as _json

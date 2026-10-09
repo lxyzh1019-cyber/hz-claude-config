@@ -239,3 +239,4 @@ Small job lane: no reviewer on Stuck, light reviewer before the pull request (ne
 Never demand a helper missing in this folder (new v3.2.7) | R | A helper that is not in this folder is never demanded
 Record writes at approval, stage end, pull request only (new v3.2.7) | R | Write the record at plan approval, at each stage end and before the pull request
 Slow tests: one change, one run (new v3.2.7) | R | do not run it again after a one-line change
+Merge only on green: read the checks of the last push (new v3.2.8) | R | Before you ask me to merge, read the checks of your last push

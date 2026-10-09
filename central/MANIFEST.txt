@@ -1,4 +1,4 @@
-version: 3.2.7
+version: 3.2.8
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -12,6 +12,7 @@ hooks/dispatch.py
 hooks/formats.py
 hooks/git-guard.py
 hooks/handoff-guard.py
+hooks/merge-guard.py
 hooks/notice-reminder.py
 hooks/plan-edit-guard.py
 hooks/plan-gate.py

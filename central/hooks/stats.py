@@ -587,7 +587,9 @@ if st_:
                  + (f" · usage-limit stops {mins(st_['limit'])} ({st_['stops']})" if st_["stops"] else "")
                  + (f" · away {mins(st_['away'])} ({st_['away_n']}, waits over {AWAY_SECONDS // 60} min, left out)"
                     if st_["away"] else ""))
-    lines.append("  " + " · ".join(f"{k} {pct(v, st_['active'])} ({mins(v)})" for k, v in st_["parts"] if v >= 30))
+    _parts8 = [f"{k} {pct(v, st_['active'])} ({mins(v)})" for k, v in st_["parts"] if v >= 30]
+    if _parts8:   # v3.2.8: no empty line in a short session
+        lines.append("  " + " · ".join(_parts8))
 # v3.2.0: parallel groups — tokens and time per 'Group:' named in the hand-overs
 _grp_of = {}
 for _r in main:
