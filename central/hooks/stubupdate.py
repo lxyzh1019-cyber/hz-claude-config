@@ -131,23 +131,10 @@ def _publish(project_dir, branch, version, staged):
             return None
         _log7({"step": "push", "ok": True, "branch": branch})
         ok = True
+        # v3.2.8: the session opens the pull request itself. Claude Code shows a pull request card only when the session
+        # runs `gh pr create|edit|…` (read from the program); in 3.2.7 the session start opened #130 in the background,
+        # so you had no card to click.
         pr = ""
-        gh = shutil.which("gh")
-        if gh and time.time() < t_end:
-            try:
-                p = subprocess.run([gh, "pr", "create", "--base", "main", "--head", branch, "--title",
-                                    f"Setup update (automatic, v{version})", "--body",
-                                    "Automatic setup update from hz-claude-config: the helper files and settings of this repository. "
-                                    "Merge it so the next sessions use them."], cwd=project_dir, capture_output=True, text=True,
-                                   encoding="utf-8", errors="replace", timeout=left(20))
-                lines = [x for x in p.stdout.splitlines() if x.startswith("http")]
-                pr = lines[-1].strip() if p.returncode == 0 and lines else ""
-                _log7({"step": "gh pr create", "ok": bool(pr), "error": "" if pr else (p.stderr or p.stdout)[-300:]})
-            except (OSError, subprocess.SubprocessError) as e:
-                pr = ""
-                _log7({"step": "gh pr create", "ok": False, "error": type(e).__name__})
-        else:
-            _log7({"step": "gh pr create", "ok": False, "error": "gh not found" if not gh else "no time left"})
         return {"pr": pr}
     except Exception:
         return None
@@ -181,7 +168,9 @@ def update(cfg, project_dir):
     if kind == "waiting":
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
-                "Do not make another one. In your first reply's 'I need from you' line, ask me to merge it.")
+                f"Do not make another one. As your first step run once: gh pr edit {branch} --title \"Setup update (automatic, "
+                f"v{version})\" — it changes nothing on GitHub, and Claude Code then shows the pull request card. In your "
+                "first reply's 'I need from you' line, ask me to merge it.")
 
     changed, skipped, staged = [], [], {}    # v3.2.6: staged = new file texts by path; written to disk only as a fallback
     _git(project_dir, "fetch", "-q", "origin", "main", timeout=15)   # v3.2.7: decide on fresh GitHub facts
@@ -264,15 +253,14 @@ def update(cfg, project_dir):
                 "and start a new session. Until then call no missing helper; plans are written in the main session.")
     done = _publish(project_dir, branch, version, staged)
     if done:
-        pr = done.get("pr")
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] The session start made this repository's setup update itself: branch {branch} (from origin/main) "
-                f"holds the commit 'Setup update (automatic, v{version})' and is pushed. "
-                + (f"The pull request is open: {pr}. " if pr else
-                   f"Open a pull request for it, ready for review, not a draft: base main, head {branch}, title "
-                   f"'Setup update (automatic, v{version})'. ")
-                + "Make no commit and switch no branch for this." + note + " In your first reply's 'I need from you' line, ask me "
-                "to merge that pull request; the new setup takes effect in the next session after the merge. Then continue "
+                f"holds the commit 'Setup update (automatic, v{version})' and is pushed. As your first step, open its pull "
+                f"request with exactly: gh pr create --base main --head {branch} --title \"Setup update (automatic, v{version})\" "
+                f"--body \"Automatic setup update from hz-claude-config.\" — if gh says it already exists, run instead: gh pr "
+                f"edit {branch} --title \"Setup update (automatic, v{version})\". Claude Code then shows the pull request card. "
+                "Make no commit and switch no branch for this." + note + " In your first reply's 'I need from you' line, ask "
+                "me to merge that pull request; the new setup takes effect in the next session after the merge. Then continue "
                 "with my request.")
     for rel, text in staged.items():
         _write(os.path.join(project_dir, rel), text)

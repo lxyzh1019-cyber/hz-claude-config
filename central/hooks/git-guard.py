@@ -102,13 +102,17 @@ def is_draft_pr(segment):
 branch = None
 where = None
 for segment in re.split(r"&&|\|\||;|\n", cmd):
+    # v3.2.8: a Git Bash path (/d/User/...) is the Windows folder D:/User/...; before, it was not found, the check fell
+    # back to the main folder, saw main and refused the commit (Weekly-Planner 8 Oct 16:05: `cd "/d/.../Weekly-Planner-1"
+    # && git commit` refused, `git -C "D:/.../Weekly-Planner-1" commit` passed three seconds later).
+    from _common import _win_path as _wp8
     _cd = re.match(r"^\s*cd\s+(\"[^\"]+\"|'[^']+'|\S+)\s*$", segment)
     if _cd:
-        where, branch = os.path.join(PROJECT_DIR, _cd.group(1).strip("\"'")), None
+        where, branch = os.path.join(PROJECT_DIR, _wp8(_cd.group(1))), None
         continue
     _gc = re.search(r"\bgit\s+-C\s+(\"[^\"]+\"|'[^']+'|\S+)", segment)
     if _gc:
-        where, branch = os.path.join(PROJECT_DIR, _gc.group(1).strip("\"'")), None
+        where, branch = os.path.join(PROJECT_DIR, _wp8(_gc.group(1))), None
     if is_draft_pr(segment.strip()):
         deny_tool("git-guard: pull requests open ready for review, not as drafts. Run the same gh pr create without "
                   "--draft/-d. If a draft PR already exists, mark it ready with gh pr ready <number>.")

@@ -2505,7 +2505,7 @@ res("  ...with one commit named 'Setup update (automatic, vX)' that holds the he
 res("  ...and the workers in that commit have their tool list (v3.2.7)",("tools: Read, Grep, Glob, Edit, Write" in git(bare,"show",br+":.claude/agents/opus-worker.md").stdout),"")
 res("  ...your working folder is not touched (no changed files, still on main)",[x for x in git(app,"status","--short").stdout.splitlines() if ".claude/state" not in x]==[] and git(app,"rev-parse","--abbrev-ref","HEAD").stdout.strip()=="main",git(app,"status","--short").stdout)
 res("  ...and no temporary worktree is left",len(git(app,"worktree","list").stdout.strip().splitlines())==1,git(app,"worktree","list").stdout)
-res("  ...the pull request is opened ready for review (no draft) and its link is given to the session",os.path.exists(os.path.join(V6,"gh-args.txt")) and "--draft" not in open(os.path.join(V6,"gh-args.txt")).read() and "pull/7" in o,(o[-200:]))
+res("  ...v3.2.8: the session start does not open the pull request; the session gets the exact gh command (Claude Code then shows the card)",(not os.path.exists(os.path.join(V6,"gh-args.txt"))) and ("gh pr create --base main --head "+br) in o,(o[-260:]))
 res("  ...the session is told to make no commit and to ask you to merge",("Make no commit" in o) and ("ask me to merge" in o),o[-260:])
 # 5. when the push cannot be made, the old way runs and nothing is left behind
 app2=os.path.join(V6,"app2"); shutil.copytree(app,app2,symlinks=True)
@@ -2627,5 +2627,78 @@ PYV7
 )
 [ "$END7" = 1 ] && { echo "PASS v3.2.7: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.7: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
 rm -rf "$V7"
+# ---- v3.2.8 ------------------------------------------------------------------------------------------------------
+V8=$(mktemp -d); export V8; END8=0
+while IFS= read -r l; do
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END8=1;; esac
+done < <(H="$H" V8="$V8" python3 - <<'PYV8'
+import json,os,subprocess,sys
+H=os.environ["H"]; V8=os.environ["V8"]; sys.path.insert(0,H)
+def res(name,ok,detail=""): print(("PASS " if ok else "FAIL ")+name+("" if ok else " -> "+str(detail)[:220]))
+P=os.path.join(V8,"p"); os.makedirs(os.path.join(P,".claude","state")); subprocess.run(["git","init","-q",P])
+def guard(sid,recs):
+    tr=os.path.join(V8,"t_%s.jsonl"%sid); open(tr,"w").write("\n".join(json.dumps(r) for r in recs)+"\n")
+    return subprocess.run(["python3",os.path.join(H,"setup-guard.py")],input=json.dumps({"session_id":sid,"transcript_path":tr,"stop_hook_active":False}),capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout
+BR="hz-setup-update-9.9.9"; mark=os.path.join(P,".claude","state","setup-pr.json")
+reply={"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi."}]}}
+ask={"type":"user","message":{"role":"user","content":"hi"}}
+json.dump({"branch":BR,"session":"S"},open(mark,"w"))
+json.dump({"sessions":{"S":1,"T":1}},open(os.path.join(P,".claude","state","prompt-number.json"),"w"))   # one prompt in each session
+o1=guard("S",[ask,reply]); o2=guard("S",[ask,reply])
+res("v3.2.8: a session that did not open the setup pull request is reminded once",("Open the setup pull request now" in o1) and not o2.strip(),(o1[:80],o2[:80]))
+o=guard("T",[ask,reply])
+res("  ...another session in the same folder is not reminded","Open the setup pull request" not in o,o[:80])
+done={"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"g1","name":"Bash","input":{"command":'gh pr create --base main --head '+BR+' --title "Setup update (automatic, v9.9.9)" --body "x"'}}]}}
+o=guard("S",[ask,done,reply])
+res("  ...after 'gh pr create … --head <branch>' the reminder ends and the mark is removed",(not o.strip()) and not os.path.exists(mark),o[:80])
+json.dump({"branch":BR,"session":"S"},open(mark,"w"))
+edit={"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"g2","name":"Bash","input":{"command":'gh pr edit '+BR+' --title "Setup update (automatic, v9.9.9)"'}}]}}
+o=guard("S",[ask,edit,reply])
+res("  ...'gh pr edit <branch>' for a pull request that exists counts too",(not o.strip()) and not os.path.exists(mark),o[:80])
+import stubupdate
+s=open(os.path.join(H,"stubupdate.py"),encoding="utf-8").read()
+res("v3.2.8: a waiting setup pull request is linked with 'gh pr edit <branch>' (the card appears)","gh pr edit {branch} --title" in s,"")
+res("  ...and the session start no longer runs gh itself","shutil.which(\"gh\")" not in s,"")
+lines=open(os.path.join(H,"stats.py"),encoding="utf-8").read()
+res("v3.2.8: the summary writes no empty line in a short session","if _parts8:" in lines,"")
+# the folder in a commit command, in the Git Bash form (Weekly-Planner 8 Oct 16:05)
+G=os.path.join(V8,"g"); os.makedirs(G); subprocess.run(["git","init","-q","-b","main",G]); subprocess.run(["git","-C",G,"-c","user.email=t@t","-c","user.name=t","commit","-q","--allow-empty","-m","b"])
+WT=os.path.join(G,"D:","User","Heng Z","Documents","GitHub","Weekly-Planner-1"); os.makedirs(os.path.dirname(WT),exist_ok=True)
+subprocess.run(["git","-C",G,"worktree","add","-q","-b","claude/consistency-1",WT],capture_output=True)
+cmd='cd "/d/User/Heng Z/Documents/GitHub/Weekly-Planner-1" && git add WORKING_RECORD.md && git commit -q -m "Record: Stage 8 done (PR #127 merged)"'
+def gg(c,fake):
+    e=dict(os.environ,CLAUDE_PROJECT_DIR=G); e.pop("HZ_FAKE_WINDOWS",None)
+    if fake: e["HZ_FAKE_WINDOWS"]="1"
+    return subprocess.run(["python3",os.path.join(H,"git-guard.py")],input=json.dumps({"tool_name":"Bash","tool_input":{"command":c}}),capture_output=True,text=True,env=e).stdout
+res("v3.2.8: the real 16:05 command (cd \"/d/…/Weekly-Planner-1\" && git commit) is no longer refused as 'main'","deny" not in gg(cmd,True),gg(cmd,True)[:120])
+res("  ...a push from that folder passes too","deny" not in gg(cmd.replace("git commit -q -m","git push -u origin claude/consistency-1 #"),True),"")
+res("  ...a commit in the main folder itself is still refused","no commits on main" in gg('git commit -m x',True),"")
+# merge only on green
+def mg(recs,sid="M"):
+    tr=os.path.join(V8,"m_%s.jsonl"%sid); open(tr,"w").write("\n".join(json.dumps(r) for r in recs)+"\n")
+    return subprocess.run(["python3",os.path.join(H,"merge-guard.py")],input=json.dumps({"session_id":sid,"transcript_path":tr,"stop_hook_active":False}),capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout
+json.dump({"sessions":{"S":1,"T":1,"M1":1,"M2":1,"M3":1,"M4":1,"M5":1}},open(os.path.join(P,".claude","state","prompt-number.json"),"w"))
+push={"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"Bash","input":{"command":"git push -u origin claude/fix"}}]}}
+ok={"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"p1","content":"pushed"}]}}
+ask_merge=lambda t="": {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Ready."+t+"\n\n---\n> 📌 **Result:** Ready.\n> 👉 **I need from you:** Merge pull request #131.\n> ➡️ **Next:** x"}]}}
+chk=lambda out: [{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"c1","name":"Bash","input":{"command":"gh pr checks 131 --watch"}}]}},{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"c1","content":out}]}}]
+o=mg([ask,push,ok,ask_merge()],"M1")
+res("v3.2.8: asking me to merge after a push without reading the checks gets one reminder","read the checks of your last push" in o,o[:100])
+o=mg([ask,push,ok,ask_merge()],"M1")
+res("  ...only once",not o.strip(),o[:80])
+o=mg([ask,push,ok]+chk("test  pass  2m  https://x\nAll checks were successful")+[ask_merge()],"M2")
+res("  ...green checks after the last push: no reminder",not o.strip(),o[:80])
+o=mg([ask,push,ok]+chk("test  fail  3m  https://x\nSome checks were not successful")+[ask_merge()],"M3")
+res("  ...failed checks and a reply that does not say so: one reminder","checks of your last push failed" in o,o[:100])
+o=mg([ask,push,ok]+chk("test  fail  3m  https://x")+[ask_merge(" The checks are red: the hint is cut off by 3 px.")],"M4")
+res("  ...a reply that says the checks are red passes",not o.strip(),o[:80])
+setup={"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"s1","name":"Bash","input":{"command":"gh pr create --base main --head hz-setup-update-3.2.7 --title x --body y"}}]}}
+o=mg([ask,setup,ask_merge()],"M5")
+res("  ...a setup pull request is left out",not o.strip(),o[:80])
+print("END")
+PYV8
+)
+[ "$END8" = 1 ] && { echo "PASS v3.2.8: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.8: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
+rm -rf "$V8"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

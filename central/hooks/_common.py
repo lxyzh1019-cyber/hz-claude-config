@@ -1473,8 +1473,8 @@ _WD = None
 
 
 def _win_path(p):
-    p = str(p or "").strip().strip('"')
-    if os.name == "nt":
+    p = str(p or "").strip().strip('"').strip("'")
+    if os.name == "nt" or os.environ.get("HZ_FAKE_WINDOWS"):   # the second only in tests on Linux
         m = re.match(r"^/([A-Za-z])/(.*)$", p)
         if m:
             p = m.group(1).upper() + ":/" + m.group(2)
