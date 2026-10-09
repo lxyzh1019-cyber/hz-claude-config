@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.8: the session opens the setup pull request itself (gh pr create, or gh pr edit when it exists), so Claude Code shows the pull request card. The commit check now understands Git Bash folder paths (/d/...), so record notes in a work folder are no longer refused as 'main'. Before asking you to merge, the session reads the checks of its last push; red checks are fixed or named. No empty summary line. No setup pull request for the apps. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.9: plans start with a Quick read with its word count; the size is a goal, never a send-back. The plan is not reopened during the work; only amounts, stored data or security wait for your answer. Each plan ends with a report in docs/reports/: Top 3 time sinks, Top 3 token sinks, the slow one-test finding, the main context, compared with the last report. Time first, tokens second; what Claude builds stays fast (one-test run under 1 minute). A pull request opens only after green tests and never goes to draft. The worker memory limit is off; plans aim for fewer pull requests. No setup pull request for the apps. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
