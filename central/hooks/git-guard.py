@@ -15,7 +15,50 @@ tool = data.get("tool_name") or ""
 tool_input = data.get("tool_input") or data.get("input") or {}
 
 
-def pr_last_check():
+def _ci_on_branch_push():
+    """v3.2.9: True when the app's GitHub tests run on a push to a work branch (then a pull request can wait for green)."""
+    import glob as _g9
+    for f in _g9.glob(os.path.join(PROJECT_DIR, ".github", "workflows", "*.y*ml")):
+        try:
+            t = open(f, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        m = re.search(r"(?m)^\s*push:\s*\n((?:[ \t]+.*\n)*)", t + "\n")
+        if re.search(r"(?m)^\s*push:\s*$", t) and m is not None:
+            block = m.group(1)
+            if "branches" not in block or re.search(r"claude/|'\*\*'|\"\*\*\"|\*\*", block):
+                return True
+        elif re.search(r"(?m)^on:\s*\[?[^\n]*\bpush\b", t):
+            return True
+    return False
+
+
+def _green_after_last_push(records):
+    """v3.2.9: the session read a green GitHub run after its last push (gh run watch / view / list, gh pr checks)."""
+    import json as _j9
+    uses, last_push, ok = {}, None, False
+    for r in records:
+        if r.get("isSidechain"):
+            continue
+        c = (r.get("message") or {}).get("content")
+        for b in c if isinstance(c, list) else []:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_use" and b.get("name") == "Bash":
+                cmd = str((b.get("input") or {}).get("command") or "")
+                if re.search(r"\bgit\s+(?:-C\s+\S+\s+)?push\b", cmd):
+                    last_push, ok = b.get("id"), False
+                elif last_push and re.search(r"\bgh\s+(run\s+(watch|view|list)|pr\s+checks)\b", cmd):
+                    uses[b.get("id")] = True
+            elif b.get("type") == "tool_result" and b.get("tool_use_id") in uses:
+                t = _j9.dumps(b.get("content"), ensure_ascii=False)
+                if re.search(r"\bsuccess\b|completed successfully|All checks were successful|\u2713", t) and \
+                        not re.search(r"\bfail(?:ed|ure|ing)?\b|\u2717", t, re.I):
+                    ok = True
+    return ok or last_push is None
+
+
+def pr_last_check(cmd=""):
     """v3.1.30: a pull request opens last — after every worker and reviewer has finished, and after a reviewer ran
     following the last build worker (it checks the tests, the picture comparison and the plan). In the Weekly-Planner
     PR 118 session the pull request opened before the picture comparison, which then found gaps, so a ready pull
@@ -32,6 +75,13 @@ def pr_last_check():
             deny_tool("git-guard: open the pull request last. Send the reviewer first (moment: Before the pull "
                       "request) — it checks the tests and the picture and figure comparison against their "
                       "references, and every agreed point of the plan. Fix what it blocks, then open the pull request.")
+    # v3.2.9: a pull request opens only when it is ready: GitHub's tests are green on the branch (owner, 9 Oct: #131 was
+    # opened, went red, was switched to draft and back). Only when the app tests work branches on push; never for the
+    # setup branch (the session start pushed it; its first reply must not wait for the tests).
+    if "hz-setup-update" not in cmd and _ci_on_branch_push() and not _green_after_last_push(read_transcript(data.get("transcript_path"))):
+        deny_tool("git-guard: open the pull request when it is ready: wait for GitHub's tests on this branch first. "
+                  "Run: gh run watch $(gh run list --branch <branch> --limit 1 --json databaseId -q '.[0].databaseId') "
+                  "--exit-status. If they are green, open the pull request; if red, fix and push, then wait again.")
 
 
 SID = data.get("session_id")
@@ -49,7 +99,7 @@ if tool.startswith("mcp__"):
                   "to false, or leave the draft field out — create it ready for review. (Switching an open pull "
                   "request back to draft while it is being fixed is allowed.)")
     if re.match(r"^mcp__.*create_pull_request$", tool):
-        pr_last_check()
+        pr_last_check(str(tool_input.get("head") or ""))
         mark("ready", str(tool_input.get("head") or "") or None)
     elif re.match(r"^mcp__.*update_pull_request$", tool) and "draft" in tool_input:
         mark("draft" if tool_input.get("draft") is True else "ready")
@@ -117,7 +167,7 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
         deny_tool("git-guard: pull requests open ready for review, not as drafts. Run the same gh pr create without "
                   "--draft/-d. If a draft PR already exists, mark it ready with gh pr ready <number>.")
     if re.match(r"^(\w+=\S+\s+)*gh\s+pr\s+create\b", segment.strip()):
-        pr_last_check()
+        pr_last_check(segment)
         mark("ready")
     elif re.match(r"^(\w+=\S+\s+)*gh\s+pr\s+ready\b", segment.strip()):
         mark("draft" if "--undo" in segment else "ready")

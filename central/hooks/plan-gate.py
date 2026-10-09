@@ -83,9 +83,11 @@ def stop_notice():
         live_proof("stop-for-plan", {"reasons": reasons})
     except ImportError:
         pass
-    return ("[stop for plan] " + "; ".join(reasons) + ". Before more build work, show the next Rev of the plan in "
-            "plan mode: the problem, its cause, and your recommended solution. A small fix that changes no approved "
-            "result may go on; say why in one line.")
+    # v3.2.9: the plan is not reopened during the work (owner, 9 Oct). Settle questions in the plan discussion.
+    return ("[finding during the work] " + "; ".join(reasons) + ". Do not reopen or rewrite the plan. If the fix "
+            "changes money, stored data or security, ask me one question in chat: the choices A/B and what each gives; "
+            "only that stage waits, the other stages go on. Otherwise choose the fix that keeps the plan's goal, record "
+            "it as a deviation in the record (what, why, effect), and go on. The end-of-plan report lists it.")
 
 
 # v3.2.1: background full test runs, measured when their notice arrives (the real case: 30 min, stopped, exit 124)
@@ -99,6 +101,14 @@ STOP_TEXT = stop_notice()
 # v3.1.30: a worker or background-command notice is not a request of mine. In the Weekly-Planner money session 79 of
 # 106 plan-gate texts went to such notices ("Full Plan vN is required (90 bullets)"), 128,000 characters re-read on
 # every later step.
+# v3.2.9: remember the folder of this project's session files, for the end-of-plan report (plan_report.py)
+try:
+    if data.get("transcript_path"):
+        os.makedirs(STATE_DIR, exist_ok=True)
+        open(os.path.join(STATE_DIR, "transcripts-dir.txt"), "w", encoding="utf-8").write(
+            os.path.dirname(str(data.get("transcript_path"))))
+except OSError:
+    pass
 # v3.2.2: report timing — at each finish notice, say whether anything still runs (one full report at the end)
 TIMING_TEXT = ""
 if prompt.lstrip().startswith("<task-notification>") and not os.environ.get("HZ_REPORT_TIMING_OFF"):

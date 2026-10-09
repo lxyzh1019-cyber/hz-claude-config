@@ -1137,10 +1137,10 @@ body = "The kids page shows the week's money and the Sunday steps in everyday wo
 open(sys.argv[1], "w", encoding="utf-8").write(head + body + stages)
 open(sys.argv[2], "w", encoding="utf-8").write(head + "The kids page shows the week's money.\n" + stages + "\nTechnical details:\n" + body)
 PY
-o=$(pg "$T/p_long.md"); check "a new plan over 7,200 characters above Technical details is sent back (v3.2.0)" "keep it under 7,200" "$o"
-check "the send-back says to move detail, not delete it" "Do not delete it" "$o"
+o=$(pg "$T/p_long.md"); check "v3.2.9: a long new plan is not sent back; its size is a note (soft goal)" "Plan size: about" "$o"
+check "  ...and there is no send-back for the size" "clean" "$(echo "$o" | grep -c 'permissionDecision' | sed 's/^0$/clean/')"
 o=$(pg "$T/p_long_ok.md"); check "long detail under Technical details is fine" "Plan size: about" "$o"
-o=$(echo '{}' | python3 $H/session-start.py); check "the plan shape at session start names the 7,200 limit for a new plan" "at most 7,200 characters" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "v3.2.9: the plan shape at session start starts with the Quick read" "Quick read" "$o"
 # --- v3.1.26d: fewer re-reads and send-backs
 # 1 rules read by shell -> refused with the Read path; setup allows Read on the rules copy
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"v=$(cat ~/.cache/hz-rules/current); cat ~/.cache/hz-rules/$v/skills/hz-change-guard/SKILL.md"}}' | python3 $H/dispatch.py)
@@ -1360,7 +1360,7 @@ o=$(echo '{"prompt":"merged, move on"}' | python3 $H/plan-gate.py)
 check "after a merge the session is never told to suggest a new session" "clean" "$(echo "$o" | grep -c 'suggest a fresh session' | sed 's/^0$/clean/')"
 # 6 writing for me in ASD-STE100-lite (user test 2026-10-05: the STE answers read better)
 check "the rules carry the STE-lite writing block" "Writing for me (ASD-STE100-lite)" "$(cat $R)"
-check "the plan summary starts with what changes for me" "What changes for you" "$(echo '{}' | python3 $H/session-start.py)"
+check "v3.2.9: the plan summary names the goal, what is done and what I need" "Goal: <one line" "$(echo '{}' | python3 $H/session-start.py)"
 check "the claude.ai preferences carry the same STE-lite block" "Accuracy is more important than style." "$(cat $H/../../docs/claude-ai-preferences.txt)"
 check "the claude.ai preferences ask for prototype and build side by side" "show the prototype and the build side by side" "$(cat $H/../../docs/claude-ai-preferences.txt)"
 # 7 explorer and reviewer on call (v3.1.28)
@@ -1500,7 +1500,7 @@ git switch -q -c claude/pr118 2>/dev/null || git checkout -q -b claude/pr118
 gs(){ python3 -c "import json,sys;print(json.dumps({'tool_name':'Bash','session_id':'b1','transcript_path':sys.argv[1],'tool_input':{'command':sys.argv[2]}}))" "$1" "$2" | python3 $H/git-guard.py; }
 mk130 "$T/b1e.jsonl" worker: reviewer:; gs "$T/b1e.jsonl" "gh pr create --fill" >/dev/null
 check "v3.1.30: opening a pull request marks its branch ready" '"claude/pr118": "ready"' "$(cat $PROJ/.claude/state/pr-branches.json)"
-o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.1.30: a fix worker on the branch of a ready pull request is refused (real PR 118 case)" "First switch it back to draft" "$o"
+o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.2.9: a fix worker on the branch of a ready pull request is not sent to switch it to draft" "clean" "$(echo "$o" | grep -c 'back to draft' | sed 's/^0$/clean/')"
 o=$(wpr "$T/b1e.jsonl" $'PR: #118 merged\n'"$HO"); check "v3.1.30: a merged pull request does not block the next worker" "^$" "$o"
 o=$(wpr "$T/b1e.jsonl" $'PR: #118 not touched\n'"$HO"); check "v3.1.30: a worker that leaves the branch alone may say so" "^$" "$o"
 gs "$T/b1e.jsonl" "gh pr ready 118 --undo" >/dev/null
@@ -1812,8 +1812,8 @@ PYX
 check "v3.2.0: the approval wording is the real one from your sessions" "has approved your plan" "$(cat $H/_common.py)"
 rm -rf "$PROJ/plans" "$PROJ/.claude/state/plan-store.json"
 check "v3.2.0: the rules say Rev counts showings and restarts per version" "starts at Rev 1 for each version" "$(cat $H/../rules/CLAUDE-rules.md)"
-check "v3.2.0: the format file gives the plan rules to the session start" "Do not write Rev marks or a change list yourself" "$(cat $H/formats.py)"
-check "v3.2.0: the planner writes no marks" "Do not write Rev marks or a change list" "$(cat $H/../agents/planner-instructions.md)"
+check "v3.2.0: the format file gives the plan rules to the session start (v3.2.9: with the Quick read)" "Do not write Rev marks yourself" "$(cat $H/formats.py)"
+check "v3.2.0: the planner writes no marks" "Do not write Rev marks" "$(cat $H/../agents/planner-instructions.md)"
 check "v3.2.0: the approved-plan edit check is registered" "plan-edit-guard.py" "$(cat $H/config.json)"
 O=$(grep -n -i -E "iPad 1194|Pop|Calm" "$H/../seed/FEATURES.md" | head -3)
 check "v3.1.33: the seed list has a neutral example (no app values)" "^$" "$O"
@@ -1920,7 +1920,7 @@ f=sys.argv[1]; R=[json.loads(l) for l in open(f)]
 R.append({"type":"assistant","message":{"id":"big","role":"assistant","usage":{"input_tokens":10,"cache_read_input_tokens":260000},"content":[{"type":"text","text":"x"}]}})
 open(f,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYM
-o=$(wb32 w32m Bash); check "v3.2.0: a worker past 250 k per step is told to report and hand over" "about 260 k tokens per step" "$o"
+o=$(wb32 w32m Bash); check "v3.2.10: a worker past 250 k per step is not stopped any more (the memory limit is off)" "clean" "$(echo "$o" | grep -c "re-reads about" | sed 's/^0$/clean/')"
 mkw w32r opus-worker 5 0 no; python3 - "$WB/sess/subagents/agent-w32r.jsonl" <<'PYR'
 import json,sys
 f=sys.argv[1]; R=[json.loads(l) for l in open(f)]
@@ -2044,11 +2044,11 @@ open(f,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYS
 o=$(wb32 w32s Bash)
 check "v3.2.0: a stage sized S that runs 40 minutes records a stop signal" "over twice its size" "$(cat "$PROJ/.claude/state/stop-signals.json")"
-o=$(echo '{"prompt":"next","session_id":"sg"}' | python3 $H/plan-gate.py); check "  ...and the main session is asked for the next Rev with problem and solution" "\[stop for plan\] a stage sized S" "$o"
+o=$(echo '{"prompt":"next","session_id":"sg"}' | python3 $H/plan-gate.py); check "  ...v3.2.9: and the session is told not to reopen the plan (ask only for money, data or security)" "\[finding during the work\] a stage sized S.*Do not reopen" "$o"
 o=$(echo '{"prompt":"next","session_id":"sg"}' | python3 $H/plan-gate.py); check "  ...only once" "clean" "$(echo "$o" | grep -c 'stop for plan' | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"<task-notification>Stuck: smoke date check — still fails — tried two fixes</task-notification>","session_id":"sg"}' | python3 $H/plan-gate.py)
 check "v3.2.0: a worker's 'Stuck:' stops the work for a plan Rev" "a worker reported 'Stuck:'" "$o"
-check "v3.2.0: when the build of a plan is done, the hand-off asks for lessons" "## Lessons" "$(cd $H && python3 -c "import _common as C;print(C.handoff_text(C.load_config(),{'plan':'P','line':''},after_build=True,lessons=True))")"
+check "v3.2.9: when the build of a plan is done, the hand-off asks for the end-of-plan report" "docs/reports/" "$(cd $H && python3 -c "import _common as C;print(C.handoff_text(C.load_config(),{'plan':'P','line':''},after_build=True,lessons=True))")"
 python3 - "$T/sz.jsonl" <<'PYZ'
 import json,sys
 R=[{"type":"user","timestamp":"2026-10-06T10:00:00Z","message":{"role":"user","content":"go"}},
@@ -2700,5 +2700,103 @@ PYV8
 )
 [ "$END8" = 1 ] && { echo "PASS v3.2.8: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.8: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
 rm -rf "$V8"
+# ---- v3.2.9 ------------------------------------------------------------------------------------------------------
+V9=$(mktemp -d); export V9; END9=0
+while IFS= read -r l; do
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END9=1;; esac
+done < <(H="$H" V9="$V9" python3 - <<'PYV9'
+import json,os,subprocess,sys,datetime as dt
+H=os.environ["H"]; V9=os.environ["V9"]; sys.path.insert(0,H)
+def res(name,ok,detail=""): print(("PASS " if ok else "FAIL ")+name+("" if ok else " -> "+str(detail)[:220]))
+import formats as F, planmarks
+QR="""# Plan v2 — Headers — Awaiting approval
+
+**Quick read** · 0 words · about 0 min
+
+**Summary**
+- Goal: one header in the whole app.
+- Done: 3 of 8 stages. Next: PR 4 headers.
+- I need from you: approve v2.
+
+**What changed since v1**
+- The phone header is 60 tall, not 56.
+
+**Decisions:** None open.
+
+**Next steps**
+- PR 4: one header on the girls' screens.
+- PR 5: one purple bar for parents.
+- PR 6: money written one way.
+- … 4 more steps in the full plan below
+
+---
+
+## The full plan
+Stages to finish
+1. PR 4 · Claude · Build
+Technical details: x
+"""
+n=F.quick_read_words(QR)
+res("v3.2.9: the Quick read is counted from its title line to the line '---'",n is not None and 40<n<90,n)
+base=QR.replace("60 tall, not 56","56 tall")
+out,_=planmarks.apply(QR,base,2,2,[],"you last looked")
+res("  ...the plan check writes the exact count and minutes into the title line","**Quick read** · %d words · about 1 min"%n in out,out[:200])
+res("  ...and adds no word-level change list when the plan has a Quick read","Changes in this version" not in out,"")
+res("  ...the coloured mark is still on the changed line","🟩 **Rev 2** — - The phone header is 60 tall" in out or "Rev 2" in out,"")
+old="# Plan v1 — X — Awaiting approval\n\n| Summary |\n|---|\n| What changes for you: a |\n\nStages to finish\n1. a · Claude · Build\n"
+o2,_=planmarks.apply(old.replace("a |","b |"),old,1,2,[],"you last looked")
+res("  ...an old plan without a Quick read keeps the old change list","Changes in this version" in o2,o2[:120])
+# a pull request opens only after green tests on the branch, when the app tests branch pushes
+P=os.path.join(V9,"p"); os.makedirs(os.path.join(P,".github","workflows")); subprocess.run(["git","init","-q","-b","feat",P])
+open(os.path.join(P,".github","workflows","ci.yml"),"w").write("on:\n  pull_request:\n  push:\n    branches: [main, 'claude/**']\n")
+def gg(recs,cmd):
+    tr=os.path.join(V9,"g.jsonl"); open(tr,"w").write("\n".join(json.dumps(r) for r in recs)+"\n")
+    return subprocess.run(["python3",os.path.join(H,"git-guard.py")],input=json.dumps({"tool_name":"Bash","session_id":"s","transcript_path":tr,"tool_input":{"command":cmd}}),capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout
+push={"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"Bash","input":{"command":"git push -u origin claude/x"}}]}}
+watch=lambda out:[{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Bash","input":{"command":"gh run watch 123 --exit-status"}}]}},{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":out}]}}]
+o=gg([push],'gh pr create --title x --body y')
+res("v3.2.9: no pull request before GitHub's tests are green on the branch (the app tests branch pushes)","wait for GitHub's tests" in o,o[:120])
+o=gg([push]+watch("✓ main CI · 123\nTriggered via push\nJOBS\n✓ smoke in 7m (ID 1)\nconclusion: success"),'gh pr create --title x --body y')
+res("  ...after a green run it opens",("wait for GitHub's tests" not in o),o[:120])
+o=gg([push]+watch("X main CI · 123\nconclusion: failure"),'gh pr create --title x --body y')
+res("  ...after a red run it still waits","wait for GitHub's tests" in o,o[:120])
+o=gg([push],'gh pr create --base main --head hz-setup-update-3.2.9 --title x --body y')
+res("  ...the setup pull request does not wait","wait for GitHub's tests" not in o,o[:120])
+open(os.path.join(P,".github","workflows","ci.yml"),"w").write("on:\n  pull_request:\n  push:\n    branches: [main]\n")
+o=gg([push],'gh pr create --title x --body y')
+res("  ...an app that tests only main and pull requests does not wait (merge-guard covers it)","wait for GitHub's tests" not in o,o[:120])
+# the end-of-plan report: measured from the session files, compared with the last report
+S=os.path.join(V9,"sessions"); os.makedirs(os.path.join(S,"s1","subagents"))
+T0=dt.datetime(2026,10,9,10,0,0)
+st=lambda m:(T0+dt.timedelta(minutes=m)).isoformat()+"Z"
+recs=[{"type":"user","timestamp":st(0),"message":{"role":"user","content":"Continue My plan on branch x"}}]
+for i in range(4):
+    recs.append({"type":"assistant","timestamp":st(i*2),"message":{"id":"m%d"%i,"role":"assistant","usage":{"input_tokens":100000},"content":[{"type":"tool_use","id":"t%d"%i,"name":"Read" if i<3 else "Bash","input":{"file_path":"a"} if i<3 else {"command":"npm run test:smoke"}}]}})
+    recs.append({"type":"user","timestamp":st(i*2+(1 if i==3 else 0.02)),"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t%d"%i,"content":"ok"}]}})
+open(os.path.join(S,"s1.jsonl"),"w").write("\n".join(json.dumps(r) for r in recs)+"\n")
+RP=os.path.join(V9,"app"); os.makedirs(os.path.join(RP,"docs","reports"))
+open(os.path.join(RP,"docs","reports","earlier-plan.md"),"w").write('# x\n<!-- metrics: {"floor_s": 1.2, "test_min": 30, "tokens_m": 50, "wall_min": 300, "refusals": 20} -->\n')
+o=subprocess.run(["python3",os.path.join(H,"plan_report.py"),"My plan","--dir",S],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=RP)).stdout
+res("v3.2.9: the report tool measures the plan's sessions (time, tokens, hook time per call, test time)","| Sessions | 1 |" in o and "Hook time per call" in o and "| Test runs (time in test commands) | 1 min |" in o,o[:300])
+res("  ...and compares with the last report","Since the last report** (earlier-plan.md)" in o and "| Hook time per call (s) | 1.2 |" in o,o[-400:])
+res("  ...and leaves its numbers for the next report","<!-- metrics: {" in o,"")
+o=subprocess.run(["python3",os.path.join(H,"plan_report.py"),"Other plan","--dir",S],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=RP)).stdout
+res("  ...a plan that no session names gives a plain note, no error","No session file names the plan" in o,o[:120])
+o=subprocess.run(["python3",os.path.join(H,"plan_report.py"),"My plan","--dir",S],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=RP)).stdout
+res("v3.2.9: the report ranks the top 3 time sinks and the top 3 token sinks","## Top 3 time sinks" in o and "## Top 3 token sinks" in o and "Fix:" in o,o[:500])
+recs2=[{"type":"user","timestamp":st(0),"message":{"role":"user","content":"Continue Slow plan on branch y"}}]
+for i in range(3):
+    recs2.append({"type":"assistant","timestamp":st(i*4),"message":{"id":"s%d"%i,"role":"assistant","usage":{"input_tokens":50000},"content":[{"type":"tool_use","id":"u%d"%i,"name":"Bash","input":{"command":"SMOKE_ONLY=oneCheck npm run test:smoke"}}]}})
+    recs2.append({"type":"user","timestamp":st(i*4+3),"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"u%d"%i,"content":"ok"}]}})
+open(os.path.join(S,"s2.jsonl"),"w").write("\n".join(json.dumps(r) for r in recs2)+"\n")
+o=subprocess.run(["python3",os.path.join(H,"plan_report.py"),"Slow plan","--dir",S],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=RP)).stdout
+res("v3.2.9: slow one-test runs are flagged in any app, with the saving (3 runs of 3 min)","**Slow one-test runs:** 3 runs, median 3.0 min" in o and "decision A" in o,o[:700])
+o=subprocess.run(["python3",os.path.join(H,"plan_report.py"),"My plan","--dir",S],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=RP)).stdout
+res("v3.2.9: the report shows the main session's context at start and peak, and the steps over 200 k","Main session context: at start / peak | 100 k / 100 k" in o and "Main steps over 200 k context | 0 of 4" in o,o[:600])
+print("END")
+PYV9
+)
+[ "$END9" = 1 ] && { echo "PASS v3.2.9: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.9: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
+rm -rf "$V9"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

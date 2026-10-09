@@ -170,7 +170,12 @@ def apply(text, base, version, rev, history, since):
         m = _PREFIX.match(lines[i])
         lines[i] = m.group(1) + label + m.group(2)
     if not added and not removed and not tech and not tagonly and not changed:
-        return "\n".join(lines), (0, "")
+        return quick_read_count("\n".join(lines)), (0, "")
+    # v3.2.9: no word-level change list any more. The owner reads "What changed" in the Quick read (written by the
+    # planner, plain lines with the result) and the coloured marks below; the old block was hard to read and repeated
+    # the marks (owner, 9 Oct, Plan v7).
+    if F.QUICK_READ_GOAL_WORDS and "**Quick read**" in text:
+        return quick_read_count("\n".join(lines)), (len(idx), gist(added, removed)[1])
     diff = ([f"+ {sq} Rev {rev} — {changed_words(o_, n_)}" for o_, n_ in changed] +
             [f"+ {sq} Rev {rev} — {_clean(l)}" for l in added] + [f"- {sq} Rev {rev} — {_clean(l)}" for l in removed])
     more = len(diff) - F.CHANGE_BLOCK_MAX_LINES
@@ -206,3 +211,14 @@ def apply(text, base, version, rev, history, since):
     lines = lines[:pos] + ["", block.rstrip("\n"), ""] + lines[pos:]
     n, g = gist(added + [n_ for _, n_ in changed], removed)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)), (n + tech + tagonly, g)
+
+
+def quick_read_count(text):
+    """v3.2.9: write the exact word count and minutes into the Quick read title line."""
+    import re as _re
+    n = F.quick_read_words(text)
+    if n is None:
+        return text
+    mins = max(1, -(-n // 200))
+    return _re.sub(r"(?m)^(\s*(?:[\U0001F7E6\U0001F7E9\U0001F7E7\U0001F7EA]\s*\*\*Rev \d+\*\* — )?\*\*Quick read\*\*)[^\n]*$",
+                   lambda m: f"{m.group(1)} · {n} words · about {mins} min", text, count=1)

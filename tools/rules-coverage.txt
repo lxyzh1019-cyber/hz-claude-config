@@ -64,7 +64,7 @@ Shape first, then one plan version | R | **Shape first, then one plan version (H
 Design decisions lines and coverage | R | `- [agreed] <point> — search: <phrase>`
 Mark agreed lines [in vN] | R | `[in vN]`
 Plan shape given at session start (format file) | F | PLAN_TEMPLATE = """# Plan vN — <short plan name> — Awaiting approval
-Summary table in every version | F | | Summary |
+Summary at the top of every plan (v3.2.9: in the Quick read) | F | **Summary**
 Changes in this version block | R | "Changes in this version"
 Everyday words above Technical details | R | Above Technical details: no file names
 Must-see parts stay above Technical details | R | Keep everything I must see (Summary, decisions, deviations, stages) above
@@ -174,7 +174,7 @@ STE: sentence length (format file) | F | at most 20 words in a step and 25 words
 STE: noun clusters (format file) | F | Do not use more than 3 nouns in a row.
 STE: no padding (format file) | F | Do not add an introduction
 STE: accuracy (format file) | F | Accuracy is more important than style.
-Plan summary starts with what changes for me | F | What changes for you
+Plan summary starts with the goal (v3.2.9: Quick read) | F | Goal: <one line
 Explorer before Complex stages (new) | R | **Explorer first (Hook).**
 Map line in Complex hand-overs (new) | R | `Map: not needed — <reason>`
 Reviewer on call at three moments (new) | R | **Reviewer on call (Hook).**
@@ -199,7 +199,7 @@ Change list: newest showing in full, older ones one line (v3.2.0) | R | older sh
 Size limit only on a new plan, 7,200 (v3.2.0) | R | A new plan (Plan v1 Rev 1) has at most 7,200 characters there
 Planner writes new plans and big changes only (v3.2.0) | R | The `planner` helper writes a new plan (Plan v1 Rev 1) and big changes
 Why and fix are two jobs (v3.2.0) | R | **"Why" and "fix" are two jobs.**
-Stop for a plan when a problem is big (v3.2.0) | R | **When to stop for a plan (Hook).**
+Stop for a plan when a problem is big (v3.2.0; v3.2.9: no plan rewrites, a chat question) | R | **No plan rewrites during the work (Hook).**
 Compact at stage breaks (v3.2.0) | R | **Compact at stage breaks.**
 Ask all open questions at once (v3.2.0) | R | **Ask all open questions at once.**
 Worker limits: steps, time, test runs (v3.2.0) | R | time 45 and 60 minutes (Routine) or 90 and 120 minutes (Complex); test runs 10 and 20
@@ -222,8 +222,8 @@ Stacked pull requests by default, at most 3 (v3.2.0) | R | **Stacked pull reques
 Config cost line in the summary (v3.2.0) | R | "Config cost" shows the time and tokens of the helpers these rules require
 Proof and size per Build stage (v3.2.0) | R | Each Build stage names its `proof:` (what shows it is right) and `size: S|M|L` (Hook).
 COMPLETE evidence shows the planned proof (v3.2.0) | R | COMPLETE needs evidence that shows that proof (Hook).
-Measured stop signals (v3.2.0) | R | Measured signals also stop the work
-Lessons after each plan (v3.2.0) | R | **Lessons after each plan (Hook).**
+Measured stop signals (v3.2.0; v3.2.9: a finding, not a plan rewrite) | R | Measured signals start this too
+Lessons after each plan (v3.2.0; v3.2.9: the end-of-plan report) | R | **Report after each plan (Hook).**
 Recommendation on every decision line (v3.2.0) | R | Each line of the `❓ Decisions` list names your recommendation (Hook).
 References first (v3.2.0) | R | **References first (Hook).**
 Size line in every hand-over (v3.2.0) | R | `Size: S|M|L` from the plan, and a level.
@@ -240,3 +240,10 @@ Never demand a helper missing in this folder (new v3.2.7) | R | A helper that is
 Record writes at approval, stage end, pull request only (new v3.2.7) | R | Write the record at plan approval, at each stage end and before the pull request
 Slow tests: one change, one run (new v3.2.7) | R | do not run it again after a one-line change
 Merge only on green: read the checks of the last push (new v3.2.8) | R | Before you ask me to merge, read the checks of your last push
+No plan rewrites during the work (new v3.2.9) | R | After approval the plan is not reopened
+Report after each plan (new v3.2.9) | R | write `docs/reports/<plan name>.md`.
+Quick read first (new v3.2.9) | R | Every plan starts with a Quick read
+A pull request opens when it is ready (new v3.2.9) | R | wait for a green run on the branch before you open the pull request
+Lean plans: fewer pull requests, joined checks, retired designs to the archive (new v3.2.9) | R | put work that can be checked together into one pull request
+Time first, tokens second (new v3.2.9) | R | Time and tokens are the two main resources of the work
+What Claude builds stays fast: one-test run under 1 minute (new v3.2.9) | R | A one-test run takes under 1 minute

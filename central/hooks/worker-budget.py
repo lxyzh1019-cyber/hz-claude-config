@@ -149,7 +149,9 @@ elif tool not in NEVER_REFUSE:
     elif tests >= int(cfg.get("worker_tests_warn", 10)) and not a.get("tests_warned"):
         say = "tests warn"
         a["tests_warned"] = True
-    elif ctx >= int(cfg.get("worker_memory_max", 250000)) and not a.get("memory_warned"):
+    # v3.2.9: off by default (worker_memory_max 0). Weekly-Planner Stage 9: one stage needed 3 Opus workers because of
+    # this limit, each re-reading the same files; model time per step stayed at 2.5 s from 50 k to 200 k context.
+    elif int(cfg.get("worker_memory_max", 0)) > 0 and ctx >= int(cfg.get("worker_memory_max", 0)) and not a.get("memory_warned"):
         say = "memory"
         a["memory_warned"] = True
     elif single_reads >= 5 and tool in ("Read", "Grep", "Glob") and not a.get("reads_warned"):

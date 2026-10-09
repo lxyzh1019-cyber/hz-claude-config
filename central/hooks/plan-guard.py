@@ -208,13 +208,8 @@ if _name and _ver is not None and _rounds_on and _entry:
         _base, _rev, _since, _hist = _entry.get("text"), 1, f"Plan v{_ev}", []
 _first_showing = _ver is not None and (not _entry or not _rounds_on)
 # v3.2.0: the size limit applies only to the first showing of a new plan (Plan v1 Rev 1): 7,200 (6,000 + 20%, owner)
-if _first_showing and (_ver or 1) == 1:
-    cap = int(cfg_.get("plan_first_max_chars", 7200))
-    if len(everyday) > cap:
-        problems.append(f"The everyday part of this first plan (everything above 'Technical details') is "
-                        f"{len(everyday):,} characters; keep it under {cap:,}. Move the detail (lists of screens, "
-                        "fields, cases, tests) under 'Technical details' at the end. Do not delete it.")
-        reasons.append("first plan too long")
+# v3.2.9: no size send-back any more (owner, 9 Oct: soft goals; a send-back costs more time and tokens than it saves).
+# The Quick read's word count is shown to the owner with the plan size below.
 # v3.2.0: the planner helper writes the first showing of a new plan, and big changes (the plan gate's strong
 # signals); the main session writes later Revs and versions
 _big = False
@@ -289,6 +284,14 @@ for rec in reversed(read_transcript(data.get("transcript_path"))):
 # v3.1.26: the plan's size is shown to me (no send-back): the everyday part keeps everything I must see
 pages = max(1, round(len(body) / 3000))
 size_note = f"Plan size: about {pages} page{'s' if pages != 1 else ''} above Technical details."
+try:   # v3.2.9: the Quick read against its goal (a note, never a send-back)
+    import formats as _F9
+    _qr = _F9.quick_read_words(text)
+    if _qr is not None:
+        size_note += (f" Quick read: {_qr} words, about {max(1, -(-_qr // 200))} min"
+                      + (f" (goal about {_F9.QUICK_READ_GOAL_WORDS})." if _qr > _F9.QUICK_READ_GOAL_WORDS else "."))
+except Exception:
+    pass
 _main = cfg_.get("main_session_model") or {}
 if model and _main.get("id") and _main["id"] not in model:   # v3.1.30: the planner helper plans; the session runs on Opus
     size_note += (f" This session runs on {model}; the work after approval needs only {_main.get('name')}: type "

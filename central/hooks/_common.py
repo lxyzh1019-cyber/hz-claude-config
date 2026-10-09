@@ -819,9 +819,14 @@ def handoff_text(cfg, comp, after_build=False, lessons=False):
 
 # v3.2.0: plan versus actual. When the build of a plan is done, the session writes what caused rework, so the next
 # plan is better (the summary shows each stage's time against its size).
-LESSONS_TEXT = ("\n4) The build of this plan is done. Add '## Lessons — {plan}' to {rec} with 3 lines. Name what "
-                "caused rework, which stages ran over their size and why, and which rule or plan habit to change. Put each "
-                "proposed change to hz-claude-config in the '❓ Decisions' list, with your recommendation.")
+LESSONS_TEXT = ("\n4) The build of this plan is done. Write the end-of-plan report now (v3.2.9): run "
+                "`python3 <rules folder>/hooks/plan_report.py \"{plan}\"` for the measured part, then write "
+                "`docs/reports/<plan name>.md` with a Quick read first, in the plan's format: Summary (3 lines: goal met "
+                "or not, done n of n in actual against planned time, one result), What changed from the plan (at most 5 "
+                "lines, or 'No deviation from the plan'), Decisions during the work, Suggestions (the slowest steps and "
+                "what to change). Be blunt: if a rule, check or step of hz-claude-config, or the plan strategy itself, "
+                "cost more than it saved, say so with the number and recommend removing it. Then the measured part, as "
+                "printed. Commit it with {rec}. In your reply show only the Quick read and the file name.")
 
 
 def restart_after_build(comp, branch=None):

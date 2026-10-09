@@ -43,17 +43,8 @@ if sub not in workers:
     deny_tool(f"Only opus-worker or sonnet-worker may do work (asked for '{sub or 'a general helper'}'). Hand this to "
               "sonnet-worker if it is Routine, to opus-worker if it is Complex.")
 
-# v3.1.30: a ready pull request must not sit on GitHub while a worker changes its branch — switch it back to draft
-# first (GitHub then turns off its merge button); the final report marks it ready again
-_branch = current_branch()
-_open_ready = pr_branch_state(data.get("session_id")).get(_branch) == "ready" if _branch else False
-if _open_ready and not re.search(r"^\s*\**PR:\**\s*#?\d+\s+(merged|closed|back to draft|not touched)\b",
-                                                  text, re.M | re.I):
-    deny_tool(f"The pull request on branch {_branch} is ready for review. I could merge it while this worker changes "
-              "its branch. First switch it back to draft: gh pr ready <number> --undo, or the GitHub tool's "
-              "update_pull_request with draft true. Tell me '#<number> back to draft — do not merge'. If it is merged "
-              "or closed, add 'PR: #<number> merged' (or closed) to the hand-over. If this worker does not change "
-              "that branch, add 'PR: #<number> not touched'.")
+# v3.2.9: no switching a pull request back to draft (owner, 9 Oct: the draft/ready flip-flop is what we avoid). A
+# pull request opens last, after green tests; while it is open, merge-guard keeps me from being asked to merge on red.
 
 # v3.2.0: up to 3 workers at once. A worker that starts while another runs gets its own worktree (a second working
 # folder on its own branch), so they never edit the same files; the plan's parallel group is named.

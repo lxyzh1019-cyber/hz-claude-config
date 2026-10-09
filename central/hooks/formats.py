@@ -2,6 +2,8 @@
 The session start, the checks (validation-line, completion-guard, plan-guard, stats) and the replay tests read these
 values from here. No other file may write its own copy of a format; a replay test fails when a text disagrees.
 All text here is for the owner or the session, in ASD-STE100-lite: short sentences, common words, one word for one thing."""
+import re
+
 
 # ---- closing block (end of every final answer) ----
 CLOSING_LABELS = ["📌 Result:", "👉 I need from you:", "➡️ Next:"]
@@ -66,30 +68,63 @@ REVIEWER_MOMENTS = ["before a big or risky plan", "when a worker reports \"Stuck
 SQUARES = {1: "🟦", 2: "🟩", 3: "🟧", 0: "🟪"}
 CHANGE_BLOCK_TITLE = "Changes in this version"          # made by the plan check, never by the model
 CHANGE_BLOCK_MAX_LINES = 40
+QUICK_READ_GOAL_WORDS = 250     # v3.2.9: a goal, not a limit; the plan check only notes it
 PLAN_RULES = ("Plan vN counts my approvals. Rev counts each showing inside a version and starts at Rev 1 for each "
               "version. My Approve closes the version; after it, a change is the next Plan vN; never edit the "
-              "approved file. Do not write Rev marks or a change list yourself. The plan check puts the coloured "
-              "square and label in front of each line changed since I last looked. It puts \"" + CHANGE_BLOCK_TITLE +
-              "\" under the Summary. If it asks you to show the plan again, show it again and change nothing. "
-              "Only the first showing of a new plan (Plan v1 Rev 1) has a size limit: 7,200 characters above "
-              "Technical details.")
+              "approved file. Do not write Rev marks yourself: the plan check puts the coloured square and label in "
+              "front of each line changed since I last looked. If it asks you to show the plan again, show it again "
+              "and change nothing. The plan starts with a Quick read I can scan in one place: Summary (3 lines), What "
+              "changed (at most 5 plain lines with the result, no history), Decisions (open ones only; each option says "
+              "what I get), Next steps (the next 3, then '… N more steps in the full plan below'). Write the word count "
+              "and the minutes (words / 200, at least 1) in its title line. Aim for about " + str(QUICK_READ_GOAL_WORDS) +
+              " words; it is a goal, not a limit. Everything else goes below the line, in the full plan. Ask every open "
+              "question before approval; after approval the plan is not reopened.")
 PLAN_TEMPLATE = """# Plan vN — <short plan name> — Awaiting approval
 
-| Summary |
-|---|
-| What changes for you: what you will see or what will be different, in everyday words |
-| What changed from the last version and why (first showing: "First version") |
-| What I need to do |
+**Quick read** · <words> words · about <minutes> min
 
-<the plan itself, in everyday words; a new plan at most 7,200 characters above Technical details>
+**Summary**
+- Goal: <one line, in everyday words>
+- Done: <x of y stages>. Next: <next step>
+- I need from you: <one action>
+
+**What changed since <last version>** (first showing: First version)
+- <the result of each change, one plain line, at most 5 lines>
+
+**Decisions:** None open. (or: 1. <question> **A** <what you get> · **B** <what you get> · Recommend: <A>)
+
+**Next steps**
+- <step>: <what you will see>
+- <step>: <what you will see>
+- <step>: <what you will see>
+- … <n> more steps in the full plan below
+
+---
+
+## The full plan
+<decisions on record, the work per pull request, your stops, Stages to finish with tags, Technical details>
 
 Stages to finish
 <n> stages: <x> build steps by Claude, then <y> checks (<what they are>)
 1. <stage> · Claude · Build · files: <main files> · after: — · level: Routine · size: S · group: A · proof: <tests, pictures or figures that show it is right>
-2. <stage> · Claude · Build · files: <other files> · after: — · level: Complex · size: M · group: A · proof: <…>
-3. <stage> · You · Check
+2. <stage> · You · Check
 
 Technical details: <file names, line numbers, commits, code, and any longer detail — only here>"""
+
+
+def quick_read_words(text):
+    """v3.2.9: words in the Quick read (from its title line to the '---' line or the full plan heading)."""
+    lines = (text or "").split("\n")
+    start = next((k for k, l in enumerate(lines) if "**Quick read**" in l), None)
+    if start is None:
+        return None
+    n = 0
+    for l in lines[start + 1:]:
+        if l.strip() == "---" or l.lstrip().startswith("## ") or l.strip().startswith("Stages to finish"):
+            break
+        l = re.sub(r"[\U0001F7E6\U0001F7E9\U0001F7E7\U0001F7EA]\s*\*\*Rev \d+\*\*\s*—\s*", "", l)   # the marks are not words to read
+        n += len(re.findall(r"[\w'’$%.-]+", re.sub(r"[*_`|#>]", " ", l)))
+    return n
 
 
 def session_formats():
