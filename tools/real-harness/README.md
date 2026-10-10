@@ -47,3 +47,7 @@ Cannot test: the real model's choices, the desktop app screens, phone notices, G
 
 - `tools/test_v3210_items.py <central dir>` (v3.2.10) — the 21 problems found with 3.2.9, each tested the same way on any rules
   version (hook scripts on scripted inputs, plus the rules, planner and reviewer text). 3.2.9: 0 of 39 checks; 3.2.10: 39 of 39.
+
+- `tools/test_v3211_items.py <central dir>` (v3.2.11) — the problems of the 9 and 10 Oct sessions (items 1, 2, 4–9).
+  3.2.10: 4 of 20 checks; 3.2.11: 20 of 20. `scenario_workflow.sh` now also has helper D, which tries a background test run:
+  3.2.11 refuses it once and the helper runs it in the foreground.

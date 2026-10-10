@@ -95,10 +95,12 @@ if _sec:
                         + (f" (+{len(_missing) - 8} more)" if len(_missing) > 8 else "") + ".")
 raw_lines = [l.strip() for l in text.splitlines() if l.strip()]
 lines = [l.lstrip("#>*-• ").strip().lower() for l in raw_lines]
-if not any(re.match(r"^\|\s*\**summary\**\s*\|", l, re.I) for l in raw_lines[:15]):
-    problems.append("Start the plan right under its title with the Summary table, so it shows in a frame. Use a "
-                    "header row '| Summary |' and a '|---|' row. Then add one row each: what changes for me, what "
-                    "changed and why, and what I need to do. Use everyday words, with no file names or code.")
+# v3.2.11: the Quick read (v3.2.9) is the plan's opening; the older Summary table also passes. Weekly-Planner 10 Oct:
+# this check still asked for the table while the shape it showed was the Quick read, so the plan went back 3 times.
+if not any(re.match(r"^\|\s*\**summary\**\s*\|", l, re.I) or re.match(r"^\**summary\**\s*$", l, re.I)
+           for l in raw_lines[:15]):
+    problems.append("Start the plan right under its title with the Quick read, as in the shape below: Quick read, "
+                    "Summary, What changed, Decisions, Next steps. Use everyday words, with no file names or code.")
 if not any(l.startswith("stages to finish") for l in lines):
     problems.append("Add 'Stages to finish' with every stage to the real goal, one per line. Examples: build, test, "
                     "merge, deploy, device check. Mark each stage 'Claude' or 'You'.")
@@ -116,8 +118,16 @@ jargon += [h for h in re.findall(r"\b[0-9a-f]{7,40}\b", body) if re.search(r"\d"
 jargon += re.findall(r"\b[A-Za-z_][\w.]*\(\)", body)
 everyday = text[:cut.start()] if cut else text
 if jargon:
+    # v3.2.11: quote each find with the words around it and its line, so it is found in one go. 10 Oct: "Found above
+    # it: line 149" was read as a line number of the file, and the plan went back three times.
+    _q = []
+    for _j in list(dict.fromkeys(jargon))[:4]:
+        _at = body.find(_j)
+        _ln = body.count("\n", 0, _at) + 1 if _at >= 0 else 0
+        _ctx = re.sub(r"\s+", " ", body[max(0, _at - 30):_at + len(_j) + 30]).strip() if _at >= 0 else _j
+        _q.append(f"'{_j}' in plan line {_ln}: …{_ctx}…")
     problems.append("Write the plan in everyday words; file names, line numbers, commit codes and code go under "
-                    "'Technical details' at the end. Found above it: " + ", ".join(dict.fromkeys(jargon))[:200] + ".")
+                    "'Technical details' at the end. Found above it: " + "; ".join(_q) + ".")
 # v3.1.24: every stage says Build (the work) or Check (confirming it), so the two are counted apart
 if any(l.startswith("stages to finish") for l in lines):
     start = [i for i, l in enumerate(lines) if l.startswith("stages to finish")][0]

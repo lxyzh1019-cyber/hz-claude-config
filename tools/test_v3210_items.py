@@ -79,7 +79,7 @@ res(5, "reviewer blocks an unconfirmed difference", "An unconfirmed difference b
 res(6, "rules: checkpoint reports in plans over 10 Build stages", "**Checkpoint reports.**" in RULES, "")
 res(6, "planner adds the checkpoint report stages", "Checkpoint report <n>" in PLANNER, "")
 res(11, "rules: the ⏳ line stands alone", "The ⏳ line always stands alone" in RULES, "")
-res(11, "report-time notice says: no ⏳ line in the full report", "without the ⏳ line" in co, "")
+res(11, "report-time notice says: no ⏳ line in the full report", "without the ⏳ line" in co or "Start it with one line: '✅ Completed" in co, "")
 res(17, "rules: one push after the review", "**One push after the review.**" in RULES, "")
 res(18, "rules: wide checks run on GitHub, not in the PC loop", "**Wide checks run on GitHub.**" in RULES, "")
 

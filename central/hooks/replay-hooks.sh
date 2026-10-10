@@ -968,7 +968,7 @@ recs[-1]["message"]["content"] = [{"type": "text", "text": "Done.\n\nConfidence:
 open(sys.argv[1], "w", encoding="utf-8").write("\n".join(json.dumps(r) for r in recs) + "\n")
 PY
 o=$(echo "{\"transcript_path\":\"$T/act.jsonl\",\"session_id\":\"act1\"}" | python3 $H/stats.py | sm)
-check "the summary shows tokens by activity (v3.1.26 groups)" "By type: planning 33% .* building 33% .* testing 18% .* git 7% .* talking 8%" "$o"
+check "the summary shows tokens by activity (v3.2.11: reading apart from planning)" "By type: planning 8% .* reading 25% .* building 33% .* testing 18% .* git 7% .* talking 8%" "$o"
 check "the activity line says it is an estimate" "By type: " "$o"
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"act2\"}" | python3 $H/stats.py | sm)
 check "helper totals count by helper type (workers code, Explore and Plan plan)" "By type: " "$o"
@@ -1058,7 +1058,7 @@ open(os.path.join(d, "sess26", "subagents", "agent-1.jsonl"), "w").write("\n".jo
 PY
 o=$(echo "{\"transcript_path\":\"$SD/sess26.jsonl\",\"session_id\":\"sess26\"}" | python3 $H/stats.py | sm)
 check "the token line shows main versus helpers" "main session 12%" "$o"
-check "shell reads count as planning, git and pull requests get their own group, text-only steps are talking" "By type: planning 31% .* building 60% .* testing 1% .* git 3% .* talking 3% .* other 1%" "$o"
+check "shell reads count as reading (v3.2.11), git and pull requests get their own group, text-only steps are talking" "By type: .*reading 31% .* building 60% .* testing 1% .* git 3% .* talking 3% .* other 1%" "$o"
 check "the activity line lists every group that has tokens" "git 3% .* talking 3%" "$o"
 check "screenshot scripts count as testing (visual checks)" "testing 1%" "$o"
 check "helper time is counted once, not twice (main 8 + helper 20 = 28 min; twice would be 48)" "By model: Opus .* 28 min" "$o"
@@ -1118,7 +1118,7 @@ o=$(pg "$T/p_mention.md"); check "a Rev mentioned inside a sentence needs no squ
 sed 's/^🟩 Rev 2 — The kids page/Rev 2 — The kids page/' "$T/p_mention.md" > "$T/p_nosq.md"
 o=$(pg "$T/p_nosq.md"); check "a Rev label at the start of a line — v3.2.0: no send-back, code places the marks" "clean" "$(echo "$o" | grep -c 'Missing on\|so its changes are marked\|put a .Changes in this version' | sed 's/^0$/clean/')"
 printf '# Plan v2 — X\n\nRev 2 — something changed in how the weekly money page shows the cash, the savings and the fines, with more words so the check reads it as a real plan and not a stray line of text, which is what this test needs to see.\n' > "$T/p_many.md"
-o=$(pg "$T/p_many.md"); check "a sent-back plan gets every problem at once (summary, stages)" "Summary table.*Stages to finish" "$o"
+o=$(pg "$T/p_many.md"); check "a sent-back plan gets every problem at once (summary, stages)" "with the Quick read.*Stages to finish" "$o"
 check "the send-back shows the shape that passes" "The shape that passes" "$o"
 o=$(echo '{"prompt":"merged, go on","session_id":"m26"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
 check "the hand-off never asks me to open a new session" "Do not ask me to open a new session" "$o"
@@ -1911,8 +1911,8 @@ PYP
 hov(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'par','tool_use_id':'tnew','transcript_path':sys.argv[1],'tool_input':{'subagent_type':'opus-worker','prompt':sys.argv[2]}}))" "$1" "$2" | python3 $H/worker-guard.py; }
 mkpar "$T/par1.jsonl" 1; mkpar "$T/par3.jsonl" 3
 o=$(hov "$T/par1.jsonl" $'Task: stage B\nLevel: Complex\nMap: not needed - test'); check "v3.2.0: a second worker without its own worktree is refused" "own worktree" "$o"
-o=$(hov "$T/par1.jsonl" $'Task: stage B\nLevel: Complex\nMap: not needed - test\nWorktree: ../app-b\nGroup: A'); check "  ...with Worktree and Group it may start" "clean" "$(echo "$o" | grep -c 'own worktree\|workers already run' | sed 's/^0$/clean/')"
-o=$(hov "$T/par3.jsonl" $'Task: stage D\nLevel: Complex\nMap: not needed - test\nWorktree: ../app-d\nGroup: A'); check "v3.2.0: a fourth worker at once is refused" "3 workers already run; the limit is 3" "$o"
+o=$(hov "$T/par1.jsonl" $'Task: stage B\nLevel: Complex\nMap: not needed - test\nWorktree: ../app-b\nFiles: b.js\nGroup: A'); check "  ...with Worktree, Files and Group it may start" "clean" "$(echo "$o" | grep -c 'own worktree\|workers already run' | sed 's/^0$/clean/')"
+o=$(hov "$T/par3.jsonl" $'Task: stage D\nLevel: Complex\nMap: not needed - test\nWorktree: ../app-d\nFiles: d.js\nGroup: A'); check "v3.2.11: a fourth worker at once may start (no fixed cap)" "clean" "$(echo "$o" | grep -c 'workers already run' | sed 's/^0$/clean/')"
 G="$T/gwt"; rm -rf "$G"; mkdir -p "$G/main"; ( cd "$G/main" && git init -q -b main . && git config user.email t@t && git config user.name t && echo a > a && git add a && git commit -qm a && git worktree add -q ../wt -b claude/b 2>/dev/null )
 o=$(echo '{"tool_name":"Bash","tool_input":{"command":"cd ../wt && git commit -m x"}}' | CLAUDE_PROJECT_DIR="$G/main" python3 $H/git-guard.py); check "v3.2.0: a commit inside a worktree on its own branch is allowed" "^$" "$o"
 o=$(echo '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}' | CLAUDE_PROJECT_DIR="$G/main" python3 $H/git-guard.py); check "  ...a commit in the main folder on main is still refused" "no commits on main" "$o"
@@ -2036,7 +2036,7 @@ o=$(re_edit '| Tags · Stage 1 of 2 — Build the header · proof: smoke header 
 check "v3.2.0: COMPLETE with evidence that does not show the planned proof is refused" "must show the proof the plan named" "$o"
 o=$(re_edit '| Tags · Stage 1 of 2 — Build the header · proof: smoke header check on phone and iPad | COMPLETE | npm run smoke header 12/12 on iPad and phone |')
 check "  ...evidence that shows it passes" "^$" "$o"
-o=$(HZ_STAGE_TAGS_OFF= hov "$T/par1.jsonl" $'Task: stage B\nLevel: Complex\nMap: not needed - test\nWorktree: ../app-b\nGroup: A')
+o=$(HZ_STAGE_TAGS_OFF= hov "$T/par1.jsonl" $'Task: stage B\nLevel: Complex\nMap: not needed - test\nWorktree: ../app-b\nFiles: b.js\nGroup: A')
 check "v3.2.0: a hand-over without the stage size is refused" "Add the line 'Size: S'" "$o"
 rm -f "$PROJ/.claude/state/stop-signals.json" "$PROJ/.claude/state/worker-steps.json"
 mkw w32s opus-worker 40 0 no; python3 - "$WB/sess/subagents/agent-w32s.jsonl" <<'PYS'

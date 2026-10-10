@@ -18,6 +18,8 @@ def plan(a):
     if a == 'B':
         return [("Write", {"file_path": "css/b.css", "content": "/* b */\n"}),
                 ("Bash", {"command": "git add css/b.css && git commit -q -m 'b from workflow'", "description": "commit"})] + [("Bash", t)] * 3
+    if a == 'D':   # v3.2.11: tries a background test run first, then runs it in the foreground
+        return [("Bash", {"command": "npm test", "description": "run tests", "run_in_background": True}), ("Bash", t)]
     return [("Read", {"file_path": ROLE})] + [("Bash", t)] * 3
 
 

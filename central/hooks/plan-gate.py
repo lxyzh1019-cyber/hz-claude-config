@@ -123,6 +123,34 @@ if prompt.lstrip().startswith("<task-notification>") and not os.environ.get("HZ_
         _left = _sr(_recs, data.get("transcript_path"))
         TIMING_TEXT = (_WT.format(what=", ".join(_left[:3]) + (f" and {len(_left) - 3} more" if len(_left) > 3 else ""),
                                   line=_F.WORKING_LINE) if _left else _RT)
+        # v3.2.11: the same work still runs as at the last notice: no new line. Weekly-Planner 10 Oct: 5 identical
+        # '⏳ Working on' lines, one per finished background run of the same three workers.
+        _wp = os.path.join(STATE_DIR, "wait-state.json")
+        if not _left and os.path.exists(_wp):
+            try:
+                _ws = json.load(open(_wp, encoding="utf-8"))
+                _ws.pop(str(data.get("session_id")), None)
+                json.dump(_ws, open(_wp, "w", encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        if _left:
+            try:
+                _ws = json.load(open(_wp, encoding="utf-8"))
+            except (OSError, ValueError):
+                _ws = {}
+            _key = "|".join(sorted(_left))
+            if _ws.get(str(data.get("session_id"))) == _key:
+                # real Claude Code 2.1.296: an empty reply is sent back ("Your previous response had no visible
+                # output"), so the shortest visible reply is one character
+                TIMING_TEXT = ("[report timing] Nothing changed: the same work still runs. End this turn with one "
+                               "character only: '…'. Not the ⏳ line again.")
+            else:
+                _ws[str(data.get("session_id"))] = _key
+                try:
+                    os.makedirs(STATE_DIR, exist_ok=True)
+                    json.dump(dict(list(_ws.items())[-20:]), open(_wp, "w", encoding="utf-8"))
+                except OSError:
+                    pass
     except Exception as _e:
         log("plan-gate", {"timing_error": str(_e)[:200]})
 from _common import is_notice_text as _is_notice

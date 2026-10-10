@@ -32,7 +32,8 @@ def script(role):
             "return await parallel([\n"
             f"  () => agent('{r}{tk}WFAGENT A: make the tests faster', {{label:'A'}}),\n"
             f"  () => agent('{r}Files: css/b.css\\nWFAGENT B: change b.css and commit it', {{label:'B'}}),\n"
-            f"  () => agent('{r}WFAGENT C: run the tests', {{label:'C'}}),\n])\n")
+            f"  () => agent('{r}WFAGENT C: run the tests', {{label:'C'}}),\n"
+            f"  () => agent('{r}WFAGENT D: run the tests once', {{label:'D'}}),\n])\n")
 json.dump([{"text":"Starting the workflow.","tools":[{"id":"toolu_wf0","name":"Workflow","input":{"script":script(False)}}]},
            {"text":"Adding the role files.","tools":[{"id":"toolu_wf1","name":"Workflow","input":{"script":script(True)}}]},
            {"text":"⏳ Working on: workflow · Build 0 of 1 done"},{"text":"Workflow finished."}],open(f'{B}/main.json','w'))
@@ -51,6 +52,7 @@ echo "helper A (test speed) requests: $(grep -c 'agent A step' req.log); at run 
 echo "helper A stopped at 20: $(grep -c 'agent A .*Test-run limit reached (20)' req.log)"
 echo "helper B wrote and committed: file=$(test -f proj/css/b.css && echo yes || echo no) commit=$(git -C proj log --oneline -1 | grep -c 'b from workflow') refused=$(grep 'agent B' req.log | grep -c -i 'refus\|denied\|not allowed\|git-guard')"
 echo "helper C read its role file and went on: $(grep -c 'agent C step 2 ' req.log)"
+echo "helper D background test refused, then run in the foreground: refused=$(grep -c 'test in the foreground' proj/.claude/state/worker-budget.jsonl 2>/dev/null) then=$(grep -c 'agent D step 2 ' req.log)"
 python3 - "$B" <<'PY'
 import json,sys,glob,os
 B=sys.argv[1]; d=glob.glob(B+'/home/.claude/projects/*/')[0]
