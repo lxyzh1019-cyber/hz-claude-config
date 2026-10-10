@@ -45,7 +45,27 @@ def record_file():
                  os.path.join(base, "subagents", name)):
         if cand and os.path.isfile(cand):
             return cand
+    # v3.2.10: a dynamic workflow's helpers keep their records one folder deeper (subagents/workflows/wf_<run>/);
+    # real Claude Code 2.1.296: without this, a workflow helper ran 22 test runs with no warning and no stop
+    import glob
+    for d in (os.path.join(base, sid, "subagents", "workflows"),
+              os.path.join(base, os.path.splitext(os.path.basename(tp))[0], "subagents", "workflows")):
+        hits = glob.glob(os.path.join(d, "*", name))
+        if hits:
+            return hits[0]
     return None
+
+
+def _tests_factor():
+    """v3.2.10: 2 for a test-speed helper ('Task kind: test speed' in its first message), else 1."""
+    try:
+        with open(rf, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if '"type":"user"' in line.replace(" ", ""):
+                    return 2 if _re.search(r"Task kind:\W*test[- ]speed", line, _re.I) else 1
+    except (OSError, NameError, TypeError):
+        pass
+    return 1
 
 
 def read_record(path):
@@ -138,7 +158,7 @@ elif tool not in NEVER_REFUSE:
         say = "stop"
     elif minutes >= lim[1]:
         say = "time stop"
-    elif tests >= int(cfg.get("worker_tests_stop", 20)):
+    elif tests >= int(cfg.get("worker_tests_stop", 20)) * _tests_factor():
         say = "tests stop"
     elif n >= warn and not a.get("warned"):
         say = "wrap up"
@@ -146,7 +166,7 @@ elif tool not in NEVER_REFUSE:
     elif minutes >= lim[0] and not a.get("time_warned"):
         say = "time warn"
         a["time_warned"] = True
-    elif tests >= int(cfg.get("worker_tests_warn", 10)) and not a.get("tests_warned"):
+    elif tests >= int(cfg.get("worker_tests_warn", 10)) * _tests_factor() and not a.get("tests_warned"):
         say = "tests warn"
         a["tests_warned"] = True
     # v3.2.9: off by default (worker_memory_max 0). Weekly-Planner Stage 9: one stage needed 3 Opus workers because of

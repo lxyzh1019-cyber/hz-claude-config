@@ -792,7 +792,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.7)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.10)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "The plan file goes into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -820,9 +820,10 @@ hg(){ printf '%s' "$1" > "$HB/t.jsonl"; rm -f "$HA/.claude/state/handoff-rounds.
 msg(){ python3 -c "import json,sys;print(json.dumps({'type':'assistant','message':{'role':'assistant','content':[{'type':'text','text':sys.argv[1]}]}}))" "$1"; }
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
 check "superseded rows are not counted" "Completion: 2 of 5 done" "$o"
-check "blocked items are listed with their state" "Stage 4 of 5 — looks (blocked)" "$o"
-check "queued items are listed with their state" "Stage 6 of 6 — PR (queued)" "$o"
-check "done plus listed adds up (3 listed for 3 not done)" "^3$" "$(echo "$o" | grep -c '^- ')"
+check "blocked items are listed with their state" "4 looks (blocked)" "$o"
+check "v3.2.10: the next stages follow in stage order on one line" "Next: 4 looks (blocked) · 6 PR" "$o"
+check "v3.2.10: the stage being worked on is the Now line" "^Now: 3 grown-ups" "$o"
+check "v3.2.10: no row-per-stage list any more" "^0$" "$(echo "$o" | grep -c '^- ')"
 o=$(hg "$(msg 'Plan v5 is ready.
 Confidence: High · Status: Proposed')"); check "a Plan vN only in the chat is sent back" "names Plan v5, but the newest plan file in plans/ is Plan v3" "$o"
 o=$(hg "$(msg 'Plan v3 is ready.
@@ -846,7 +847,7 @@ o=$(hg "$(msg "$L1")"); check "a restart line with the record committed but not 
 o=$(hg "$(msg "$L1")"); check "a pushed record, the ledger name, this branch and every row listed: passes" "^$" "$o"
 o=$(hg "$(msg 'Continue R14 / Plan v5 — Sunday on branch claude/sunday-v15; next: Stage 3.')")
 check "a restart line with another plan name is sent back with the exact line" "Plan v3 .u2014 Sunday v15 on branch claude/sunday-v15; next: Stage 3 of 5" "$o"
-check "a restart line without the not-complete rows is sent back" "List every row of the plan that is not complete" "$o"
+check "v3.2.10: a restart line without the Completion lines is sent back" "Show the Completion lines (Now, Next, Later)" "$o"
 o=$(hg "$(msg 'Continue R14 / Plan v3 — Sunday v15 on branch main; next: Stage 3.')"); check "a restart line with the wrong branch is sent back" "names branch main, but this session is on claude/sunday-v15" "$o"
 printf '{"session":"hs","n":3}' > "$HA/.claude/state/prompt-number.json"; rm -f "$HA/.claude/state/handoff-rounds.json"
 printf '%s' "$(msg 'Plan v9.')" > "$HB/t.jsonl"
@@ -856,11 +857,12 @@ rm -f "$HA/.claude/state/prompt-number.json"
 o=$(echo '{"prompt":"merged, go on","session_id":"m1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
 check "after a merge the session gets the hand-off with the exact restart line" "Plan v3 .u2014 Sunday v15 on branch claude/sunday-v15; next: Stage 3 of 5" "$o"
 check "the hand-off asks to commit and push the record" "commit and push WORKING_RECORD.md to claude/sunday-v15" "$o"
-check "the hand-off asks for every row that is not complete" "open, blocked, queued" "$o"
+check "v3.2.10: the hand-off asks for the short Completion lines" "Completion lines as given (Now, Next, Later)" "$o"
+check "v3.2.10: after a merge the restart line goes to the record, not the reply" "restart line only in the record, not in this reply" "$o"
 check "the hand-off points to the plan file instead of copying it" "its " "$o"
 mkdir -p "$HA/.claude/state"; printf '{"long1": 2000000}' > "$HA/.claude/state/session-tokens.json"
 o=$(echo '{"prompt":"next step please","session_id":"long1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
-check "a long session is asked to hand off at the next stage break" "This session is long (2.0 M tokens)" "$o"
+check "v3.2.10: the token-count hand-off is off (it fired in every long session)" "clean" "$(echo "$o" | grep -c 'This session is long' | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"next step please","session_id":"long1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
 check "the long-session hand-off is asked once per session" "clean" "$(echo "$o" | grep -c 'This session is long' | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"next step please","session_id":"short1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
@@ -894,7 +896,7 @@ R
 echo x > index.html && git add -A && git commit -qm base && git push -q origin HEAD:main && git checkout -qb claude/recovery && git push -q -u origin claude/recovery ) >/dev/null 2>&1
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
 check "Build and Check are counted apart: Build 100% when Claude's work is done" "Completion: Build 4 of 4 done (100%) · Check 0 of 3" "$o"
-check "the checks are listed under their own heading" "^Check:" "$o"
+check "v3.2.10: after Build, the first check is the Now line" "^Now: 5 Check: merge both (waiting on you)" "$o"
 check "Build done says the rest is checking and how to come back" "Build is done; the rest is checking" "$o"
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;c=completion_summary(load_config());print(restart_line(c))")
 check "after Build, the restart line points to the first check" "next: Stage 5 of 7 — merge both" "$o"
@@ -1019,7 +1021,7 @@ PY
 o=$(echo "{\"transcript_path\":\"$T/chat.jsonl\",\"session_id\":\"ch1\"}" | python3 $H/stats.py | sm)
 check "the summary counts in-between messages (2 here, the final answer not counted)" "in-between messages 2" "$o"
 # --- v3.1.25c: the completion send-back keeps the closing lines last; preferences carry Edmonton time
-check "the completion send-back puts its lines before the validation line, closing lines last" "the three closing lines stay last" "$(cat $H/completion-guard.py)"
+check "the completion send-back puts its lines before the validation line, closing lines last" "do not repeat the report" "$(cat $H/completion-guard.py)"
 check "claude.ai preferences ask for Edmonton time" "Edmonton time" "$(cat $H/../../docs/claude-ai-preferences.txt)"
 check "claude.ai preferences make changes from the approval a question" "is a question in the Decisions list" "$(cat $H/../../docs/claude-ai-preferences.txt)"
 check "claude.ai preferences keep the step-writing line" "ASD-STE100-lite" "$(cat $H/../../docs/claude-ai-preferences.txt)"
@@ -1122,7 +1124,7 @@ o=$(echo '{"prompt":"merged, go on","session_id":"m26"}' | CLAUDE_PROJECT_DIR="$
 check "the hand-off never asks me to open a new session" "Do not ask me to open a new session" "$o"
 printf '{"long26": 2000000}' > "$HA/.claude/state/session-tokens.json"
 o=$(echo '{"prompt":"next","session_id":"long26"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
-check "a long session keeps going and stays lean instead of stopping" "Keep going without stopping, but keep this main session lean" "$o"
+check "v3.2.10: a long session by token count gets no hand-off" "clean" "$(echo "$o" | grep -c 'This session is long' | sed 's/^0$/clean/')"
 # --- v3.1.26c: find all, fix all, check once
 o=$(echo '{}' | python3 $H/session-start.py); check "session start asks to find all problems, fix all, check once" "Find all, fix all, check once" "$o"
 check "workers are told the same and report their test runs" "how many full test runs you used" "$(cat $H/../agents/opus-worker-instructions.md)"
@@ -1237,8 +1239,8 @@ cat > WORKING_RECORD.md <<'R'
 R
 git add -A && git commit -qm b ) >/dev/null 2>&1
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$QP" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
-check "a stage waiting for plan approval is queued, not blocked" "Stage 2 of 4 — redesigns (queued)" "$o"
-check "a stage 'waiting on you' only for approval is queued, not a check" "Stage 3 of 4 — looks (queued)" "$o"
+check "a stage waiting for plan approval is queued, not blocked" "^Now: 2 redesigns$" "$o"
+check "a stage 'waiting on you' only for approval is queued, not a check" "Next: 3 looks · 4 Check: merge" "$o"
 check "  ...so Build counts them as work still to come" "Completion: Build 1 of 3 done (33%) · Check 0 of 1" "$o"
 cat > "$T/p27.md" <<'P'
 # Plan v9 — Sunday v15
@@ -1945,11 +1947,12 @@ check "  ...it stacks the pull requests (at most 3)" "at most 3 unmerged" "$o"
 o=$(echo '{"prompt":"晚安","session_id":"n2"}' | python3 $H/plan-gate.py); check "  ...also in Chinese" "\[night\]" "$o"
 python3 - "$T/mem.jsonl" <<'PYN'
 import json,sys
-R=[{"type":"user","message":{"role":"user","content":"x"}},{"type":"assistant","message":{"id":"a","role":"assistant","usage":{"input_tokens":5,"cache_read_input_tokens":230000},"content":[{"type":"text","text":"y"}]}}]
+R=[{"type":"user","message":{"role":"user","content":"x"}},{"type":"assistant","message":{"id":"a","role":"assistant","usage":{"input_tokens":5,"cache_read_input_tokens":530000},"content":[{"type":"text","text":"y"}]}}]
 open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYN
 rm -f "$PROJ/.claude/state/memory-notice.json"
-o=$(echo "{\"prompt\":\"<task-notification>done</task-notification>\",\"session_id\":\"m1\",\"transcript_path\":\"$T/mem.jsonl\"}" | python3 $H/plan-gate.py); check "v3.2.0: the main session gets a memory notice past 200 k, also on a worker's notice" "about 230 k tokens" "$o"
+o=$(echo "{\"prompt\":\"<task-notification>done</task-notification>\",\"session_id\":\"m1\",\"transcript_path\":\"$T/mem.jsonl\"}" | python3 $H/plan-gate.py); check "v3.2.10: the main session gets a memory notice above 50% of its context, also on a worker's notice" "The main context is 53% (530 k of 1000 k)" "$o"
+check "  ...and asks for /compact with the %" "then type /compact (context 53%)" "$o"
 o=$(echo "{\"prompt\":\"next\",\"session_id\":\"m1\",\"transcript_path\":\"$T/mem.jsonl\"}" | python3 $H/plan-gate.py); check "  ...only once per 100 k" "clean" "$(echo "$o" | grep -c '\[memory\]' | sed 's/^0$/clean/')"
 python3 - "$T/away.jsonl" <<'PYA'
 import json,sys
@@ -2798,5 +2801,158 @@ PYV9
 )
 [ "$END9" = 1 ] && { echo "PASS v3.2.9: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.9: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
 rm -rf "$V9"
+# --- v3.2.10: dynamic workflows, short Completion lines, report delivery, notes-only pushes, stacked bases
+V10=$(mktemp -d); export V10; END10=0
+while IFS= read -r l; do
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END10=1;; esac
+done < <(H="$H" V10="$V10" python3 - <<'PYV10'
+import json,os,subprocess,sys,datetime as dt,glob
+H=os.environ["H"]; V10=os.environ["V10"]; sys.path.insert(0,H)
+def res(name,ok,detail=""): print(("PASS " if ok else "FAIL ")+name+("" if ok else " -> "+str(detail)[:220]))
+def run(script,inp,proj,**env):
+    e=dict(os.environ,CLAUDE_PROJECT_DIR=proj); e.update(env)
+    for k,v in list(e.items()):
+        if v is None: e.pop(k)
+    return subprocess.run(["python3",os.path.join(H,script)],input=json.dumps(inp),capture_output=True,text=True,env=e,cwd=proj).stdout
+def sh(cmd,cwd): subprocess.run(cmd,shell=True,cwd=cwd,capture_output=True)
+now=lambda: dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+# 1) workflow helper records one folder deeper: test-run limits apply
+P=os.path.join(V10,"p"); os.makedirs(os.path.join(P,".claude","state"))
+base=os.path.join(V10,"projects","-p"); sid="s10"; os.makedirs(base)
+T=os.path.join(base,sid+".jsonl"); open(T,"w").write("")
+wf=os.path.join(base,sid,"subagents","workflows","wf_abc-123"); os.makedirs(wf)
+def record(aid,n,first="WFAGENT: run the tests"):
+    rows=[{"type":"user","timestamp":now(),"message":{"role":"user","content":first}}]
+    rows+=[{"type":"assistant","timestamp":now(),"message":{"id":"m%d"%i,"role":"assistant","content":[{"type":"tool_use","id":"t%d"%i,"name":"Bash","input":{"command":"npm test"}}]}} for i in range(n)]
+    open(os.path.join(wf,"agent-%s.jsonl"%aid),"w").write("\n".join(json.dumps(r) for r in rows)+"\n")
+inp=lambda aid:{"session_id":sid,"agent_id":aid,"transcript_path":T,"tool_name":"Bash","tool_input":{"command":"npm test"},"hook_event_name":"PreToolUse"}
+record("wa",10); o=run("worker-budget.py",inp("wa"),P)
+res("v3.2.10: a workflow helper with 10 test runs gets the 'find all, fix all' warning","You ran 10 test runs" in o,o)
+record("wb",20); o=run("worker-budget.py",inp("wb"),P)
+res("v3.2.10: a workflow helper with 20 test runs is stopped","Test-run limit reached (20)" in o,o)
+record("wc",3); o=run("worker-budget.py",inp("wc"),P)
+res("v3.2.10: a workflow helper with 3 test runs is not warned","test runs" not in o and "limit" not in o.lower(),o)
+st=json.load(open(os.path.join(P,".claude","state","worker-steps.json")))
+res("  ...its steps come from the record, not from counting hook calls",st["agents"]["wc"].get("source")=="record",st["agents"].get("wc"))
+record("wd",20,"Task kind: test speed\nWFAGENT: make the smoke job faster"); o=run("worker-budget.py",inp("wd"),P)
+res("v3.2.10: a test-speed helper is not stopped at 20 test runs","limit reached" not in o.lower() and "You ran 20" in o,o)
+record("we",40,"Task kind: test speed\nWFAGENT: make the smoke job faster"); o=run("worker-budget.py",inp("we"),P)
+res("  ...but it is stopped at 40","Test-run limit reached (40)" in o,o)
+# 2) wait line when a workflow starts
+o=run("report-timing.py",{"session_id":sid,"tool_name":"Workflow","tool_input":{"script":"x"}},P,HZ_REPORT_TIMING_OFF=None)
+res("v3.2.10: the main session gets the wait line when it starts a workflow","the workflow you are starting" in o and "Working on" in o,o)
+cfg=json.load(open(os.path.join(H,"config.json")))
+res("  ...and the switchboard sends Workflow to the wait-line and workflow checks",any(x.get("script")=="report-timing.py" and "Workflow" in x["tools"] for x in cfg["dispatch"]["PreToolUse"]) and any(x.get("script")=="worker-guard.py" and "Workflow" in x["tools"] for x in cfg["dispatch"]["PreToolUse"]),"")
+for f in ("../../stub/settings.json","../stub-files/settings.json"):
+    s=json.load(open(os.path.join(H,f)))
+    res("v3.2.10: the app hook list covers Workflow ("+f.split("/")[-2]+")",any("Workflow" in (g.get("matcher") or "") for g in s["hooks"]["PreToolUse"]),"")
+# 3) workflow helpers get their role file: refused once, then allowed (never loops)
+os.makedirs(os.path.join(P,".claude","state"),exist_ok=True)
+open(os.path.join(P,".claude","state","prompt-number.json"),"w").write(json.dumps({"session":sid,"n":4}))
+wi={"session_id":sid,"tool_name":"Workflow","tool_input":{"script":"await parallel([()=>agent('fix A')])"},"transcript_path":T}
+o=run("worker-guard.py",wi,P); res("v3.2.10: a workflow without role files is refused once, with the fix","Role file:" in o and '"deny"' in o,o)
+o=run("worker-guard.py",wi,P); res("  ...the second try passes (never loops)",'"deny"' not in o,o)
+wi2=dict(wi,tool_input={"script":"agent('Role file: x/agents/opus-worker-instructions.md\\nFiles: a.js\\nfix A')"})
+open(os.path.join(P,".claude","state","prompt-number.json"),"w").write(json.dumps({"session":sid,"n":5}))
+o=run("worker-guard.py",wi2,P); res("  ...a workflow whose helpers carry the role file passes",'"deny"' not in o,o)
+# 4) short Completion lines, Decisions count as waiting, stage total change
+A=os.path.join(V10,"app"); os.makedirs(A); sh("git init -q --bare ../o.git && git init -q . && git config user.email t@t && git config user.name t && git remote add origin ../o.git",A)
+rows=["| Pass · Stage %d of 6 — %s | %s | %s |"%(k,n,s,e) for k,n,s,e in [(1,"tests","COMPLETE","ok"),(2,"PR 1 build · proof: smoke green","COMPLETE","ok"),(3,"merge PR 1 (Check)","COMPLETE","merged"),(4,"PR 2 headers · proof: measured","PARTIAL",""),(5,"merge PR 2 (Check)","QUEUED — after Stage 4",""),(6,"PR 3 words","QUEUED — after Stage 5","")]]
+open(os.path.join(A,"WORKING_RECORD.md"),"w").write("# WORKING RECORD\n\n## Where we are\n- x\n\n## Deliverable ledger\n| Deliverable | State | Evidence |\n|---|---|---|\n"+"\n".join(rows)+"\n")
+open(os.path.join(A,"index.html"),"w").write("x")
+sh("git add -A && git commit -qm b && git push -q origin HEAD:main && git checkout -qb claude/x && git push -q -u origin claude/x",A)
+def disp():
+    return subprocess.run(["python3","-c","import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])"],capture_output=True,text=True,cwd=H,env=dict(os.environ,CLAUDE_PROJECT_DIR=A)).stdout
+o=disp()
+res("v3.2.10: the Completion lines are Now / Next / Later, in stage order","Stage 4 of 6\nNow: 4 PR 2 headers\nNext: 5 Check: merge PR 2 · 6 PR 3 words" in o,o)
+res("  ...without the proof text",'proof:' not in o,o)
+s=open(os.path.join(A,"WORKING_RECORD.md")).read().replace("Stage 6 of 6 — PR 3 words","Stage 6 of 8 — PR 3 words")+"| Pass · Stage 7 of 8 — PR 4 | QUEUED — after Stage 6 | |\n| Pass · Stage 8 of 8 — merge (Check) | QUEUED — after Stage 7 | |\n"
+open(os.path.join(A,"WORKING_RECORD.md"),"w").write(s)
+o=disp(); res("v3.2.10: a changed stage total shows one line, with a request for why","Plan: 6 → 8 stages — say why in one line." in o,o)
+TR=os.path.join(V10,"t.jsonl")
+def turn(text):
+    R=[{"type":"user","message":{"role":"user","content":"go"}},
+       {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":os.path.join(A,"app.js")}}]}},
+       {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}},
+       {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":text}]}}]
+    open(TR,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+rep="Header built.\nCompletion: Build 2 of 5 done (40%) · Check 1 of 3\nConfidence: Medium · Status: Checked\n\n❓ Decisions\n1. Phone week: A keep. Recommend: A.\n---\n> 📌 **Result:** Waiting on a decision.\n> 👉 **I need from you:** Answer 1.\n> ➡️ **Next:** I build it."
+turn(rep); o=run("completion-guard.py",{"transcript_path":TR,"session_id":"cg"},A)
+res("v3.2.10: a report that asks me decisions is not sent back for its open stage",'"block"' not in o,o)
+o=disp(); res("  ...and the stage-total line is shown once",'→' not in o,o)
+turn(rep.replace("❓ Decisions\n1. Phone week: A keep. Recommend: A.\n","")); o=run("completion-guard.py",{"transcript_path":TR,"session_id":"cg2"},A)
+res("v3.2.10: other send-backs ask for one line, not the whole report again","do not repeat the report" in o and "Now: 4" in o,o)
+# 5) report delivery
+open(os.path.join(A,".claude","state","prompt-number.json") if os.path.isdir(os.path.join(A,".claude","state")) else os.path.join(V10,"x"),"w").write(json.dumps({"session":"rd","n":2}))
+os.makedirs(os.path.join(A,"docs","reports"),exist_ok=True)
+open(os.path.join(A,"docs","reports","old.md"),"w").write("x")
+turn("Work goes on.\nConfidence: High · Status: Checked"); o=run("report-delivery.py",{"transcript_path":TR,"session_id":"rd"},A)
+res("v3.2.10: the first run only records the reports that exist",o.strip()=="",o)
+open(os.path.join(A,"docs","reports","pass-checkpoint-1.md"),"w").write("# report")
+o=run("report-delivery.py",{"transcript_path":TR,"session_id":"rd"},A)
+res("v3.2.10: a new report that I did not get is sent back once","pass-checkpoint-1.md is written but I have not got it" in o,o)
+o=run("report-delivery.py",{"transcript_path":TR,"session_id":"rd"},A)
+res("  ...never twice",o.strip()=="",o)
+open(os.path.join(A,"docs","reports","pass-checkpoint-2.md"),"w").write("# report")
+turn("**Quick read** — checkpoint 2: one-test run 33 s.\nFile: pass-checkpoint-2.md\nConfidence: High · Status: Checked"); o=run("report-delivery.py",{"transcript_path":TR,"session_id":"rd2"},A)
+res("v3.2.10: a reply with the file name and its Quick read passes",o.strip()=="",o)
+# 6) merge check: notes-only last push after green code
+def mturn(cmds,text):
+    R=[{"type":"user","message":{"role":"user","content":"go"}}]
+    for i,c in enumerate(cmds):
+        R.append({"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b%d"%i,"name":"Bash","input":{"command":c}}]}})
+        R.append({"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b%d"%i,"content":"all checks pass"}]}})
+    R.append({"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":text}]}})
+    open(TR,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+ask="Green.\n---\n> 📌 **Result:** Ready.\n> 👉 **I need from you:** Merge pull request 9.\n> ➡️ **Next:** PR 5."
+sh("echo y >> WORKING_RECORD.md && git commit -qam notes",A)
+mturn(["git push","gh pr checks 9 --watch","git push"],ask); o=run("merge-guard.py",{"transcript_path":TR,"session_id":"mg1"},A)
+res("v3.2.10: a notes-only last push after green code checks needs no new wait",o.strip()=="",o)
+sh("echo z >> index.html && git commit -qam code",A)
+mturn(["git push","gh pr checks 9 --watch","git push"],ask); o=run("merge-guard.py",{"transcript_path":TR,"session_id":"mg2"},A)
+res("  ...a code push still needs its checks read","read the checks of your last push" in o,o)
+# 7) stacked base warning; other git checks still run
+gi=lambda c:{"tool_name":"Bash","tool_input":{"command":c},"session_id":"g"}
+o=run("git-guard.py",gi("gh pr create --base claude/consistency-3 --title x --body y"),A)
+res("v3.2.10: a pull request on a work branch gets the move-to-main warning","gh pr edit <number> --base main" in o and '"deny"' not in o,o)
+o=run("git-guard.py",gi("gh pr create --base main --title x --body y"),A)
+res("  ...a pull request on main gets none","--base main" not in o,o)
+o=run("git-guard.py",gi("gh pr create --base claude/a --title x && git push origin main"),A)
+res("  ...and a push to main in the same command is still refused",'"deny"' in o and "pushing to main" in o,o)
+o=run("git-guard.py",gi('git add WORKING_RECORD.md docs/reports/x.md && git commit -m "record"'),A)
+res("v3.2.10: a notes-only commit gets the [skip ci] hint","[skip ci]" in o and '"deny"' not in o,o)
+o=run("git-guard.py",gi('git add WORKING_RECORD.md js/app.js && git commit -m "x"'),A)
+res("  ...a commit with code gets none","skip ci" not in o,o)
+o=run("git-guard.py",gi('git add WORKING_RECORD.md && git commit -m "record [skip ci]"'),A)
+res("  ...a notes commit that has it gets none","skip ci" not in o,o)
+# 8) report: workflow helpers, background GitHub waits, parallel candidates
+S=os.path.join(V10,"sess"); os.makedirs(S)
+t0=dt.datetime(2026,10,9,18,0,tzinfo=dt.timezone.utc)
+ts=lambda m: (t0+dt.timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+main=[{"type":"user","timestamp":ts(0),"message":{"role":"user","content":"Continue Pass plan on branch x"}},
+      {"type":"assistant","timestamp":ts(1),"message":{"id":"a1","role":"assistant","content":[{"type":"tool_use","id":"toolu_gh1","name":"Bash","input":{"command":"timeout 1800 gh run watch 5","run_in_background":True}}]}},
+      {"type":"user","timestamp":ts(1),"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_gh1","content":"started"}]}},
+      {"type":"user","timestamp":ts(11),"message":{"role":"user","content":"<task-notification><task-id>x</task-id><tool-use-id>toolu_gh1</tool-use-id></task-notification>"}},
+      {"type":"assistant","timestamp":ts(60),"message":{"id":"a2","role":"assistant","content":[{"type":"text","text":"done"}]}}]
+open(os.path.join(S,"m.jsonl"),"w").write("\n".join(json.dumps(r) for r in main)+"\n")
+def helper(path,stage,start,end,f):
+    os.makedirs(os.path.dirname(path),exist_ok=True)
+    R=[{"type":"user","timestamp":ts(start),"message":{"role":"user","content":"Task: Stage %d of 9 — x"%stage}},
+       {"type":"assistant","timestamp":ts(end),"message":{"id":"h%d"%stage,"role":"assistant","content":[{"type":"tool_use","id":"w%d"%stage,"name":"Edit","input":{"file_path":"D:/r/"+f}}]}}]
+    open(path,"w").write("\n".join(json.dumps(r) for r in R)+"\n")
+helper(os.path.join(S,"m","subagents","agent-a1.jsonl"),3,2,22,"css/app.css")
+helper(os.path.join(S,"m","subagents","workflows","wf_1","agent-b2.jsonl"),5,23,33,"tests/smoke.js")
+o=subprocess.run(["python3",os.path.join(H,"plan_report.py"),"Pass plan","--dir",S],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=A)).stdout
+res("v3.2.10: the report counts workflow helpers","| Helpers started | 2 |" in o,o[:400])
+res("  ...and background GitHub waits (10 min)","**waiting for GitHub**: 10 min" in o,o[:600])
+res("  ...and lists parallel candidates (stages 3 and 5, 10 min)","**Parallel candidates:** 10 min" in o and "Stages 3 and 5: 10 min" in o,o[:900])
+# 9) /compact and the early hand-off
+pg=open(os.path.join(H,"plan-gate.py")).read()
+res("v3.2.10: the token-count hand-off is off by default",cfg.get("fresh_session_hint_tokens")==0,cfg.get("fresh_session_hint_tokens"))
+print("END")
+PYV10
+)
+[ "$END10" = 1 ] && { echo "PASS v3.2.10: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.10: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
+rm -rf "$V10"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

@@ -47,7 +47,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Glob|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|WebFetch|ExitPlanMode|SubagentHandback|mcp__.*",
+        "matcher": "Read|Glob|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|Workflow|WebFetch|ExitPlanMode|SubagentHandback|mcp__.*",
         "hooks": [
           {
             "type": "command",

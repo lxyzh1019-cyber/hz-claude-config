@@ -21,6 +21,8 @@ tool = str(data.get("tool_name") or "")
 inp = data.get("tool_input") or {}
 if tool in ("Agent", "Task"):
     what = "the helper you are starting"
+elif tool == "Workflow":
+    what = "the workflow you are starting"   # v3.2.10: a workflow runs in the background like a helper
 elif tool == "Bash" and inp.get("run_in_background"):
     what = "the command you are starting"
 else:

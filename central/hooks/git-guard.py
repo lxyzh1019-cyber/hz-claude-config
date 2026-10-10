@@ -151,6 +151,7 @@ def is_draft_pr(segment):
 
 branch = None
 where = None
+_stack_warn = None
 for segment in re.split(r"&&|\|\||;|\n", cmd):
     # v3.2.8: a Git Bash path (/d/User/...) is the Windows folder D:/User/...; before, it was not found, the check fell
     # back to the main folder, saw main and refused the commit (Weekly-Planner 8 Oct 16:05: `cd "/d/.../Weekly-Planner-1"
@@ -166,6 +167,12 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
     if is_draft_pr(segment.strip()):
         deny_tool("git-guard: pull requests open ready for review, not as drafts. Run the same gh pr create without "
                   "--draft/-d. If a draft PR already exists, mark it ready with gh pr ready <number>.")
+    # v3.2.10: a pull request on a work branch, not main. Weekly-Planner 9 Oct: PR 4 sat on the PR 3 branch; GitHub
+    # closed it when that branch was deleted after the merge, and the work had to open again as #137. A warning, not a
+    # refusal: night work stacks on purpose.
+    _bm = re.search(r"\bgh\s+pr\s+(?:create|edit)\b.*?(?:--base|-B)[=\s]+(\S+)", segment)
+    if _bm and _bm.group(1).strip("'\"") not in PROTECTED:
+        _stack_warn = _bm.group(1).strip("'\"")
     if re.match(r"^(\w+=\S+\s+)*gh\s+pr\s+create\b", segment.strip()):
         pr_last_check(segment)
         mark("ready")
@@ -192,4 +199,27 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
             branch = branch if branch is not None else current_branch(where)
             if branch in PROTECTED:
                 deny_tool(f"git-guard: this would push {branch}. Switch to a working branch first.")
+# v3.2.10: a commit of notes only (record, docs, plans) starts a full GitHub run of 8-13 minutes, and the app's
+# 'cancel-in-progress' stops the code run already going. '[skip ci]' in the message starts no run.
+_notes_hint = None
+_adds = re.findall(r"\bgit\s+(?:-C\s+\S+\s+)?add\s+([^&|;\n]+)", cmd)
+if _adds and re.search(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b", cmd) and "[skip ci]" not in cmd:
+    try:
+        from _common import load_config as _lc
+        _notes = tuple(_lc().get("notes_paths") or ["WORKING_RECORD.md", "FEATURES.md", "docs/", "plans/"])
+    except Exception:
+        _notes = ("WORKING_RECORD.md", "FEATURES.md", "docs/", "plans/")
+    _files = [f.strip("'\"").replace("\\", "/") for a in _adds for f in shlex.split(a.replace("\\", "/"), posix=False)
+              if f not in ("-A", "-u", "--all", ".")]
+    if _files and len(_files) == sum(len(shlex.split(a.replace("\\", "/"), posix=False)) for a in _adds) and all(
+            any(f == n or f.startswith(n) or ("/" + n) in f or f.endswith("/" + n) for n in _notes) for f in _files):
+        _notes_hint = True
+if _stack_warn or _notes_hint:   # after every other check of this command (add_context ends the hook)
+    from _common import add_context as _ac, log as _lg
+    _lg("git-guard", {"stacked_base": _stack_warn, "notes_only_commit": bool(_notes_hint)})
+    _ac("PreToolUse", ((f"[git-guard] This pull request's base is {_stack_warn}, not main. Do this only when the plan or "
+        "night work stacks it. When the base pull request merges, change this base to main at once (gh pr edit "
+        "<number> --base main), before the base branch is deleted: GitHub closes a pull request whose base branch is "
+        "gone. ") if _stack_warn else "") + ("[git-guard] This commit has notes only. Put [skip ci] in its message, so "
+        "GitHub starts no run and does not cancel the run of your code." if _notes_hint else ""))
 sys.exit(0)

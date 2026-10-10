@@ -34,7 +34,9 @@ def memory_notice():
                 _ctx = sum(int(_u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens",
                                                          "cache_creation_input_tokens"))
                 break
-        _budget = int(cfg.get("main_memory_max", 200000))
+        # v3.2.10: /compact only above half the context window (owner, 9 Oct: "/compact is useful >50%")
+        _win = int(cfg.get("context_window_tokens", 1000000))
+        _budget = int(cfg.get("main_memory_max", 0)) or _win // 2
         if _ctx < _budget:
             return ""
         _lvl = (_ctx - _budget) // 100000
@@ -47,9 +49,10 @@ def memory_notice():
             return ""
         os.makedirs(STATE_DIR, exist_ok=True)
         json.dump({str(data.get("session_id") or ""): _lvl}, open(_sp, "w", encoding="utf-8"))
-        return (f"[memory] Each step now re-reads about {round(_ctx / 1000)} k tokens (budget {round(_budget / 1000)} k). "
-                "At the next stage break, put 'Type /compact' in the 'I need from you' line. Send long work to fresh "
-                "workers.")
+        _pct = round(100 * _ctx / _win)
+        return (f"[memory] The main context is {_pct}% ({round(_ctx / 1000)} k of {round(_win / 1000)} k). At the next "
+                f"stop for me, end the 'I need from you' line with: 'then type /compact (context {_pct}%)'. Below 50%, "
+                "never ask for /compact. Send long work to fresh workers.")
     except Exception:
         return ""
 
@@ -233,7 +236,10 @@ else:
         already = sid and sid in open(warned, encoding="utf-8").read().split()
     except OSError:
         already = False
-    if sid and used >= int(cfg.get("fresh_session_hint_tokens", 1500000)) and comp["total"] and not already:
+    # v3.2.10: off by default. It counted every token re-read (98 M in the 9 Oct session), so it fired early in every
+    # session and put a restart line in an ordinary report. The memory notice above covers a long main session.
+    if (sid and int(cfg.get("fresh_session_hint_tokens", 0)) and used >= int(cfg.get("fresh_session_hint_tokens", 0))
+            and comp["total"] and not already):
         handoff_why = (f"This session is long ({round(used / 1e6, 1)} M tokens): every step re-reads all of it. Keep "
                        "going without stopping, but keep this main session lean from now on: hand each remaining stage "
                        "to a fresh worker, read only its short report, and do not read screenshots or large files here. "
@@ -278,7 +284,8 @@ elif any(ph in low for ph in NIGHT):
     _lp("night-work", {"step": "good night"})
     msgs.append("[night] I am away now. Use my answers. Keep working on every approved stage that needs no other answer "
                 "from me. Stack pull requests as usual: branch from the earlier unmerged branch, with that branch as "
-                "the base, at most 3 unmerged. I merge them in order in the morning. "
+                "the base, at most 3 unmerged. I merge them in order in the morning; after each merge, move the next base to main "
+                "(gh pr edit <n> --base main). "
                 "Never merge. When a new question comes up, take your own recommendation if it changes no app behaviour and "
                 "no stored data and can be undone: build it on its branch and note 'built on my recommendation — "
                 "undone if you say no'. Show no plan at night; in the morning, show the next Rev with these decisions "

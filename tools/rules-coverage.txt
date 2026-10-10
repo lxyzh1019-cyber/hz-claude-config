@@ -118,14 +118,14 @@ Read the file, not the scrollback | R | Read the file, not the scrollback
 Evidence at the edit | R | COMPLETE without Evidence in the same edit is refused at the edit
 No inflated progress | R | Never change granularity to inflate progress
 Completion line counting | R | **Completion line and auto-fix (Hook).**
-Completion line format | R | `Build n of m done (p%) · Check c of d`
-Open item listing | R | `+N more open in the record`
+Completion line format | R | `Completion: Build n of m done (p%) · Check c of d — <plan> · Stage k of M`
+Open item listing: Now, Next 3, Later count (v3.2.10) | R | then `Now:`, `Next:` (3 stages) and `Later:` (a count)
 Wrong count is a notice | R | A wrong count alone is not sent back
 Auto-fix one round per prompt | R | one auto-fix round per prompt of mine
 Auto-fix limit text | R | "Auto-fix limit reached"
 Stop here / pause here | R | "stop here"/"pause here"
 One session carries the whole plan | R | **One session carries the whole plan; hand-off for safety (Hook).**
-Long session keeps main lean | R | From 1.5 M tokens
+Long session keeps main lean | R | Keep the main session lean: fresh workers take the stages
 Hand-off contents | R | never keys or passwords
 Restart line | R | `Continue <plan> on branch <branch>; next: <stage>.`
 Never ask for a new session | R | never ask me to open a new session
@@ -200,7 +200,7 @@ Size limit only on a new plan, 7,200 (v3.2.0) | R | A new plan (Plan v1 Rev 1) h
 Planner writes new plans and big changes only (v3.2.0) | R | The `planner` helper writes a new plan (Plan v1 Rev 1) and big changes
 Why and fix are two jobs (v3.2.0) | R | **"Why" and "fix" are two jobs.**
 Stop for a plan when a problem is big (v3.2.0; v3.2.9: no plan rewrites, a chat question) | R | **No plan rewrites during the work (Hook).**
-Compact at stage breaks (v3.2.0) | R | **Compact at stage breaks.**
+Compact only above half the context (v3.2.10) | R | **Compact above half the context (Hook).**
 Ask all open questions at once (v3.2.0) | R | **Ask all open questions at once.**
 Worker limits: steps, time, test runs (v3.2.0) | R | time 45 and 60 minutes (Routine) or 90 and 120 minutes (Complex); test runs 10 and 20
 Formats come from the format file (v3.2.0) | R | The exact formats (writing rules, answer order, closing block, validation line, Completion line) come in the FORMATS part
@@ -210,7 +210,7 @@ Up to 3 parallel workers, own worktree (v3.2.0) | R | **Parallel workers (Hook).
 Stage tags: files, after, level, tests, group (v3.2.0) | R | The planner tags each stage with files, after, level, tests and group.
 Night work with stacked pull requests (v3.2.0) | R | **Night work (Hook).**
 Phone notice when you need me (v3.2.0) | R | **Phone notice when you need me.**
-Memory budgets 250 k worker, 200 k main (v3.2.0) | R | memory 250 k per step
+Main session notice above 50% of context (v3.2.10) | R | The main session gets a notice above 50% of its context
 Batch reads after 5 single reads (v3.2.0) | R | After 5 single-read steps in a row
 Test map and saved tools (v3.2.0) | R | **Test map and saved tools.**
 Away time left out of the shares (v3.2.0) | R | away time (waits over 60 minutes, left out of the shares)
@@ -247,3 +247,15 @@ A pull request opens when it is ready (new v3.2.9) | R | wait for a green run on
 Lean plans: fewer pull requests, joined checks, retired designs to the archive (new v3.2.9) | R | put work that can be checked together into one pull request
 Time first, tokens second (new v3.2.9) | R | Time and tokens are the two main resources of the work
 What Claude builds stays fast: one-test run under 1 minute (new v3.2.9) | R | A one-test run takes under 1 minute
+Decisions in the reply count the stage as waiting (v3.2.10) | R | counts its open stage as waiting on me
+Stage total change line (v3.2.10) | R | `Plan: 39 → 42 stages`
+Restart line in the reply only at Build 100% (v3.2.10) | R | Show the restart line in the reply only when Build reaches 100%
+Stacked pull request: move the base to main after the merge (v3.2.10) | R | move the next one to main at once
+Notes-only push needs no new wait (v3.2.10) | R | needs no new wait when the code before it is green
+One push after the review (v3.2.10) | R | **One push after the review.**
+Test-speed helpers: limits 20 and 40 (v3.2.10) | R | `Task kind: test speed`
+Wide checks run on GitHub (v3.2.10) | R | **Wide checks run on GitHub.**
+Dynamic workflows: one wide step, role file, own files (v3.2.10) | R | **Dynamic workflows (Hook).**
+References are exact by default (v3.2.10) | R | **References are exact.**
+Checkpoint reports and delivery (v3.2.10) | R | **Checkpoint reports.**
+The ⏳ line stands alone (v3.2.10) | R | The ⏳ line always stands alone
