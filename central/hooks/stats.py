@@ -195,14 +195,17 @@ def activity_of(rec, content):
             INLINE_SCRIPT.search(p) for p in parts) and any(WRITES.search(c) for c in cmds):
         return "coding"
     if parts and all(INLINE_SCRIPT.search(p) or READ_CMD.match(p) for p in parts):
-        return "planning"            # an inline script that only reads and prints
+        return "reading"             # v3.2.11: an inline script that only reads and prints
     # v3.1.28: a step that only waits (sleep, a loop until a log line appears, following a log) is 'waiting'
     if names & WAIT_TOOLS or (parts and any(WAIT_CMD.match(p) for p in parts)
                               and all(WAIT_CMD.match(p) or READ_CMD.match(p) for p in parts)):
         return "waiting"
-    if names & PLAN_TOOLS or helpers & PLAN_HELPERS or rec.get("permissionMode") == "plan" or (
-            parts and all(READ_CMD.match(p) for p in parts)):
+    # v3.2.11: 'planning' is plan mode and the planner; reading files and searching is 'reading'. 10 Oct: 'planning 41%'
+    # was mostly workers reading code, which looked like Opus planning.
+    if names & {"ExitPlanMode", "EnterPlanMode", "TodoWrite"} or helpers & PLAN_HELPERS or rec.get("permissionMode") == "plan":
         return "planning"
+    if names & PLAN_TOOLS or (parts and all(READ_CMD.match(p) for p in parts)):
+        return "reading"
     if parts and all(GIT_CMD.match(p) or READ_CMD.match(p) for p in parts):
         return "git & pull requests"
     if not uses:
@@ -211,6 +214,7 @@ def activity_of(rec, content):
 
 
 reread = [0]   # tokens that re-read context already sent before (cache reads)
+act_reread = {}   # v3.2.11: the re-read part of each type (owner, 10 Oct: separate planning, reading and re-reading)
 CAP = 60 * 60
 
 
@@ -272,6 +276,7 @@ def add_file(recs, source="main", key=None):
                                     and is_test_run((b.get("input") or {}).get("command")))
                 activity[act] = activity.get(act, 0) + sum(int(u.get(k) or 0) for k in (
                     "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+                act_reread[act] = act_reread.get(act, 0) + int(u.get("cache_read_input_tokens") or 0)
             _act_now = activity_of(rec, blocks_by_id.get(msg.get("id"), content))
             if t is not None and last_t is not None:
                 seconds[lab] = seconds.get(lab, 0) + min(max(t - last_t, 0), CAP)
@@ -298,7 +303,9 @@ helper_found = bool(side)
 if side:
     add_file(side, "helpers")
 done_files = set()   # v3.1.26: the two search patterns can name the same folder; count each helper file once
-for pattern in (os.path.splitext(tp)[0] + "/subagents/*.jsonl", os.path.join(os.path.dirname(tp), sid, "subagents", "*.jsonl")):
+_file_tokens = {}   # v3.2.11: (kind, stage) -> tokens, read from each helper's own file
+for pattern in (os.path.splitext(tp)[0] + "/subagents/*.jsonl", os.path.join(os.path.dirname(tp), sid, "subagents", "*.jsonl"),
+                os.path.splitext(tp)[0] + "/subagents/workflows/*/agent-*.jsonl"):
     for f in sorted(glob.glob(pattern)):
         key = os.path.normcase(os.path.realpath(f))
         if key in done_files:
@@ -311,6 +318,18 @@ for pattern in (os.path.splitext(tp)[0] + "/subagents/*.jsonl", os.path.join(os.
             _kind = "helper"
         _recs = read_transcript(f)
         add_file(_recs, "helpers", _kind)
+        _seen_ids, _ftot, _fstage = set(), 0, ""
+        for _r in _recs:
+            _m = _r.get("message") or {}
+            if _r.get("type") == "user" and not _fstage:
+                _sm = re.search(r"(?mi)^\s*Task:\s*(.+?)\s*$", json.dumps(_m.get("content"), ensure_ascii=False)
+                                .replace("\\n", "\n"))
+                _fstage = _sm.group(1)[:60] if _sm else "-"
+            if _r.get("type") == "assistant" and _m.get("usage") and _m.get("id") not in _seen_ids:
+                _seen_ids.add(_m.get("id"))
+                _ftot += sum(int(_m["usage"].get(k) or 0) for k in ("input_tokens", "output_tokens",
+                                                                    "cache_creation_input_tokens", "cache_read_input_tokens"))
+        _file_tokens[(_kind, _fstage)] = _file_tokens.get((_kind, _fstage), 0) + _ftot
         try:
             _tuid = str(json.load(open(f[:-len(".jsonl")] + ".meta.json", encoding="utf-8")).get("toolUseId") or "")
         except (OSError, ValueError):
@@ -390,6 +409,13 @@ for rec in main:
                 "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")) or 0)
             by_helper[stype] = by_helper.get(stype, 0) + tot
             by_stage.setdefault(stage, {"main": 0, "helpers": 0})["helpers"] += tot
+# v3.2.11: background helpers return no totals with their start ("async launched"), so every helper showed 0 tokens
+# (Weekly-Planner 10 Oct: opus-worker 0 of 26.5 M). Their own files give the numbers.
+if not any(by_helper.values()) and _file_tokens:
+    for (_k, _st), _n in _file_tokens.items():
+        by_helper[_k] = by_helper.get(_k, 0) + _n
+        if _st and _st != "-":
+            by_stage.setdefault(_st, {"main": 0, "helpers": 0})["helpers"] += _n
 # v3.2.0: session time. Usage-limit stops ("You've hit your session limit") are counted apart; the shares are of the
 # time without them.
 def _ts(r):
@@ -569,7 +595,7 @@ lines.append("  By role: " + " · ".join(f"{k} {pct(v, total)} ({big(v)})" + (f"
                                        for k, v in sorted(role_tok.items(), key=lambda x: -x[1]) if v))
 act_total = sum(activity.values())
 if act_total:
-    ACT = ("planning", "coding", "testing", "waiting", "git & pull requests", "talking", "other")
+    ACT = ("planning", "reading", "coding", "testing", "waiting", "git & pull requests", "talking", "other")
     NAME = {"coding": "building", "git & pull requests": "git"}
     # v3.2.5: the type times share the session clock. Parallel helpers each add their own time (3 helpers = 3 times the
     # clock) and helper files carry waits; scale them to the worked time so that they add up (real Stage 3 session:
@@ -581,6 +607,10 @@ if act_total:
     lines.append("  By type: " + " · ".join(f"{NAME.get(k, k)} {pct(activity.get(k, 0), act_total)} ({big(activity.get(k, 0))}) "
                                            f"{mins(act_secs.get(k, 0) * _scale)}" for k in ACT
                                            if activity.get(k) or k == "testing"))
+    _rr = sum(act_reread.values())
+    if _rr:
+        lines.append(f"  Re-read (the memory each step carries again): {pct(_rr, act_total)} ({big(_rr)}) — "
+                     + " · ".join(f"{NAME.get(k, k)} {big(act_reread[k])}" for k in ACT if act_reread.get(k)))
 st_ = session_time(main)
 if st_:
     lines.append(f"Session time: {mins(st_['wall'])} actual · {mins(st_['active'])} worked"

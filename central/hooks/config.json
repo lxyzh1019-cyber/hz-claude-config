@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.10: dynamic workflows run under the rules (test-run limits reach workflow helpers; the ⏳ wait line when a workflow starts; each helper gets its role file; 'Task kind: test speed' doubles the test-run limits). Reports: Completion lines are Now / Next / Later; a reply with decisions is not sent back; a send-back asks for one line, not the whole report; the restart line goes to the record; /compact only above 50% context; a new report in docs/reports/ must reach you. GitHub: a notes-only push needs no new wait and gets the [skip ci] hint; a stacked pull request moves to main after its base merges. References are exact by default; checkpoint reports in long plans. Your apps get one setup pull request (hz-setup-update-3.2.10, one file). claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.11: Routine = the answer is known, even across many files (Sonnet); Complex names its reason. Parallel lanes by files, no fixed number; a notice above 5. Workers run tests in the foreground (the background only over 10 minutes), with a summary of the output. No repeated ⏳ line when nothing changed; the full report starts with ✅ Completed. Sonnet may make a change in .github/ that the hand-over names. Plan check: the Quick read passes; each find is quoted. Token report: planning, reading and re-reading apart; helper tokens counted. The Completion lines link the newest report. No setup pull request for your apps. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -104,8 +104,7 @@
     "security rules",
     "sync",
     "shared state",
-    "shared data",
-    "refactor"
+    "shared data"
   ],
   "sonnet_protected_paths": [
     "firestore.rules",
@@ -155,5 +154,8 @@
     "id": "claude-opus-5-5",
     "name": "Opus 5.5",
     "switch": "/model opus"
-  }
+  },
+  "max_parallel_workers": 0,
+  "parallel_notice_above": 5,
+  "worker_handback_tokens": 150000
 }

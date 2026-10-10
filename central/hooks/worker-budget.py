@@ -150,6 +150,22 @@ single_reads = (rec or {}).get("single_reads", 0)
 pngs = (rec or {}).get("pngs", 0)
 open_runs = (rec or {}).get("open", [])
 say = None
+# v3.2.11: a worker runs its tests in the foreground (up to 10 minutes). Weekly-Planner 10 Oct: workers put 7 test runs in
+# the background, tried to wait with sleep loops (refused 13 times), then stopped with the run still going; each finished
+# run woke the main session again (5 identical ⏳ lines). Refused once per worker, with the fix.
+_ti = data.get("tool_input") or {}
+if (tool == "Bash" and _ti.get("run_in_background") and _is_test(_ti.get("command"))
+        and not a.get("bg_test_refused")):
+    a["bg_test_refused"] = True
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(state, open(path, "w", encoding="utf-8"))
+    except OSError:
+        pass
+    log("worker-budget", {"agent": aid, "said": "test in the foreground"})
+    deny_tool("Run this test in the foreground and let it finish: no run_in_background, and set the Bash timeout to "
+              "600000 (10 minutes). Use the background only for a run you expect to take more than 10 minutes; then "
+              "read code meanwhile, with no sleep loop. Run it again now.")
 if tool in HANDBACK and open_runs and not a.get("handback_warned"):
     a["handback_warned"] = True
     say = "runs open"
@@ -369,4 +385,4 @@ if tool == "Bash" and rf and not a.get("slow_tests_advised") and _is_test(str((d
         log("worker-budget", {"agent": aid, "said": "slow tests", "runs": len(_sr)})
         _advise("PreToolUse", f"[worker budget] Your last {len(_sr)} test runs took about {round(sum(_sr) / len(_sr) / 60, 1)} "
                 "min each. Before the next one: put every debug print you need into one change, make one change, and run "
-                "once. Run a long test in the background (run_in_background with a timeout) and read the code meanwhile.")
+                "once. Run it in the foreground with a 10-minute timeout (timeout 600000) and let it finish.")

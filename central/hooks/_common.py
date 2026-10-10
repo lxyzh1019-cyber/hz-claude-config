@@ -800,6 +800,31 @@ def clear_plan_total_change(plan):
         pass
 
 
+def report_link(plan):
+    """v3.2.11: the newest report of this plan in docs/reports/, as a GitHub link on the current branch (owner, 10 Oct:
+    'add the report link in the completion information'). None when the plan has no report yet."""
+    import glob as _g
+    slug = re.sub(r"[^a-z0-9]+", "-", str(plan or "").lower()).strip("-")
+    if not slug:
+        return None
+    try:
+        wd = work_dir()
+        files = [f for f in _g.glob(os.path.join(wd, "docs", "reports", "*.md"))
+                 if os.path.basename(f).lower().startswith(slug[:40])]
+        if not files:
+            return None
+        f = max(files, key=os.path.getmtime)
+        name = os.path.basename(f)
+        url = run_text(["git", "remote", "get-url", "origin"], timeout=5, cwd=wd).stdout.strip()
+        br = run_text(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5, cwd=wd).stdout.strip() or "main"
+        m = re.search(r"github\.com[:/]+([^/]+)/([^/\s]+?)(?:\.git)?$", url)
+        if not m:
+            return f"docs/reports/{name}"
+        return f"[{name}](https://github.com/{m.group(1)}/{m.group(2)}/blob/{br}/docs/reports/{name})"
+    except Exception:
+        return None
+
+
 def plan_block(cfg, plan, items, line, rows):
     """v3.2.10: the Completion line, then Now / Next 3 / Later in stage order. Weekly-Planner 9 Oct: every queued
     stage was listed with its plan name and proof text, 25 lines per report, twice per decision."""
@@ -829,6 +854,9 @@ def plan_block(cfg, plan, items, line, rows):
     if not [i for i in rows if not i.get("check")]:
         out.append("Build is done; the rest is checking. If a check finds a problem, tell this session. It becomes a "
                    "new Build row.")
+    rl = report_link(plan)
+    if rl:
+        out.append("Report: " + rl)
     ch = plan_total_change(plan, total)
     if ch:
         out.append(f"Plan: {ch[0]} → {ch[1]} stages — say why in one line.")
@@ -1382,9 +1410,9 @@ def still_running(records, transcript_path=None):
 
 WAIT_TEXT = ("[report timing] Still running in the background: {what}. End this turn with one line only: '{line}'. "
              "Write no report and no closing lines yet. When the last one has finished, write one full report.")
-REPORT_TEXT = ("[report timing] Every helper and background command has finished. Write the one full report now, "
-               "without the ⏳ line, "
-               "with the closing lines. Do not repeat an earlier report: give only what is new.")
+REPORT_TEXT = ("[report timing] Every helper and background command has finished. Write the one full report now. "
+               "Start it with one line: '✅ Completed: <the names from your last ⏳ line> · Build <n> of <m> done'. "
+               "Then the report, with the closing lines. Do not repeat an earlier report: give only what is new.")
 
 
 # ---- Newer rules on GitHub (v3.2.2) --------------------------------------------------------------------------------

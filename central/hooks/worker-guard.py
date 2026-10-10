@@ -73,13 +73,20 @@ if sub not in workers:
 from _common import open_workers
 _open = open_workers(read_transcript(data.get("transcript_path")), workers, data.get("transcript_path"),
                      exclude_id=data.get("tool_use_id"))
-_max = int(cfg.get("max_parallel_workers", 3))
-if len(_open) >= _max:
+# v3.2.11: no fixed cap. The limits are files (each lane has its own files and worktree), the usage limit and the
+# owner's stops; above 5 lanes the session is told the usage cost once. 9 Oct: 3 lanes ran at once without trouble.
+_max = int(cfg.get("max_parallel_workers", 0))
+if _max and len(_open) >= _max:
     deny_tool(f"{len(_open)} workers already run; the limit is {_max}. Wait for one to report, then start this one.")
-if _open and not re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I):
-    deny_tool("Another worker is running. A parallel worker works in its own worktree, so they never edit the same "
-              "files. Make one with 'git worktree add ../<repo>-<group> -b claude/<group>' and add the line "
-              "'Worktree: <folder>' and 'Group: <parallel group from the plan>' to this hand-over.")
+_lane_notice = None
+if len(_open) + 1 > int(cfg.get("parallel_notice_above", 5)):
+    _lane_notice = (f"[lanes] {len(_open) + 1} workers now run at once. Each one uses the usage limit at the same time; "
+                    "start more only when the stages have their own files and end in one joined stop.")
+if _open and not (re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I)
+                  and re.search(r"^\s*\**Files:\**\s*\S", text, re.M | re.I)):
+    deny_tool("Another worker is running. A parallel worker works in its own worktree and names its files, so no two "
+              "workers edit the same file. Make one with 'git worktree add ../<repo>-<lane> -b claude/<lane>' and add "
+              "the lines 'Worktree: <folder>', 'Files: <the files it changes>' and 'Group: <lane from the plan>'.")
 if _open:
     try:
         from _common import live_proof
@@ -91,9 +98,10 @@ task = re.search(r"^\s*\**Task:\**\s*(\S.*)$", text, re.M | re.I)
 level = re.search(r"^\s*\**Level:\**\s*(Routine|Complex)\b", text, re.M | re.I)
 if not task or not level:
     deny_tool("Start the hand-over with two lines: 'Task: <the stage name from the plan>' and 'Level: Routine' or "
-              "'Level: Complex'. Routine = a small, clear change with a known answer (a fix with a repro, wording, "
-              "layout, docs, a test for an understood change). Complex = finding an unknown cause, design, anything "
-              "touching shared data, settings, sync or the data model. When unsure: Complex.")
+              "'Level: Complex'. Ask: must the worker find or decide something? No = Routine: the answer is known, even "
+              "across many files (a fix with a repro, wording, layout, an exact table of values, a rename, moving code "
+              "to one helper with a check, test data from a measured list). Yes = Complex: an unknown cause, a design "
+              "choice, shared data, settings, sync, security rules or the data model.")
 lvl = level.group(1).lower()
 # v3.2.0: the stage's size from the plan (S, M, L), so the actual time can be compared with the estimate
 if not re.search(r"^\s*\**Size:\**\s*[SML]\b", text, re.M | re.I) and not os.environ.get("HZ_STAGE_TAGS_OFF"):
@@ -163,3 +171,6 @@ if sub == "sonnet-worker":
     except OSError:
         pass
 log("worker-guard", {"worker": sub, "level": lvl, "escalated": bool(escalated)})
+if _lane_notice:
+    from _common import add_context as _ac
+    _ac("PreToolUse", _lane_notice)

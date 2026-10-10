@@ -27,6 +27,26 @@ if path and __import__("re").search(r"[\\/]temp[\\/]claude[\\/]", path.replace("
     sys.exit(0)
 if os.path.exists(os.path.join(STATE_DIR, "main-session-edit-authorized")):
     sys.exit(0)
+def _named_github_change(d):
+    """v3.2.11: True when this worker's hand-over has a line 'Named change: .github/<file> ...'. A redesign of the
+    GitHub jobs stays with opus-worker; a named one-line change (a trigger, a timeout, a path) may go to Sonnet."""
+    import glob, re as _r
+    tp, aid = str(d.get("transcript_path") or ""), str(d.get("agent_id") or "")
+    if not tp or not aid:
+        return False
+    base = tp[:-6] if tp.endswith(".jsonl") else tp
+    for f in glob.glob(os.path.join(base, "subagents", f"agent-{aid}.jsonl")) + glob.glob(
+            os.path.join(base, "subagents", "workflows", "*", f"agent-{aid}.jsonl")):
+        try:
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if '"user"' in line:
+                        return bool(_r.search(r"Named change:\s*\S*\.github/", line.replace("\\n", "\n"), _r.I))
+        except OSError:
+            pass
+    return False
+
+
 is_worker = any(v for v in subagent_markers.values() if v and str(v) != str(data.get("session_id")))
 marker_fields = cfg.get("subagent_marker_fields") or []
 if marker_fields:
@@ -36,6 +56,8 @@ if is_worker:
     if str(data.get("agent_type") or "") == "sonnet-worker":
         norm = path.replace("\\", "/").lower()
         hit = next((g for g in cfg.get("sonnet_protected_paths", []) if g.lower() in norm), None)
+        if hit == ".github/" and _named_github_change(data):
+            hit = None   # v3.2.11: a change in .github/ that the hand-over names exactly ('Named change: .github/...')
         if hit:
             deny_tool(f"sonnet-worker may not change '{path}' (shared data rules, settings, build or deploy set-up). Stop "
                       "and return: 'Escalate to opus-worker: this task needs " + hit + "'.")
