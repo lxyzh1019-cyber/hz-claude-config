@@ -692,7 +692,7 @@ lines.append(f"Counts: hand-overs {ho}" + (f" (escalated {escalated})" if escala
              + f" · refused: planner edits {st.get('refused:routing-guard', 0)}, hand-overs {st.get('refused:worker-guard', 0)},"
              f" plans {st.get('refused:plan-guard', 0)} · send-backs {st.get('sendbacks', 0)}{sb} · saved fixes {st.get('savedfixes', 0)}"
              f" · early reports {st.get('early_reports', 0)}")
-if total >= int(cfg.get("fresh_session_hint_tokens", 1500000)):
+if int(cfg.get("fresh_session_hint_tokens", 0)) and total >= int(cfg.get("fresh_session_hint_tokens", 0)):
     lines.append("This session is long: it carries on, hands stages to fresh workers, and keeps a restart line in the record in case you close it.")
 mark_shown()
 log("stats", {"shown": "summary", "tokens": total, "reread": reread[0], "activity": activity,

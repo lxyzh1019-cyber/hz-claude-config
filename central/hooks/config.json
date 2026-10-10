@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.9: plans start with a Quick read with its word count; the size is a goal, never a send-back. The plan is not reopened during the work; only amounts, stored data or security wait for your answer. Each plan ends with a report in docs/reports/: Top 3 time sinks, Top 3 token sinks, the slow one-test finding, the main context, compared with the last report. Time first, tokens second; what Claude builds stays fast (one-test run under 1 minute). A pull request opens only after green tests and never goes to draft. The worker memory limit is off; plans aim for fewer pull requests. No setup pull request for the apps. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.10: dynamic workflows run under the rules (test-run limits reach workflow helpers; the ⏳ wait line when a workflow starts; each helper gets its role file; 'Task kind: test speed' doubles the test-run limits). Reports: Completion lines are Now / Next / Later; a reply with decisions is not sent back; a send-back asks for one line, not the whole report; the restart line goes to the record; /compact only above 50% context; a new report in docs/reports/ must reach you. GitHub: a notes-only push needs no new wait and gets the [skip ci] hint; a stacked pull request moves to main after its base merges. References are exact by default; checkpoint reports in long plans. Your apps get one setup pull request (hz-setup-update-3.2.10, one file). claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -40,11 +40,11 @@
       },
       {
         "script": "worker-guard.py",
-        "tools": "Agent|Task"
+        "tools": "Agent|Task|Workflow"
       },
       {
         "script": "report-timing.py",
-        "tools": "Agent|Task|Bash"
+        "tools": "Agent|Task|Bash|Workflow"
       },
       {
         "script": "record-edit-guard.py",
@@ -68,6 +68,7 @@
       "validation-line.py",
       "qc-guard.py",
       "report-early.py",
+      "report-delivery.py",
       "merge-guard.py",
       "stats.py"
     ],
@@ -131,7 +132,14 @@
     "delete the (repo|repository|branch main|main branch)",
     "wipe"
   ],
-  "fresh_session_hint_tokens": 1500000,
+  "fresh_session_hint_tokens": 0,
+  "context_window_tokens": 1000000,
+  "notes_paths": [
+    "WORKING_RECORD.md",
+    "FEATURES.md",
+    "docs/",
+    "plans/"
+  ],
   "worker_step_warn": 80,
   "worker_step_stop": 100,
   "worker_never_refuse": [

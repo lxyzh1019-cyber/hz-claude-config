@@ -57,10 +57,10 @@ if rm:
     if dirty or unpushed:
         problems.append(f"Commit and push {rec} to {branch} before giving the restart line: a new session reads "
                         "the record from GitHub, not from this session.")
-    missing = [n for n in comp.get("not_done", []) if norm(n)[:40] not in norm(text)]
-    if missing:
-        problems.append("List every row of the plan that is not complete: open, blocked, queued or waiting. Done plus "
-                        "listed must add up to the total. Missing: " + "; ".join(missing[:6]) + ".")
+    # v3.2.10: the Completion lines are Now / Next / Later; every queued row is no longer listed (Weekly-Planner
+    # 9 Oct: a send-back for 6 queued rows made the list 25 lines long)
+    if comp.get("total") and not re.search(cfg["completion_line_pattern"], text):
+        problems.append("Show the Completion lines (Now, Next, Later) with the restart line.")
 
 if not problems:
     sys.exit(0)

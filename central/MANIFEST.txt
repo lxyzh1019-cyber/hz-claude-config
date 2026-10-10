@@ -1,4 +1,4 @@
-version: 3.2.9
+version: 3.2.10
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -25,6 +25,7 @@ hooks/ready-notice-guard.py
 hooks/record-edit-guard.py
 hooks/record-guard.py
 hooks/replay-hooks.sh
+hooks/report-delivery.py
 hooks/report-early.py
 hooks/report-timing.py
 hooks/routing-guard.py

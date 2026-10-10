@@ -19,6 +19,7 @@ if not m or not re.search(r"\bmerge\b", m.group(1), re.I):
 PUSH = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?push\b|\bgh\s+pr\s+create\b")
 CHECKS = re.compile(r"\bgh\s+pr\s+checks\b|\bgh\s+run\s+(?:watch|view)\b")
 last_push, checks, setup = None, [], False
+checked_before = False   # v3.2.10: checks were read after an earlier push of this turn
 results = {}
 for r in turn:
     c = (r.get("message") or {}).get("content")
@@ -28,6 +29,7 @@ for r in turn:
         if b.get("type") == "tool_use" and b.get("name") == "Bash":
             cmd = str((b.get("input") or {}).get("command") or "")
             if PUSH.search(cmd):
+                checked_before = checked_before or bool(checks)
                 last_push, checks = b.get("id"), []
                 setup = "hz-setup-update" in cmd
             elif CHECKS.search(cmd) and last_push:
@@ -36,6 +38,20 @@ for r in turn:
             results[b.get("tool_use_id")] = json.dumps(b.get("content"), ensure_ascii=False)
 if not last_push or setup or refused_by_safety_check(turn):
     sys.exit(0)
+# v3.2.10: a last push that changed only notes (the record, docs, plans) needs no new wait when the checks of the code
+# before it were read this turn. Weekly-Planner 9 Oct: 8 minutes waiting for a run on a record-only commit.
+if not checks and checked_before:
+    try:
+        from _common import run_text, load_config
+        _notes = tuple((load_config().get("notes_paths") or ["WORKING_RECORD.md", "FEATURES.md", "docs/", "plans/"]))
+        _files = [f for f in run_text(["git", "show", "--name-only", "--format=", "HEAD"], timeout=10).stdout.splitlines()
+                  if f.strip()]
+        if _files and all(f.startswith(_notes) or f in _notes for f in _files):
+            sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception:
+        pass
 failed = any(re.search(r"\bfail(?:ed|ing|ure)?\b|\bX\s", results.get(i, ""), re.I) for i in checks)
 says_red = re.search(r"\b(red|fail(?:ed|ing|s)?)\b", text, re.I)
 if checks and (not failed or says_red):

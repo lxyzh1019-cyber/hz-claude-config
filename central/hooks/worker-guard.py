@@ -17,6 +17,28 @@ from _common import (read_hook_input, load_config, deny_tool, prompt_number, STA
 data = read_hook_input()
 cfg = load_config()
 inp = data.get("tool_input") or {}
+# v3.2.10: a dynamic workflow starts its helpers with agent() inside a script, not with the Agent tool, so the checks
+# below never see them. Each helper must still get its role file (the rules for workers) in its prompt. One refusal
+# with the fix; a second try passes, so a session that cannot comply never loops.
+if str(data.get("tool_name") or "") == "Workflow":
+    script = str(inp.get("script") or "")
+    if "agent(" in script and not re.search(r"Role file:|Worker instructions:", script):
+        _flag = os.path.join(STATE_DIR, "workflow-role-refused.json")
+        try:
+            _seen = json.load(open(_flag, encoding="utf-8"))
+        except (OSError, ValueError):
+            _seen = []
+        key = f"{data.get('session_id')}:{prompt_number(data.get('session_id'))}"
+        if key not in _seen:
+            os.makedirs(STATE_DIR, exist_ok=True)
+            json.dump((_seen + [key])[-50:], open(_flag, "w", encoding="utf-8"))
+            log("worker-guard", {"workflow": "no role file"})
+            deny_tool("Every agent() prompt in this workflow starts with the worker rules: add the line 'Role file: "
+                      "<rules folder>/agents/opus-worker-instructions.md - read it first with the Read tool' (use "
+                      "reviewer-instructions.md for a helper that only checks). A helper that edits files names its "
+                      "files ('Files: ...'), and no two helpers edit the same file. A helper that makes tests faster "
+                      "also gets the line 'Task kind: test speed'. Then start the workflow again.")
+    raise SystemExit(0)
 sub = str(inp.get("subagent_type") or "").strip()
 text = "\n".join(str(v) for k, v in inp.items() if isinstance(v, str) and k in ("prompt", "description", "task"))
 

@@ -38,3 +38,12 @@ Result on 2026-10-08 with Claude Code 2.1.293: 3.2.1 — closing lines 2, summar
 the model follows. Also seen: PreToolUse added text reaches the model; SessionStart runs again on `--resume`.
 
 Cannot test: the real model's choices, the desktop app screens, phone notices, GitHub.
+
+- `scenario_workflow.sh <central dir> <label> <app repo folder>` (v3.2.10) — the real Claude Code runs a dynamic workflow on a
+  work branch: first without role files, then with them. Helper A makes tests faster (`Task kind: test speed`, 22 test runs),
+  B writes and commits a file, C reads its role file (`stand_in_workflow.py`). Claude Code 2.1.296 on a copy of Weekly-Planner
+  main: 3.2.9 — no refusal, no wait line, 23 unchecked test runs, report 0 helpers; 3.2.10 — refused once with the fix, wait
+  line, warned at 20 and not stopped, commit passed, report 3 helpers.
+
+- `tools/test_v3210_items.py <central dir>` (v3.2.10) — the 21 problems found with 3.2.9, each tested the same way on any rules
+  version (hook scripts on scripted inputs, plus the rules, planner and reviewer text). 3.2.9: 0 of 39 checks; 3.2.10: 39 of 39.

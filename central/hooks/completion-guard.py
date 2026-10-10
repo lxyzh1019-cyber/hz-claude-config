@@ -77,6 +77,18 @@ cap = int(cfg["auto_fix_max_rounds"])
 if used >= cap:
     sys.exit(0)  # this prompt's send-back is spent: never loop, whatever the reason
 open_items = comp["open"] if comp["scoped"] else []
+# v3.2.10: a reply that asks me decisions is waiting on me. Weekly-Planner 9 Oct: the stage was marked partial, this
+# check sent the report back twice, and the session wrote the whole report again (decisions and closing lines twice).
+import formats as _F
+if open_items and _F.DECISIONS_HEADER in (text or ""):
+    log("completion-guard", {"waiting_by_decisions": len(open_items)})
+    open_items = []
+try:
+    from _common import clear_plan_total_change as _cptc
+    if comp.get("plan"):
+        _cptc(comp["plan"])   # v3.2.10: the 'Plan: 39 → 42 stages' line was in this report; show it once
+except ImportError:
+    pass
 wrong_count = stated and (int(stated.group(1)) != comp["complete"] or int(stated.group(2)) != comp["total"])
 
 reasons = []
@@ -118,6 +130,7 @@ if reasons:
     bump()
     log("completion-guard", {"send_back": used + 1, "open": open_items})
     work = bool(open_items) or any(r.startswith("Before done: send the reviewer") for r in reasons)
-    block(" ".join(reasons) + "\nPut these lines just before the validation line (the three closing lines stay last):\n"
+    block(" ".join(reasons) + "\nWhen you answer again, do not repeat the report: I already see it. Write one line on "
+          "what changed, then these lines, the validation line, --- and the closing block:\n"
           + comp["display"], kind="work" if work else None)
 sys.exit(0)

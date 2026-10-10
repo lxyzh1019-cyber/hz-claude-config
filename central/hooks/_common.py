@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.2.7",
+        "version": "3.2.10",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -94,7 +94,8 @@ DEFAULT_CONFIG = {
         "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"],
                            "PreToolUse ": ["ExitPlanMode", "plan check before approval"],
                            "PreToolUse  ": ["Read|Glob|Grep", "worker step count on reads (v3.1.26)"],
-                           "PreToolUse   ": ["SubagentHandback", "worker hand-back check (v3.2.0)"]},
+                           "PreToolUse   ": ["SubagentHandback", "worker hand-back check (v3.2.0)"],
+                           "PreToolUse    ": ["Workflow", "dynamic workflow checks (v3.2.10)"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission",
                   "Read(~/.cache/hz-rules/**)": "reading the central rules without a prompt (v3.1.26)"},
         "pointer_text": {"hooks inactive": "multi-repo fallback in CLAUDE.md"},
@@ -722,7 +723,10 @@ def completion_summary(cfg):
     if plan:
         line = f"{line} — {plan}"
     display = completion_display(cfg, line, open_, waiting, [i["name"] for i in blocked], queued)
-    if checks:
+    _stage_rows = [i for i in build + checks if not i["complete"] and PLAN_ROW.match(i["name"])] if plan else []
+    if _stage_rows:   # v3.2.10: one short block in stage order (Now / Next 3 / Later), not every row
+        display = plan_block(cfg, plan, items, line, _stage_rows)
+    elif checks:
         states = {i["name"]: i for i in checks}
         display += "\nCheck:\n" + "\n".join(
             f"- {n}" + (" (waiting on you)" if states[n].get("waiting") else " (queued)" if states[n].get("queued")
@@ -736,6 +740,99 @@ def completion_summary(cfg):
             "build_done": total > 0 and len(done) == total,
             "untagged_checks": [i["name"] for i in checks if not CHECK_TAG.search(i["name"])],
             "not_done": [i["name"] for i in build + checks if not i["complete"]]}
+
+
+def _stage_k(name):
+    m = PLAN_ROW.match(name or "")
+    if not m:
+        return (10 ** 6, "")
+    k = m.group("k")
+    return (int(re.match(r"\d+", k).group(0)), k)
+
+
+def _short_stage(name, width=60):
+    """'Plan · Stage 20 of 42 — PR 4 fix round: rebuild … · proof: …' -> 'PR 4 fix round'."""
+    m = PLAN_ROW.match(name or "")
+    rest = name[m.end():] if m else (name or "")
+    rest = re.sub(r"^\s*[—–-]\s*", "", rest)
+    rest = re.split(r"\s+·\s+proof:|\s+\(Check\)", rest)[0].strip()
+    rest = re.split(r":\s", rest)[0].strip() if len(rest) > width else rest
+    return rest if len(rest) <= width else rest[:width - 1].rstrip() + "…"
+
+
+def plan_stage_total(plan, items):
+    """Highest 'of M' among the plan's rows."""
+    ms = [int(m.group("m")) for m in (PLAN_ROW.match(i["name"]) for i in items) if m]
+    return max(ms) if ms else 0
+
+
+def plan_total_change(plan, total):
+    """v3.2.10: (before, after) when the plan's stage total changed since the last report, else None. The store
+    keeps the change until a Stop check clears it (clear_plan_total_change), so it is shown in one report."""
+    path = os.path.join(STATE_DIR, "plan-total.json")
+    try:
+        st = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        st = {}
+    rec = st.get(plan) or {}
+    if not total:
+        return None
+    if rec.get("m") and rec["m"] != total:
+        rec = {"m": total, "prev": rec["m"]}
+    elif not rec.get("m"):
+        rec = {"m": total}
+    st[plan] = rec
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(st, open(path, "w", encoding="utf-8"))
+    except OSError:
+        pass
+    return (rec["prev"], total) if rec.get("prev") else None
+
+
+def clear_plan_total_change(plan):
+    path = os.path.join(STATE_DIR, "plan-total.json")
+    try:
+        st = json.load(open(path, encoding="utf-8"))
+        if (st.get(plan) or {}).pop("prev", None) is not None:
+            json.dump(st, open(path, "w", encoding="utf-8"))
+    except (OSError, ValueError, AttributeError):
+        pass
+
+
+def plan_block(cfg, plan, items, line, rows):
+    """v3.2.10: the Completion line, then Now / Next 3 / Later in stage order. Weekly-Planner 9 Oct: every queued
+    stage was listed with its plan name and proof text, 25 lines per report, twice per decision."""
+    total = plan_stage_total(plan, items)
+    rows = sorted(rows, key=lambda i: _stage_k(i["name"]))
+    def state(i):
+        if i.get("waiting"):
+            return " (waiting on you)"
+        if i.get("blocked"):
+            return " (blocked)"
+        return ""
+    def label(i):
+        k = _stage_k(i["name"])[1]
+        return f"{k} " + ("Check: " if i.get("check") else "") + _short_stage(i["name"])
+    head = f"{line} · Stage {_stage_k(rows[0]['name'])[1]} of {total}"
+    out = [head, "Now: " + label(rows[0]) + state(rows[0])]
+    nxt = rows[1:1 + int(cfg.get("completion_next_shown", 3))]
+    if nxt:
+        out.append("Next: " + " · ".join(label(i) + state(i) for i in nxt))
+    later = rows[1 + len(nxt):]
+    blocked_later = [i for i in later if i.get("blocked") or i.get("waiting")]
+    if later:
+        nb = len([i for i in later if not i.get("check")])
+        out.append(f"Later: {len(later)} stages ({nb} build, {len(later) - nb} check)")
+    for i in blocked_later:
+        out.append("Also: " + label(i) + state(i))
+    if not [i for i in rows if not i.get("check")]:
+        out.append("Build is done; the rest is checking. If a check finds a problem, tell this session. It becomes a "
+                   "new Build row.")
+    ch = plan_total_change(plan, total)
+    if ch:
+        out.append(f"Plan: {ch[0]} → {ch[1]} stages — say why in one line.")
+    return "\n".join(out)
 
 
 def completion_display(cfg, line, open_names, waiting=(), blocked=(), queued=()):
@@ -808,10 +905,11 @@ def handoff_text(cfg, comp, after_build=False, lessons=False):
             f"1) Update '## Where we are' in {rec}. Write the plan name as in the ledger, the newest Plan vN and its "
             "plan file, the next stage, and the restart line. Point to plan files, commits and pull requests; do not "
             f"copy them. Write no keys or passwords. Then commit and push {rec} to {branch}.\n"
-            "2) Show the Completion lines. List every row of the plan that is not complete: open, blocked, queued, "
-            f"waiting, Build and Check. Done plus listed must add up ({comp.get('line', '')}).\n"
-            "3) Above the --- line, give this restart line in a code block, exactly: "
-            f"`{restart_line(comp, branch) if not after_build else restart_after_build(comp, branch)}`\n"
+            "2) Show the Completion lines as given (Now, Next, Later).\n"
+            + ("3) Above the --- line, give this restart line in a code block, exactly: "
+               f"`{restart_after_build(comp, branch)}`\n" if after_build else
+               "3) Write the restart line only in the record, not in this reply (v3.2.10): "
+               f"`{restart_line(comp, branch)}`\n") +
             "In the 'I need from you' line, ask only for my next action (a merge, a check), or nothing. Do not ask me "
             "to open a new session. This session carries on. The restart line is only for later, if the session "
             "closes." + (LESSONS_TEXT.format(rec=rec, plan=comp.get("plan") or "the plan") if lessons else ""))
@@ -1285,6 +1383,7 @@ def still_running(records, transcript_path=None):
 WAIT_TEXT = ("[report timing] Still running in the background: {what}. End this turn with one line only: '{line}'. "
              "Write no report and no closing lines yet. When the last one has finished, write one full report.")
 REPORT_TEXT = ("[report timing] Every helper and background command has finished. Write the one full report now, "
+               "without the ⏳ line, "
                "with the closing lines. Do not repeat an earlier report: give only what is new.")
 
 

@@ -9,6 +9,10 @@ You write the plan. The main session shows it to the owner, runs the workers and
 - Write like a senior editor: key facts only. Start with the Quick read in the given shape. Summary: 3 lines (goal, done and next, what I need). What changed: at most 5 plain lines with the result, no history. Decisions: open ones only; each option A/B/C says what I get; one recommendation. Next steps: the next 3, then "… N more steps in the full plan below". Write its word count and minutes (words / 200). About 250 words is a goal. Everything else goes below the line, in the full plan.
 - Read the newest report in `docs/reports/`, if there is one. For each top time or token sink with a fix in this app (for example a slow one-test run), offer the fix in Decisions: A, add it first (saves about X min); B, later.
 - Fewer pull requests and fewer stops for me. Each pull request costs a full GitHub run, a review and my merge. Put work that can be checked together into one pull request. Join my checks: a merge and an iPad read are one stop.
+- References (v3.2.10): mark each design, picture, prototype or document the owner gave `exact` or `for reference only`. Exact is the default. For an exact reference, the first Build stage writes a table of its values, and the test checks each value before the screens are built.
+- Checkpoint reports (v3.2.10): a plan with more than 10 Build stages gets a Build stage `Checkpoint report <n>` at each stop with an iPad read.
+- A stage that makes tests faster gets `Task kind: test speed`; parallel helpers or a dynamic workflow may do it, each helper on its own files.
+- Check how the app's GitHub tests start before planning. Stack pull requests only when a stage needs an unmerged one; when the base merges, the next base moves to main.
 - Keep the plan file lean. When a new version replaces a design, move the old design to `docs/archive/`. Technical details keep only what the next stages need.
 - Ask every open question before approval. After approval the plan is not reopened; findings are recorded and reported.
 - A new plan (Plan v1): "What changed" says "First version".
