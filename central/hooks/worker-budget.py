@@ -296,6 +296,35 @@ if _tmsg and tool not in NEVER_REFUSE:
 # the Weekly-Planner Stage 7 helpers) and gets nothing done; the same words reach the model with the tool's result
 # (real Claude Code 2.1.293: PreToolUse added text reaches the model). Refusals stay for real stops and for test runs.
 from _common import add_context as _advise
+# v3.2.15: after a failed test run, re-run only the failed checks first (SMOKE_ONLY / test:failed); the full suite once,
+# at the end. 11 Oct: 116 worker test runs, 90 min, many of them full runs after a small fix. A notice, once per worker.
+_ti2 = data.get("tool_input") or {}
+_cmd2 = str(_ti2.get("command") or "")
+if (tool == "Bash" and rf and _is_test(_cmd2) and not _re.search(r"SMOKE_ONLY=|test:failed|--grep\b|--last-failed", _cmd2)
+        and not a.get("failed_first_told") and not os.environ.get("HZ_FAILED_FIRST_OFF")):
+    try:
+        _last = None
+        _pend2 = {}
+        for _l in open(rf, encoding="utf-8", errors="replace"):
+            _r = json.loads(_l)
+            for _b in ((_r.get("message") or {}).get("content") or []) if isinstance((_r.get("message") or {}).get("content"), list) else []:
+                if isinstance(_b, dict) and _b.get("type") == "tool_use" and _b.get("name") == "Bash" and _is_test((_b.get("input") or {}).get("command")):
+                    _pend2[_b.get("id")] = True
+                elif isinstance(_b, dict) and _b.get("type") == "tool_result" and _b.get("tool_use_id") in _pend2:
+                    _last = json.dumps(_b.get("content"), ensure_ascii=False)
+        if _last and _re.search(r"Exit code [1-9]|\b[1-9]\d* failed\b|\bFAIL(ED)?\b|✗|✘", _last):
+            a["failed_first_told"] = True
+            try:
+                json.dump(state, open(path, "w", encoding="utf-8"))
+            except OSError:
+                pass
+            log("worker-budget", {"agent": aid, "said": "failed checks first"})
+            _advise("PreToolUse", "[failed first] The last test run failed. Re-run only the failed checks first "
+                    "(npm run test:failed, or SMOKE_ONLY=<the failed checks>); run the full suite once, at the end.")
+    except SystemExit:
+        raise
+    except Exception:
+        pass
 if say == "wrap up":
     log("worker-budget", {"agent": aid, "steps": n, "source": a["source"], "said": say})
     _advise("PreToolUse", f"[worker budget] Step {n} of this worker run. Finish the fix you are on in about "

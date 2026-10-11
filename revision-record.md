@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.2.14
-Built on: 3.2.12
+Version: 3.2.15
+Built on: 3.2.14
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -62,13 +62,14 @@ F51 v3.2.11: Routine defined by a known answer (worker-guard.py text; 'ref | wor
 F52 v3.2.12: one ⏳ line per round (plan-gate.py and report-timing.py share | plan-gate.py
 F53 v3.2.13: restart lines checked against GitHub (branch_merged_on_github | branch_merged_on_github
 F54 v3.2.14: workers run in the foreground (foreground-workers.py rewrites | foreground-workers.py
+F55 v3.2.15: reads no longer start the checks (app hook list without Read | event_matchers_absent
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
 
 ## Open problems (stay until fixed with proof or he drops them)
 P02 Model-dependent solutions (one review per pull request, lean main session, Part names, report link copied, short test output) are proven only by a live session | found: 2026-10-11 campaign | next: the live scorecard in each end report shows works / does not work
-P01 Plan marks need one extra plan round (about 10 s and one re-read per revised plan) | found: 2026-10-10 Weekly-Planner session 4f3a9e6e | next: fix when a test way exists (the test program has no plan mode)
+P01 Plan marks need one extra plan round | found: 2026-10-10 | Mitigated in 3.2.15 (option A: marks on the way; fallback C) | proof needed: the next revised plan shows 1 try with marks on screen
 
 ## Fixed (moved from Open; proof required)
 X01 Known-answer rebuilds went to Opus as "Complex" (26.5 M tokens, 10 Oct) | fixed in 3.2.11 | proof: tools/test_v3211_items.py item 1; session 7574e882: 5 Sonnet hand-overs, 1 correct escalation
@@ -94,6 +95,8 @@ X21 The main session watched GitHub in the background (4 wake-ups) | fixed in 3.
 X22 The report counted GitHub waits while workers worked, and listed parallel pairs twice | fixed in 3.2.14 | proof: tools/test_v3214_items.py item 5; session c7347d6a 33 → 25 min
 X23 False 'report not delivered' after a folder change | fixed in 3.2.14 (content, not date) | proof: tools/test_v3214_items.py item 7
 X24 The session waited 15 min for an 'ok' after a restart line | fixed in 3.2.14 | proof: tools/test_v3214_items.py item 8
+X25 3.2.15: the 22 problems P1–P22 of 11 Oct (lanes refused, Completion order, report tool refused, check time, review after notes, [skip ci], PR conflicts, plan tries, change list) | fixed in 3.2.15 | proof: tools/test_v3215_items.py 32/32 (3.2.14: 5/32); real setup update and wake-up tests
+X26 Full test suites re-run after every small fix (11 Oct: 116 worker test runs, 90 min) | fixed in 3.2.15 (failed checks first; gh run rerun --failed) | proof: tools/test_v3215_items.py S26–S28
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
@@ -101,3 +104,4 @@ X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PA
 - 3.2.13: items X16–X19; features listed again from FEATURES.md.
 - 3.2.14 (built on 3.2.12 main; it also carries 3.2.13, which was never installed): X06 reopened and fixed with foreground workers; P02 added; the live scorecard.
 - 3.2.14, second part: X20–X24 from session c7347d6a.
+- 3.2.15: X25; P01 mitigated (waits for its live proof).

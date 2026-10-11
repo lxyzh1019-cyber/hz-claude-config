@@ -271,3 +271,13 @@ Workers in the foreground, no wake-ups (v3.2.14) | R | Workers run in the foregr
 Complex needs a reason (v3.2.14) | R | `Complex because: <reason>` (Hook)
 Main session waits for GitHub in the foreground (v3.2.14) | R | it waits in the foreground the same way, never in the background (Hook)
 Restart line: go on at once (v3.2.14) | R | goes on with the next stage at once
+Self-check before the hand-back (v3.2.15) | R | **Self-check before the hand-back.**
+One complete review (v3.2.15) | R | **One complete review.**
+Proof-line template (v3.2.15) | R | **Proof-line template.**
+Format changes: search the tests (v3.2.15) | R | **Format changes.**
+Workers commit; [skip ci] for notes (v3.2.15) | R | **Workers commit.**
+Gaps at the map step (v3.2.15) | R | **Gaps at the map step.**
+Lanes meet before me (v3.2.15) | R | **Lanes meet before me.**
+What changed list (v3.2.15) | R | **What changed.**
+Big plans start with the planner (v3.2.15) | R | **Big plans start with the planner.**
+Failed checks first (v3.2.15) | R | **Failed checks first (Hook).**

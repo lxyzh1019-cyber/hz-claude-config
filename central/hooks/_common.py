@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.2.10",
+        "version": "3.2.15",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -93,9 +93,10 @@ DEFAULT_CONFIG = {
         # which tools an event's matcher must cover ("<needle in the matcher>", "<plain name>")
         "event_matchers": {"PreToolUse": ["mcp__", "GitHub tool check before a pull request"],
                            "PreToolUse ": ["ExitPlanMode", "plan check before approval"],
-                           "PreToolUse  ": ["Read|Glob|Grep", "worker step count on reads (v3.1.26)"],
+                           "PreToolUse  ": ["Edit|Write", "edit checks; reads no longer start the checks (v3.2.15)"],
                            "PreToolUse   ": ["SubagentHandback", "worker hand-back check (v3.2.0)"],
                            "PreToolUse    ": ["Workflow", "dynamic workflow checks (v3.2.10)"]},
+        "event_matchers_absent": {"PreToolUse": ["Read|Glob|Grep", "reads no longer start the checks (v3.2.15)"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission",
                   "Read(~/.cache/hz-rules/**)": "reading the central rules without a prompt (v3.1.26)"},
         "pointer_text": {"hooks inactive": "multi-repo fallback in CLAUDE.md"},
@@ -814,7 +815,10 @@ def report_link(plan):
                  if os.path.basename(f).lower().startswith(slug[:40])]
         if not files:
             return None
-        f = max(files, key=os.path.getmtime)
+        def _rank(p):   # v3.2.15: the highest report number wins (11 Oct: the line linked report 2 after report 3)
+            m = re.search(r"-(\d+)\.md$", p)
+            return (int(m.group(1)) if m else -1, os.path.getmtime(p))
+        f = max(files, key=_rank)
         name = os.path.basename(f)
         url = run_text(["git", "remote", "get-url", "origin"], timeout=5, cwd=wd).stdout.strip()
         br = run_text(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5, cwd=wd).stdout.strip() or "main"
@@ -895,35 +899,87 @@ def checkpoint_due(cfg):
             "and push it. In the report below, give that Quick read and the link.")
 
 
+def plan_after(plan):
+    """v3.2.15: stage -> the stages it waits for, read from the newest plan file ('N. … · after: 33, 38'). Stage numbers
+    are not the run order: Plan v11 added stages 47–56 that run before Stage 41."""
+    import glob as _g
+    deps, path = {}, None
+    try:
+        files = [f for f in _g.glob(os.path.join(work_dir(), "plans", "*.md"))]
+        files = [f for f in files if plan and plan.lower()[:20] in open(f, encoding="utf-8", errors="replace").read(4000).lower()] or files
+        path = max(files, key=os.path.getmtime) if files else None
+        if path:
+            for ln in open(path, encoding="utf-8", errors="replace"):
+                m = re.match(r"^\s*(\d+)\.\s.*?·\s*after:\s*([\d,\s—–-]+)", ln)
+                if m:
+                    deps[int(m.group(1))] = [int(x) for x in re.findall(r"\d+", m.group(2))]
+    except Exception:
+        pass
+    return deps, path
+
+
+def _gh_link(path):
+    """A GitHub link for a file of the work folder on the current branch, or the plain path."""
+    try:
+        wd = work_dir()
+        rel = os.path.relpath(path, wd).replace("\\", "/")
+        url = run_text(["git", "remote", "get-url", "origin"], timeout=5, cwd=wd).stdout.strip()
+        br = run_text(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5, cwd=wd).stdout.strip() or "main"
+        m = re.search(r"github\.com[:/]+([^/]+)/([^/\s]+?)(?:\.git)?$", url)
+        return f"[{os.path.basename(path)}](https://github.com/{m.group(1)}/{m.group(2)}/blob/{br}/{rel})" if m else rel
+    except Exception:
+        return os.path.basename(path)
+
+
 def plan_block(cfg, plan, items, line, rows):
-    """v3.2.10: the Completion line, then Now / Next 3 / Later in stage order. Weekly-Planner 9 Oct: every queued
-    stage was listed with its plan name and proof text, 25 lines per report, twice per decision."""
+    """v3.2.15: the Completion lines in bold, every stage as **Stage n**, in run order (the plan's 'after:'), with the
+    stops that wait on the owner apart from the work, and links to the plan and the newest report. Owner, 11 Oct:
+    "Now 34, Next 38 is confusing" — 34 and 38 were one stop, and 41 waited for Kit 1.1 (stages 49–54)."""
     total = plan_stage_total(plan, items)
-    rows = sorted(rows, key=lambda i: _stage_k(i["name"]))
-    def state(i):
-        if i.get("waiting"):
-            return " (waiting on you)"
-        if i.get("blocked"):
-            return " (blocked)"
-        return ""
-    def label(i):
-        k = _stage_k(i["name"])[1]
-        return f"{k} " + ("Check: " if i.get("check") else "") + _short_stage(i["name"])
-    head = f"{line} · Stage {_stage_k(rows[0]['name'])[1]} of {total}"
-    rl = report_link(plan)
-    if rl:   # v3.2.12: in the first line, which sessions copy word for word (10 Oct: a separate line was left out)
-        head += " · Report: " + rl
-    out = [head, "Now: " + label(rows[0]) + state(rows[0])]
-    nxt = rows[1:1 + int(cfg.get("completion_next_shown", 3))]
+    num = lambda i: _stage_k(i["name"])[0]
+    deps, plan_path = plan_after(plan)
+    done = {num(i) for i in items if i["complete"]}
+    open_ = {num(i): i for i in rows}
+    order, placed = [], set(done)
+    pending = sorted(open_)
+    while pending:   # run order: a stage comes after the stages it waits for; ties by number
+        ready = [k for k in pending if all(d in placed or d not in open_ for d in deps.get(k, []))] or pending[:1]
+        k = min(ready)
+        order.append(k)
+        placed.add(k)
+        pending.remove(k)
+    S = lambda k: f"**Stage {k}**"
+    def lab(k):
+        i = open_[k]
+        return S(k) + " " + _short_stage(i["name"]) + (" (blocked)" if i.get("blocked") else "")
+    waiting = [k for k in order if open_[k].get("check") and all(d in done or (d in open_ and open_[d].get("check"))
+                                                                 or d not in open_ for d in deps.get(k, []))]
+    stop = []
+    for k in order:   # the next stop: the checks that wait on the owner before any build
+        if k in waiting:
+            stop.append(k)
+        elif not open_[k].get("check"):
+            break
+    rest = [k for k in order if k not in stop]
+    head = f"**{line.strip()} · Now at Stage {order[0]} of {total}**"
+    out = [head]
+    if stop:
+        out.append("**Waiting on you (one stop):** " + " · ".join(lab(k) for k in stop))
+    work = [k for k in rest if not open_[k].get("check")][:1]
+    if work and (not stop or order.index(work[0]) < order.index(stop[0])):
+        out.append("**Working on:** " + lab(work[0]))
+        rest = [k for k in rest if k != work[0]]
+    nxt = rest[:int(cfg.get("completion_next_shown", 4))]
     if nxt:
-        out.append("Next: " + " · ".join(label(i) + state(i) for i in nxt))
-    later = rows[1 + len(nxt):]
-    blocked_later = [i for i in later if i.get("blocked") or i.get("waiting")]
-    if later:
-        nb = len([i for i in later if not i.get("check")])
-        out.append(f"Later: {len(later)} stages ({nb} build, {len(later) - nb} check)")
-    for i in blocked_later:
-        out.append("Also: " + label(i) + state(i))
+        out.append("**Then, in order:** " + " · ".join(lab(k) for k in nxt))
+    later = rest[len(nxt):]
+    links = []
+    if plan_path:
+        links.append("**Plan:** " + _gh_link(plan_path))
+    rl = report_link(plan)
+    if rl:
+        links.append("**Report:** " + rl)
+    out.append((f"**Later:** {len(later)} stages" if later else "**Later:** none") + (" · " + " · ".join(links) if links else ""))
     if not [i for i in rows if not i.get("check")]:
         out.append("Build is done; the rest is checking. If a check finds a problem, tell this session. It becomes a "
                    "new Build row.")

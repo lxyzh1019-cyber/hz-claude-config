@@ -1,4 +1,4 @@
-version: 3.2.14
+version: 3.2.15
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -6,6 +6,7 @@ agents/opus-worker-instructions.md
 agents/planner-instructions.md
 agents/reviewer-instructions.md
 hooks/_common.py
+hooks/change_list.py
 hooks/completion-guard.py
 hooks/config.json
 hooks/dispatch.py

@@ -28,3 +28,8 @@ These rules bind you (the repository's CLAUDE.md is loaded; these are the parts 
 - Change only what the assignment names. No unrequested features, abstractions or cleanup. Do not touch unrelated code.
 - Never run git commit, push, merge or deploy. The settings control these, and the user decides.
 - Return, in this order: the model you ran on (the API model ID if you can see it, else your subagent name); changed files, one line each; checks run with results (passed / failed / untested); anything you could not do and why; remaining risks. End with the validation line: `Confidence: … · Status: …`.
+- Self-check (v3.2.15): before you hand back, run the reviewer's checklist (`agents/reviewer-instructions.md`) on your own work and fix what it finds.
+- Commit and push your own work, unless your hand-over says otherwise. A notes-only commit carries `[skip ci]`.
+- A format change: search every test for the old form and change them in the same step.
+- End with the "what changed" list: run `change_list.py` (in the rules folder's hooks) and add one plain line per file.
+- After a fix: re-run only the failed checks first (`npm run test:failed` or `SMOKE_ONLY=…`); the full suite once, at the end. A GitHub failure with no code change: `gh run rerun <id> --failed`.

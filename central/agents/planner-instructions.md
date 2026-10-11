@@ -16,6 +16,8 @@ You write the plan. The main session shows it to the owner, runs the workers and
 - Level (v3.2.11): Routine when the answer is known, even across many files (an exact table, a rename, a move to one helper with a check). Each Complex stage names its reason: the cause is unknown, or a design choice, data, sync, security or schema.
 - Lanes (v3.2.11): stages whose files do not overlap get one group and run at once; their checks join into one stop. Stages that share a file wait for each other.
 - Names (v3.2.12): a work package is "Part n — <name>"; a GitHub pull request is only "#<number>". Never "PR n" for a Part.
+- Map step (v3.2.15): list every case the shared kit or the reference does not cover. The owner answers them before the build.
+- Lanes (v3.2.15): the lanes of one round merge into one round branch; the owner merges one pull request per round.
 - Keep the plan file lean. When a new version replaces a design, move the old design to `docs/archive/`. Technical details keep only what the next stages need.
 - Ask every open question before approval. After approval the plan is not reopened; findings are recorded and reported.
 - A new plan (Plan v1): "What changed" says "First version".

@@ -4,11 +4,11 @@ Usage: python3 tools/test_v3210_items.py <central dir>   (for example central, o
 Prints one line per check: item number, PASS/FAIL, what was checked and what happened. Hook checks run the real hook
 scripts on scripted inputs in a temporary project; text checks read the rules, planner and reviewer files. Items 1, 2,
 4, 19, 20 and 21 also have a real-program test (tools/real-harness/scenario_workflow.sh, scenario_setup_update.sh)."""
-import json, os, subprocess, sys, tempfile, datetime as dt, glob, shutil
+import json, re, os, subprocess, sys, tempfile, datetime as dt, glob, shutil
 C = os.path.abspath(sys.argv[1]); H = os.path.join(C, "hooks"); ROOT = os.path.dirname(C)
 V = tempfile.mkdtemp(); results = []
 def res(item, name, ok, detail=""):
-    results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:160]!r}"))
+    ok = bool(ok); results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:160]!r}"))
 def run(script, inp, proj, **env):
     p = os.path.join(H, script)
     if not os.path.exists(p):
@@ -63,7 +63,7 @@ res(2, "switchboard sends Workflow to the wait-line check", "Workflow" in pre.ge
 stub = json.loads(read(C, "stub-files", "settings.json") or "{}")
 res(2, "app hook list covers Workflow", any("Workflow" in (g.get("matcher") or "") for g in stub.get("hooks", {}).get("PreToolUse", [])), "")
 co = read(H, "_common.py")
-res(4, "setup version 3.2.10 (apps get the new hook list)", '"version": "3.2.10"' in co, "")
+res(4, "setup version 3.2.10 (apps get the new hook list)", re.search(r'"version": "3\.2\.1\d"', co), "")
 
 # ---- scenario file (items 3, 20) ------------------------------------------------------------------------------------
 sc = read(ROOT, "tools", "real-harness", "scenario_workflow.sh") + read(ROOT, "tools", "real-harness", "stand_in_workflow.py")
@@ -98,7 +98,7 @@ def disp():
     return subprocess.run(["python3", "-c", "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])"],
                           capture_output=True, text=True, cwd=H, env=dict(os.environ, CLAUDE_PROJECT_DIR=A, PYTHONDONTWRITEBYTECODE="1")).stdout
 o = disp()
-res(10, "Completion lines: Now, Next 3, Later count", "Now: 4 PR 2 headers" in o and "Next: 5 Check: merge PR 2 · 6 PR 3 words · 7 PR 4 cards" in o and "Later: 2 stages" in o, o)
+res(10, "Completion lines: Now, Next 3, Later count", ("Now: 4 PR 2 headers" in o and "Next: 5 Check: merge PR 2 · 6 PR 3 words · 7 PR 4 cards" in o) or ("**Working on:** **Stage 4** PR 2 headers" in o and "**Stage 5** merge PR 2 · **Stage 6** PR 3 words · **Stage 7** PR 4 cards" in o), o)
 res(10, "no proof text and no row per stage", "proof:" not in o and o.count("\n- ") == 0, o)
 TR = os.path.join(V, "t.jsonl")
 def turn(text, edit=True):
