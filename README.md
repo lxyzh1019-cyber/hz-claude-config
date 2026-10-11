@@ -30,6 +30,8 @@ A few setup files live inside each app repository (which helper runs on which mo
 
 Fallback, only if a session reports that it could not update automatically (for example a helper file someone edited by hand): ask the chat for a package for that repository and add it with GitHub Desktop as in Step E.
 
+Packages come with Windows line endings, so GitHub Desktop lists only the files that really change. If it lists more files than the chat said, stop and tell the chat.
+
 ## C. New app repositories
 A repository without the setup yet needs the installer once: ask the chat for a package for it (give its name) and add it with GitHub Desktop as in Step E.
 

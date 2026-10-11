@@ -1,4 +1,4 @@
-version: 3.2.11
+version: 3.2.12
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -49,7 +49,9 @@ seed/WORKING_RECORD.md
 skills/hz-change-guard/SKILL.md
 skills/hz-change-guard/references/content-ledger.md
 skills/hz-change-guard/references/manifest-formats.md
+skills/hz-change-guard/references/revision-record.md
 skills/hz-change-guard/scripts/coverage_gate.py
+skills/hz-change-guard/scripts/revision_gate.py
 stub-files/CLAUDE-pointer.md
 stub-files/explore.md
 stub-files/hz-loader.py

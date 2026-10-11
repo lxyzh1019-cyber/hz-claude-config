@@ -739,7 +739,8 @@ def completion_summary(cfg):
             "scoped": scoped, "check_open": check_open, "check_total": len(checks),
             "build_done": total > 0 and len(done) == total,
             "untagged_checks": [i["name"] for i in checks if not CHECK_TAG.search(i["name"])],
-            "not_done": [i["name"] for i in build + checks if not i["complete"]]}
+            "not_done": [i["name"] for i in build + checks if not i["complete"]],
+            "items": [dict(i, check=i in checks) for i in build + checks]}
 
 
 def _stage_k(name):
@@ -825,6 +826,51 @@ def report_link(plan):
         return None
 
 
+def checkpoint_due(cfg):
+    """v3.2.12: at a stop for the owner's check in a plan with more than 10 Build stages, a new checkpoint report comes
+    first. Weekly-Planner 10 Oct: Stage 31 (iPad read) had none, because the plan was made before the v3.2.10 rule.
+    Returns the instruction, or '' when no report is due (not a check stop, short plan, or a report since the last
+    check stop)."""
+    import glob as _g
+    comp = completion_summary(cfg)
+    plan = comp.get("plan")
+    items = comp.get("items") or []
+    builds = [i for i in items if not i.get("check")]
+    if not plan or len(builds) <= int(cfg.get("checkpoint_min_build_stages", 10)):
+        return ""
+    rows = sorted([i for i in items if not i["complete"] and PLAN_ROW.match(i["name"])], key=lambda i: _stage_k(i["name"]))
+    nxt = [i for i in rows if not i.get("blocked")]
+    if not nxt or not nxt[0].get("check") and not (nxt[0].get("waiting") and rows[1:2] and rows[1].get("check")):
+        return ""
+    slug = re.sub(r"[^a-z0-9]+", "-", plan.lower()).strip("-")
+    files = _g.glob(os.path.join(work_dir(), "docs", "reports", slug[:40] + "*checkpoint*.md"))
+    stage = _stage_k(nxt[0]["name"])[1]
+    path = os.path.join(STATE_DIR, "checkpoint-stops.json")
+    try:
+        st = json.load(open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        st = {}
+    newest = max([os.path.getmtime(f) for f in files], default=0)
+    rec = st.get(plan) or {}
+    if rec.get("stage") == stage or (rec and newest > rec.get("seen", 0)):
+        st[plan] = {"stage": stage, "seen": newest}
+        try:
+            json.dump(st, open(path, "w", encoding="utf-8"))
+        except OSError:
+            pass
+        return ""
+    st[plan] = {"stage": stage, "seen": newest}
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(st, open(path, "w", encoding="utf-8"))
+    except OSError:
+        pass
+    n = len(files) + 1
+    return (f"[checkpoint] Stage {stage} is a stop for my check in a long plan. First make checkpoint report {n}: run "
+            f"plan_report.py \"{plan}\" into docs/reports/{slug}-checkpoint-{n}.md, add its Quick read on top, commit "
+            "and push it. In the report below, give that Quick read and the link.")
+
+
 def plan_block(cfg, plan, items, line, rows):
     """v3.2.10: the Completion line, then Now / Next 3 / Later in stage order. Weekly-Planner 9 Oct: every queued
     stage was listed with its plan name and proof text, 25 lines per report, twice per decision."""
@@ -840,6 +886,9 @@ def plan_block(cfg, plan, items, line, rows):
         k = _stage_k(i["name"])[1]
         return f"{k} " + ("Check: " if i.get("check") else "") + _short_stage(i["name"])
     head = f"{line} · Stage {_stage_k(rows[0]['name'])[1]} of {total}"
+    rl = report_link(plan)
+    if rl:   # v3.2.12: in the first line, which sessions copy word for word (10 Oct: a separate line was left out)
+        head += " · Report: " + rl
     out = [head, "Now: " + label(rows[0]) + state(rows[0])]
     nxt = rows[1:1 + int(cfg.get("completion_next_shown", 3))]
     if nxt:
@@ -854,9 +903,6 @@ def plan_block(cfg, plan, items, line, rows):
     if not [i for i in rows if not i.get("check")]:
         out.append("Build is done; the rest is checking. If a check finds a problem, tell this session. It becomes a "
                    "new Build row.")
-    rl = report_link(plan)
-    if rl:
-        out.append("Report: " + rl)
     ch = plan_total_change(plan, total)
     if ch:
         out.append(f"Plan: {ch[0]} → {ch[1]} stages — say why in one line.")
@@ -1409,7 +1455,8 @@ def still_running(records, transcript_path=None):
 
 
 WAIT_TEXT = ("[report timing] Still running in the background: {what}. End this turn with one line only: '{line}'. "
-             "Write no report and no closing lines yet. When the last one has finished, write one full report.")
+             "Write no report, no closing lines and no text before tool steps until it ends. Later notices this round: '…' only. "
+             "When the last one has finished, write one full report.")
 REPORT_TEXT = ("[report timing] Every helper and background command has finished. Write the one full report now. "
                "Start it with one line: '✅ Completed: <the names from your last ⏳ line> · Build <n> of <m> done'. "
                "Then the report, with the closing lines. Do not repeat an earlier report: give only what is new.")

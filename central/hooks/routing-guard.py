@@ -20,6 +20,31 @@ log("routing-guard", {"mode": mode, "tool": data.get("tool_name"), "path": path,
 if mode != "enforce":
     sys.exit(0)
 if is_governance_path(path, cfg):
+    # v3.2.12: the main session hands record, plan-file and git work to the worker of the stage. Weekly-Planner 10 Oct:
+    # 142 main steps re-read 172 k each (15.5 M, 53%), many of them record and plan updates. A notice, once per prompt.
+    _pp = path.replace("\\", "/")
+    if (not data.get("agent_id") and data.get("tool_name") in ("Edit", "Write", "MultiEdit") and not os.environ.get("HZ_LEAN_MAIN_OFF")
+            and (os.path.basename(_pp) in ("WORKING_RECORD.md", "FEATURES.md") or "/plans/" in _pp)):
+        try:
+            import json as _j
+            from _common import prompt_number as _pn, add_context as _ac
+            _f = os.path.join(STATE_DIR, "lean-main.json")
+            try:
+                _s = _j.load(open(_f, encoding="utf-8"))
+            except (OSError, ValueError):
+                _s = {}
+            _k = f"{data.get('session_id')}:{_pn(data.get('session_id'))}"
+            if _s.get("last") != _k:
+                os.makedirs(STATE_DIR, exist_ok=True)
+                _j.dump({"last": _k}, open(_f, "w", encoding="utf-8"))
+                log("routing-guard", {"lean_main": os.path.basename(path)})
+                _ac("PreToolUse", "[lean main] Each step of this main session re-reads all of it. Put record rows, "
+                    "plan-file changes, commits and pushes into the hand-over of the stage's worker ('Also: update the "
+                    "record row, commit and push'). Do this one yourself only when no worker runs next.")
+        except SystemExit:
+            raise
+        except Exception:
+            pass
     sys.exit(0)
 # v3.2.0: Claude's own scratch folder (…/Temp/claude/…) is not app code. In the
 # Weekly-Planner consistency pass two writes there were refused for nothing.

@@ -39,11 +39,12 @@ Right after the feature manifest, in the same place:
 ## Running the gate
 
 ```
-python scripts/coverage_gate.py page.html            # ledger inside the file
-python scripts/coverage_gate.py page.txt ledger.md   # ledger in a separate file
+G=/mnt/skills/plugins/hz-change-guard/scripts/coverage_gate.py   # path in chat
+python3 $G page.html            # ledger inside the file
+python3 $G page.txt ledger.md   # ledger in a separate file
 ```
 
-It searches the artifact text (the ledger block itself excluded), prints `Ledger items: N  Missing: M`, lists each missing phrase, and exits with code 1 if anything is missing. A missing item means STOP: restore it, or put it under "Left out — OK?" for the user to decide.
+It searches the artifact text with HTML comments removed (so the ledger and any commented-out old text never count), HTML entities decoded and spaces and line breaks evened out. It fails on a repeated ledger number. It prints `Ledger items: N  Missing: M`, lists each missing phrase, and exits with code 1 if anything is missing. A missing item means STOP: collect all of them, restore them in one pass, or put them under "Left out — OK?" for the user to decide.
 
 ## Keeping it honest
 
