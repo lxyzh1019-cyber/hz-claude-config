@@ -27,6 +27,10 @@ try:
 except ValueError:
     data = {}
 event = data.get("hook_event_name", "")
+# v3.2.15: '.claude/hz-off' in the project turns every check off for a side-by-side run (owner, 11 Oct: "does the
+# config help me or make it worse"). Remove the file to turn them on again.
+if os.path.exists(os.path.join(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd(), ".claude", "hz-off")):
+    sys.exit(0)
 tool = data.get("tool_name", "") or ""
 cfg = load_config()
 entries = (cfg.get("dispatch") or {}).get(event, [])

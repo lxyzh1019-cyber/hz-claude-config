@@ -14,7 +14,7 @@ pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
 export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if the planner wrote the plan; the v3.1.30 tests switch it on
 export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
-export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1   # v3.2.14: older fixtures: no reason line, background workers
+export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1 HZ_SKIP_CI_SOFT=1 HZ_PLAN_MARKS_ROUND=1   # v3.2.15: older fixtures keep the hint and the marks round   # v3.2.14: older fixtures: no reason line, background workers
 export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1   # v3.2.13: no live GitHub in tests; older fixtures start single workers in worktrees
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
 export HZ_PLAN_ROUNDS_OFF=1        # v3.1.33: older plan tests are independent plans; the v3.1.33 tests switch it on
@@ -794,7 +794,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.10)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.15)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "The plan file goes into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -822,9 +822,9 @@ hg(){ printf '%s' "$1" > "$HB/t.jsonl"; rm -f "$HA/.claude/state/handoff-rounds.
 msg(){ python3 -c "import json,sys;print(json.dumps({'type':'assistant','message':{'role':'assistant','content':[{'type':'text','text':sys.argv[1]}]}}))" "$1"; }
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
 check "superseded rows are not counted" "Completion: 2 of 5 done" "$o"
-check "blocked items are listed with their state" "4 looks (blocked)" "$o"
-check "v3.2.10: the next stages follow in stage order on one line" "Next: 4 looks (blocked) · 6 PR" "$o"
-check "v3.2.10: the stage being worked on is the Now line" "^Now: 3 grown-ups" "$o"
+check "blocked items are listed with their state" "Stage 4\*\* looks (blocked)" "$o"
+check "v3.2.15: the next stages follow in run order on one line, as bold stages" "Then, in order:\*\* \*\*Stage 4\*\* looks (blocked) · \*\*Stage 6\*\* PR" "$o"
+check "v3.2.15: the stage being worked on is the Working on line" "Working on:\*\* \*\*Stage 3\*\* grown-ups" "$o"
 check "v3.2.10: no row-per-stage list any more" "^0$" "$(echo "$o" | grep -c '^- ')"
 o=$(hg "$(msg 'Plan v5 is ready.
 Confidence: High · Status: Proposed')"); check "a Plan vN only in the chat is sent back" "names Plan v5, but the newest plan file in plans/ is Plan v3" "$o"
@@ -898,7 +898,7 @@ R
 echo x > index.html && git add -A && git commit -qm base && git push -q origin HEAD:main && git checkout -qb claude/recovery && git push -q -u origin claude/recovery ) >/dev/null 2>&1
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
 check "Build and Check are counted apart: Build 100% when Claude's work is done" "Completion: Build 4 of 4 done (100%) · Check 0 of 3" "$o"
-check "v3.2.10: after Build, the first check is the Now line" "^Now: 5 Check: merge both (waiting on you)" "$o"
+check "v3.2.15: after Build, the checks are the stop that waits on you" "Waiting on you (one stop):\*\* \*\*Stage 5\*\* merge both" "$o"
 check "Build done says the rest is checking and how to come back" "Build is done; the rest is checking" "$o"
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$HCA" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;c=completion_summary(load_config());print(restart_line(c))")
 check "after Build, the restart line points to the first check" "next: Stage 5 of 7 — merge both" "$o"
@@ -1153,7 +1153,7 @@ check "  ...with the exact skill file to read" "hz-change-guard/SKILL.md" "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | python3 $H/rules-read-guard.py)
 check "other shell commands are untouched" "^$" "$o"
 check "the setup allows the Read tool on the rules copy" "Read(~/.cache/hz-rules/\*\*)" "$(cat $H/../../stub/settings.json)"
-check "the setup counts reads for the worker step limit" "Read|Glob|Grep|Edit" "$(cat $H/../../stub/settings.json)"
+check "v3.2.15: reads no longer start the checks (the matcher starts at Edit)" "\"Edit|Write" "$(cat $H/../../stub/settings.json)"
 # 3 which check sent a reply back
 o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sb26\"}" | python3 $H/stats.py >/dev/null; python3 -c "
 import sys;sys.path.insert(0,'$H');import os;os.environ['CLAUDE_PROJECT_DIR']='$PROJ'
@@ -1241,8 +1241,8 @@ cat > WORKING_RECORD.md <<'R'
 R
 git add -A && git commit -qm b ) >/dev/null 2>&1
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$QP" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])")
-check "a stage waiting for plan approval is queued, not blocked" "^Now: 2 redesigns$" "$o"
-check "a stage 'waiting on you' only for approval is queued, not a check" "Next: 3 looks · 4 Check: merge" "$o"
+check "a stage waiting for plan approval is queued, not blocked" "Working on:\*\* \*\*Stage 2\*\* redesigns$" "$o"
+check "a stage 'waiting on you' only for approval is queued, not a check" "Stage 3\*\* looks · \*\*Stage 4\*\* merge" "$o"
 check "  ...so Build counts them as work still to come" "Completion: Build 1 of 3 done (33%) · Check 0 of 1" "$o"
 cat > "$T/p27.md" <<'P'
 # Plan v9 — Sunday v15
@@ -2867,7 +2867,7 @@ sh("git add -A && git commit -qm b && git push -q origin HEAD:main && git checko
 def disp():
     return subprocess.run(["python3","-c","import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])"],capture_output=True,text=True,cwd=H,env=dict(os.environ,CLAUDE_PROJECT_DIR=A)).stdout
 o=disp()
-res("v3.2.10: the Completion lines are Now / Next / Later, in stage order","Stage 4 of 6\nNow: 4 PR 2 headers\nNext: 5 Check: merge PR 2 · 6 PR 3 words" in o,o)
+res("v3.2.15: the Completion lines: working stage, then the rest in order, bold","**Working on:** **Stage 4** PR 2 headers" in o and "**Stage 5** merge PR 2 · **Stage 6** PR 3 words" in o,o)
 res("  ...without the proof text",'proof:' not in o,o)
 s=open(os.path.join(A,"WORKING_RECORD.md")).read().replace("Stage 6 of 6 — PR 3 words","Stage 6 of 8 — PR 3 words")+"| Pass · Stage 7 of 8 — PR 4 | QUEUED — after Stage 6 | |\n| Pass · Stage 8 of 8 — merge (Check) | QUEUED — after Stage 7 | |\n"
 open(os.path.join(A,"WORKING_RECORD.md"),"w").write(s)
@@ -2884,7 +2884,7 @@ turn(rep); o=run("completion-guard.py",{"transcript_path":TR,"session_id":"cg"},
 res("v3.2.10: a report that asks me decisions is not sent back for its open stage",'"block"' not in o,o)
 o=disp(); res("  ...and the stage-total line is shown once",'→' not in o,o)
 turn(rep.replace("❓ Decisions\n1. Phone week: A keep. Recommend: A.\n","")); o=run("completion-guard.py",{"transcript_path":TR,"session_id":"cg2"},A)
-res("v3.2.10: other send-backs ask for one line, not the whole report again","do not repeat the report" in o and "Now: 4" in o,o)
+res("v3.2.10: other send-backs ask for one line, not the whole report again","do not repeat the report" in o and "Stage 4" in o,o)
 # 5) report delivery
 open(os.path.join(A,".claude","state","prompt-number.json") if os.path.isdir(os.path.join(A,".claude","state")) else os.path.join(V10,"x"),"w").write(json.dumps({"session":"rd","n":2}))
 os.makedirs(os.path.join(A,"docs","reports"),exist_ok=True)

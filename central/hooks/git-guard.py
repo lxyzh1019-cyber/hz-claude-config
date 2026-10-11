@@ -58,6 +58,31 @@ def _green_after_last_push(records):
     return ok or last_push is None
 
 
+def _notes_only_since_review():
+    """v3.2.15: True when a reviewer ran before and every commit since its start changed only notes (the record, docs,
+    plans, a compare page's run id). 11 Oct: a new review was demanded 4 times after notes-only commits (about 10 min)."""
+    import json as _j
+    from datetime import datetime as _dt
+    last = None
+    for r in read_transcript(data.get("transcript_path")):
+        if r.get("type") != "assistant":
+            continue
+        for b in ((r.get("message") or {}).get("content") or []):
+            if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task") \
+                    and str((b.get("input") or {}).get("subagent_type") or "").startswith("reviewer"):
+                last = r.get("timestamp")
+    if not last:
+        return False
+    try:
+        from _common import load_config as _lc, run_text as _rt
+        notes = tuple(_lc().get("notes_paths") or ["WORKING_RECORD.md", "FEATURES.md", "docs/", "plans/"])
+        out = _rt(["git", "log", f"--since={last}", "--name-only", "--format="], timeout=10).stdout
+        files = [f.strip() for f in out.splitlines() if f.strip()]
+        return bool(files) and all(f.startswith(notes) or f in notes for f in files)
+    except Exception:
+        return False
+
+
 def pr_last_check(cmd=""):
     """v3.1.30: a pull request opens last — after every worker and reviewer has finished, and after a reviewer ran
     following the last build worker (it checks the tests, the picture comparison and the plan). In the Weekly-Planner
@@ -71,7 +96,8 @@ def pr_last_check(cmd=""):
     if "worker" in kinds:
         last_worker = max(i for i, k in enumerate(kinds) if k == "worker")
         from _common import agent_on_pc as _aop7
-        if "reviewer" not in kinds[last_worker + 1:] and (_aop7("reviewer") or _aop7("reviewer-light")):   # v3.2.7
+        if ("reviewer" not in kinds[last_worker + 1:] and (_aop7("reviewer") or _aop7("reviewer-light"))   # v3.2.7
+                and not _notes_only_since_review()):
             deny_tool("git-guard: open the pull request last. Send the reviewer first (moment: Before the pull "
                       "request) — it checks the tests and the picture and figure comparison against their "
                       "references, and every agreed point of the plan. Fix what it blocks, then open the pull request.")
@@ -214,6 +240,26 @@ if _adds and re.search(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b", cmd) and "[skip ci]"
     if _files and len(_files) == sum(len(shlex.split(a.replace("\\", "/"), posix=False)) for a in _adds) and all(
             any(f == n or f.startswith(n) or ("/" + n) in f or f.endswith("/" + n) for n in _notes) for f in _files):
         _notes_hint = True
+if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
+    # v3.2.15: refused once per prompt (the hint alone was ignored: 11 Oct, notes pushes started second GitHub runs)
+    try:
+        import json as _j2
+        from _common import STATE_DIR as _SD2, prompt_number as _pn2
+        _f2 = os.path.join(_SD2, "skip-ci-refused.json")
+        try:
+            _r2 = _j2.load(open(_f2, encoding="utf-8"))
+        except (OSError, ValueError):
+            _r2 = []
+        _k2 = f"{data.get('session_id')}:{_pn2(data.get('session_id'))}"
+        if _k2 not in _r2:
+            os.makedirs(_SD2, exist_ok=True)
+            _j2.dump((_r2 + [_k2])[-50:], open(_f2, "w", encoding="utf-8"))
+            deny_tool("This commit has notes only. Put [skip ci] in its message, so GitHub starts no run and does not "
+                      "cancel the run of your code. Then commit again.")
+    except SystemExit:
+        raise
+    except Exception:
+        pass
 if _stack_warn or _notes_hint:   # after every other check of this command (add_context ends the hook)
     from _common import add_context as _ac, log as _lg
     _lg("git-guard", {"stacked_base": _stack_warn, "notes_only_commit": bool(_notes_hint)})

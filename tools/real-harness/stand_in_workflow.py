@@ -7,7 +7,7 @@ Code program runs its real tools and hooks. The main session follows main.json. 
   C  reads its role file, runs the tests 3 times
 Every request is logged to req.log with the last message the model saw (hook texts included)."""
 import json, sys, re, http.server, itertools
-LOG = open('req.log', 'a'); main_steps = json.load(open(sys.argv[2])); cnt = itertools.count()
+LOG = open('req.log', 'a'); SIZE = open('sizes.tsv', 'a'); main_steps = json.load(open(sys.argv[2])); cnt = itertools.count()
 ROLE = sys.argv[3] if len(sys.argv) > 3 else ''
 
 
@@ -18,6 +18,16 @@ def plan(a):
     if a == 'B':
         return [("Write", {"file_path": "css/b.css", "content": "/* b */\n"}),
                 ("Bash", {"command": "git add css/b.css && git commit -q -m 'b from workflow'", "description": "commit"})] + [("Bash", t)] * 3
+    if a == 'F':   # v3.2.15 end-to-end lane: edit, commit, a notes-only commit, the report tool, the change list
+        return [("Write", {"file_path": "css/lane-f.css", "content": "/* f */\n"}),
+                ("Bash", {"command": "git add css/lane-f.css && git commit -q -m 'lane f'", "description": "commit"}),
+                ("Bash", {"command": "echo '- lane f done' >> WORKING_RECORD.md && git add WORKING_RECORD.md && git commit -q -m 'record'", "description": "notes"}),
+                ("Bash", {"command": "echo '- lane f done' >> WORKING_RECORD.md && git add WORKING_RECORD.md && git commit -q -m 'record [skip ci]'", "description": "notes"}),
+                ("Bash", {"command": f"python3 {ROLE.rsplit('/agents/', 1)[0]}/hooks/plan_report.py 'Part 9' --dir . | head -3", "description": "report"}),
+                ("Bash", {"command": f"python3 {ROLE.rsplit('/agents/', 1)[0]}/hooks/change_list.py main", "description": "changes"})]
+    if a == 'G':   # reads a lot, then runs the tests in the foreground
+        return [("Read", {"file_path": "index.html"}), ("Grep", {"pattern": "header", "path": "js"}), ("Glob", {"pattern": "css/*.css"}),
+                ("Read", {"file_path": "WORKING_RECORD.md"}), ("Bash", {"command": "npm test", "description": "tests"})]
     if a == 'E':   # stops with a background command of its own still running (seen in real workers)
         return [("Bash", {"command": "sleep 4; echo bg-done", "description": "slow step", "run_in_background": True})]
     if a == 'D':   # v3.2.11: tries a background test run first, then runs it in the foreground
@@ -43,6 +53,7 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_response(200); self.send_header('content-type', 'application/json'); self.end_headers()
             self.wfile.write(b'{"input_tokens":10}'); return
         msgs = req.get('messages', []); first = txt(msgs[0].get('content')) if msgs else ''
+        SIZE.write(f"{n}\t{'agent' if re.search(r'WFAGENT', first) else 'main'}\n"); SIZE.flush()
         last = txt(msgs[-1].get('content')) if msgs else ''
         sysx = json.dumps(req.get('system', ''))
         if '<transcript>' in last or 'Respond with <severity>' in sysx + last or 'MUST begin with <block>' in sysx + last:

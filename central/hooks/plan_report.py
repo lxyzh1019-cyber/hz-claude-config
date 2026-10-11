@@ -76,6 +76,7 @@ def measure(paths):
                     kind = "helper"
             recs = R if name == "main" else _load(f)
             seen, pend, tok = set(), {}, 0
+            _by_msg, _agent_msgs = {}, set()
             bg = {}       # v3.2.10: background GitHub waits end at their task notice (9 Oct: 101 min were not counted)
             edited, stage, t_first, t_last = set(), None, None, None
             for r in recs:
@@ -105,6 +106,10 @@ def measure(paths):
                         continue
                     if b.get("type") == "tool_use":
                         pend[b.get("id")] = (_t(r), b.get("name"), (b.get("input") or {}))
+                        _mid = (r.get("message") or {}).get("id")
+                        _by_msg.setdefault(_mid, set()).add(b.get("id"))
+                        if b.get("name") in ("Agent", "Task", "Workflow"):
+                            _agent_msgs.add(_mid)
                         _in = b.get("input") or {}
                         if b.get("name") in ("Edit", "Write", "MultiEdit") and _in.get("file_path"):
                             edited.add(os.path.basename(str(_in["file_path"]).replace("\\", "/")))
@@ -121,6 +126,11 @@ def measure(paths):
                             continue
                         d = t1 - t0
                         m["tool_calls"] += 1
+                        if nm in ("Agent", "Task", "Workflow"):
+                            continue   # v3.2.15: a worker's time is counted in its own file, not again as the main step
+                        if any(b["tool_use_id"] in _by_msg.get(_m, ()) for _m in _agent_msgs):
+                            continue   # v3.2.15: a step started beside a worker reports when the worker ends (11 Oct:
+                                       # four record edits "took" 19-23 min each: 134 min of "other commands")
                         if nm in ("Read", "Grep", "Glob"):
                             floor.append(d)
                         cmd = str(inp.get("command") or "") if nm == "Bash" else ""
@@ -269,7 +279,7 @@ def scorecard(paths):
                         d["part_n"] += len(re.findall(r"\bPart \d+\b", t))
                         if "Completion:" in t:
                             d["completion"] += 1
-                            if re.search(r"Completion:[^\n]*Report: \[", t):
+                            if re.search(r"Completion:[\s\S]{0,1500}?Report:\**\s*\[", t):
                                 d["report_link"] += 1
                     if b.get("type") == "tool_use":
                         n, i = b.get("name"), b.get("input") or {}
@@ -278,8 +288,10 @@ def scorecard(paths):
                         if n in ("Agent", "Task"):
                             st = str(i.get("subagent_type") or "")
                             if st.startswith("reviewer"):
-                                tk = re.search(r"Task:\s*(.+)", str(i.get("prompt") or ""))
-                                key = re.sub(r"\s*\(.*?\)\s*$", "", tk.group(1).strip())[:60] if tk else "?"
+                                _pr = str(i.get("prompt") or "")
+                                sm = re.search(r"Stages?\s+(\d+)", _pr)   # v3.2.15: per stage (11 Oct: all counted as one)
+                                tk = re.search(r"Task:\s*(.+)", _pr)
+                                key = ("Stage " + sm.group(1)) if sm else (re.sub(r"\s*\(.*?\)\s*$", "", tk.group(1).strip())[:60] if tk else "?")
                                 d["reviews"][key] = d["reviews"].get(key, 0) + 1
                             if "sonnet" in st:
                                 d["sonnet"] += 1
@@ -302,6 +314,28 @@ def scorecard(paths):
                             r"npm (run )?test|playwright|SMOKE|test:smoke", str((b.get("input") or {}).get("command"))):
                         d["bg_tests" if (b.get("input") or {}).get("run_in_background") else "fg_tests"] += 1
     rev_max = max(d["reviews"].values(), default=0)
+    # v3.2.15: check time per session = check runs (tool calls + Bash second runs + Stop) × the measured time per run
+    _tc = _bash = _stops = 0
+    _stop_ms, _quick, _pend = [], [], {}
+    for p in paths:
+        for f in [p] + _g.glob(os.path.join(p[:-6], "subagents", "**", "agent-*.jsonl"), recursive=True):
+            for r in _load(f):
+                if r.get("subtype") == "stop_hook_summary":
+                    _stops += 1
+                    _stop_ms += [h.get("durationMs") for h in (r.get("hookInfos") or []) if h.get("durationMs")]
+                for b in ((r.get("message") or {}).get("content") if isinstance((r.get("message") or {}).get("content"), list) else []):
+                    if isinstance(b, dict) and b.get("type") == "tool_use":
+                        _tc += 1
+                        _bash += b.get("name") == "Bash"
+                        if b.get("name") in ("Read", "Grep", "Glob"):
+                            _pend[b.get("id")] = _t(r)
+                    elif isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in _pend:
+                        a, z = _pend.pop(b["tool_use_id"]), _t(r)
+                        if a and z:
+                            _quick.append(z - a)
+    import statistics as _st
+    _per = _st.median(_quick) if _quick else 1.0   # a quick read is almost all check time
+    d["check_min"] = round(((_tc + _bash) * _per + sum(_stop_ms) / 1000) / 60)
     main_pct = round(100 * d["main_tok"] / d["all_tok"]) if d["all_tok"] else 0
     son_pct = round(100 * d["sonnet"] / (d["sonnet"] + d["opus"])) if d["sonnet"] + d["opus"] else 0
     ok = lambda c: "works" if c else "**does not work**"
@@ -310,6 +344,7 @@ def scorecard(paths):
         ("Asked you to open a new session (goal: 0)", str(d["new_session_asks"]), ok(d["new_session_asks"] == 0)),
         ("Reviews per pull request (goal: at most 2)", f"max {rev_max}", ok(rev_max <= 2)),
         ("Plan tries per approval (goal: at most 2)", f"{d['plan_tries']} tries, {d['plan_shown']} approved", ok(d["plan_tries"] <= 2 * max(d["plan_shown"], 1))),
+        ("Check time (goal: under 5% of the session)", f"about {d.get('check_min', 0)} min ({_tc} tool calls, {_per:.1f} s per check run)", "measured"),
         ("Main session share of tokens (goal: under 35%)", f"{main_pct}%", ok(main_pct < 35)),
         ("Sonnet share of worker hand-overs (goal: 40% or more)", f"{son_pct}% ({d['sonnet']} of {d['sonnet'] + d['opus']})", ok(son_pct >= 40)),
         ("Workers' tests in the foreground (goal: 0 in the background)", f"{d['fg_tests']} foreground, {d['bg_tests']} background", ok(d["bg_tests"] == 0)),

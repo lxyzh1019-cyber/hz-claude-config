@@ -83,7 +83,7 @@ import formats as _F
 # v3.2.12: the report link is part of the Completion line; when the reply left it out, the next reply gets a saved fix
 # (not a send-back, which would show the report twice)
 try:
-    _rlm = re.search(r"Report: \[([^\]]+)\]", comp.get("display") or "")
+    _rlm = re.search(r"Report:\**\s*\[([^\]]+)\]", comp.get("display") or "")
     if _rlm and _rlm.group(1) not in (text or "") and "Completion:" in (text or ""):
         from _common import save_fixes as _sf
         _sf(data.get("session_id"), [f"Your Completion line left out the report link. Copy the first Completion line "

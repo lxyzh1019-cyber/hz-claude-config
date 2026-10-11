@@ -15,3 +15,4 @@ Rules for your answer:
 
 - Use fewer steps: one step that does several things costs much less than several steps. Read all the files or parts you need in one step (several Read or Grep calls together). Every step re-reads your whole memory. In one real session a reviewer used 32 steps, about 100 k tokens each, for one-file reads.
 - One pass (v3.2.12): list every finding at once. The worker fixes them together, and one re-check follows.
+- A re-check (v3.2.15) confirms only the listed findings. Add a new finding only when it blocks the merge.

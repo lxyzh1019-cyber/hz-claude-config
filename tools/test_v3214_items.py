@@ -6,7 +6,7 @@ tools/real-harness/scenario_wakeups.sh (3.2.13: 3 replies; 3.2.14: 1)."""
 import json, os, subprocess, sys, tempfile, shutil
 R = os.path.abspath(sys.argv[1]); H = os.path.join(R, "central", "hooks"); V = tempfile.mkdtemp(); results = []
 def res(item, name, ok, detail=""):
-    results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
+    ok = bool(ok); results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
 P = os.path.join(V, "p"); os.makedirs(os.path.join(P, ".claude", "state")); subprocess.run("git init -q", shell=True, cwd=P)
 T0 = os.path.join(V, "e.jsonl"); open(T0, "w").write(json.dumps({"type": "user", "message": {"role": "user", "content": "go"}}) + "\n")
 call = {"hook_event_name": "PreToolUse", "tool_name": "Agent", "session_id": "f", "transcript_path": T0, "tool_use_id": "x",

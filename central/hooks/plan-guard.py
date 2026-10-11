@@ -273,12 +273,18 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
             with open(plan_file, "w", encoding="utf-8") as _f:
                 _f.write(_final)
             live_proof("plan-guard", {"marks": "written into the plan file", "version": _ver, "rev": _rev})
-            deny_tool(f"The plan check added the coloured change marks (Plan v{_ver} · Rev {_rev}) to the plan file. "
-                      "Show the plan again now. Change nothing.")
+            if os.environ.get("HZ_PLAN_MARKS_ROUND"):   # fallback C: the old extra round
+                deny_tool(f"The plan check added the coloured change marks (Plan v{_ver} · Rev {_rev}) to the plan "
+                          "file. Show the plan again now. Change nothing.")
+            # v3.2.15 (P01, option A): the plan goes on to the owner with its marks, rewritten on its way (updatedInput),
+            # instead of one more round. The answer is printed once, at the end of this check.
+            _UPD = dict(data.get("tool_input") or {}, plan=_final)
+            shown_text = _final
         except OSError:
             pass
-    live_proof("plan-guard", {"marks": "asked to paste", "version": _ver, "rev": _rev})
-    deny_tool("Replace the plan with this text, exactly as given, then show it again. It has the coloured change "
+    if plan_norm(shown_text) != plan_norm(_final):   # v3.2.15: skipped when the marks went on with the plan
+      live_proof("plan-guard", {"marks": "asked to paste", "version": _ver, "rev": _rev})
+      deny_tool("Replace the plan with this text, exactly as given, then show it again. It has the coloured change "
               "marks.\n\n" + _final)
 if _name and _ver is not None and _rounds_on:
     _store["plans"][_name] = {"version": _ver, "rev": _rev, "text": text, "base": _base, "since": _since,
@@ -306,4 +312,7 @@ _main = cfg_.get("main_session_model") or {}
 if model and _main.get("id") and _main["id"] not in model:   # v3.1.30: the planner helper plans; the session runs on Opus
     size_note += (f" This session runs on {model}; the work after approval needs only {_main.get('name')}: type "
                   f"{_main.get('switch')} — the planner helper still plans on the first-choice model.")
-print(json.dumps({"systemMessage": size_note}))
+_out = {"systemMessage": size_note}
+if globals().get("_UPD"):
+    _out["hookSpecificOutput"] = {"hookEventName": "PreToolUse", "permissionDecision": "allow", "updatedInput": _UPD}
+print(json.dumps(_out))

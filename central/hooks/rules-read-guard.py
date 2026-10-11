@@ -7,6 +7,8 @@ from _common import read_hook_input, deny_tool, SKILLS_DIR, RULES_PATH
 
 data = read_hook_input()
 cmd = str((data.get("tool_input") or {}).get("command") or "")
+if re.search(r"\bpython[0-9.]*(\.exe)?\b[^|;&]*(plan_report|change_list)\.py", cmd):
+    raise SystemExit(0)   # v3.2.15: running the report tool is not reading the rules (10-11 Oct: 13 refusals, no measured part)
 if "hz-rules" in cmd and re.search(r"(^|[\s;&|(])(cat|head|tail|sed|less|more|type|Get-Content|awk|grep)\b", cmd):
     want = re.search(r"skills/([\w.-]+)/SKILL\.md", cmd)
     path = f"{SKILLS_DIR}/{want.group(1)}/SKILL.md" if want else (SKILLS_DIR if "skills" in cmd else RULES_PATH)

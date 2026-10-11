@@ -121,7 +121,10 @@ if (re.search(r"(?im)^\s*\**Level:\**\s*Complex\b", text) and not re.search(r"(?
                   "to one helper), use 'Level: Routine' and sonnet-worker instead.")
 # v3.2.13: a worktree only for a parallel lane. Weekly-Planner 10 Oct: 19 linked worktrees, one per stage, never
 # removed. A single worker works in the main folder on the stage branch made from main. Refused once per prompt.
-if not _open and re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I) and not os.environ.get("HZ_WORKTREE_CHECK_OFF"):
+_declared_lane = bool(re.search(r"(?im)^\s*\**Group:\**\s*\S", text) and re.search(r"(?im)^\s*\**Files:\**\s*\S", text))
+# v3.2.15: a declared lane (Group and Files) may use its worktree even when it starts first (11 Oct: Part 7, the first of
+# three lanes started together, was refused and waited 50 minutes)
+if not _open and not _declared_lane and re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I) and not os.environ.get("HZ_WORKTREE_CHECK_OFF"):
     _wf = os.path.join(STATE_DIR, "worktree-refused.json")
     try:
         _wr = json.load(open(_wf, encoding="utf-8"))

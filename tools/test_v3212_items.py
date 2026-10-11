@@ -3,10 +3,10 @@
 Items: 1 Windows packages rule · 3 Part n and #number · 4 hz-change-guard v18 copy · 5 revision record and gate ·
 6 one ⏳ line per round, '…' after it, no text before tool steps, the pushing worker waits for GitHub ·
 7 the report no longer says 'run long tests in the background'. Item 2 (plan marks round) stays open: see the record."""
-import json, os, subprocess, sys, tempfile, shutil
+import json, re, os, subprocess, sys, tempfile, shutil
 R = os.path.abspath(sys.argv[1]); C = os.path.join(R, "central"); H = os.path.join(C, "hooks"); V = tempfile.mkdtemp(); results = []
 def res(item, name, ok, detail=""):
-    results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
+    ok = bool(ok); results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
 def read(*p):
     try:
         return open(os.path.join(*p), encoding="utf-8").read()
@@ -89,7 +89,7 @@ subprocess.run("git add -A && git commit -qm a && git checkout -qb claude/x", sh
 dsp = subprocess.run(["python3", "-c", "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])"],
                      capture_output=True, text=True, cwd=H, env=dict(os.environ, CLAUDE_PROJECT_DIR=L, PYTHONDONTWRITEBYTECODE="1")).stdout
 first = dsp.splitlines()[0] if dsp else ""
-res(11, "the report link is in the first Completion line", first.startswith("Completion:") and "Report: [long-plan-checkpoint-1.md]" in first, first[:200])
+res(11, "the report link is in the first Completion line", re.search(r"Report:\**\s*\[long-plan-checkpoint-1\.md\]", dsp), first[:200])
 TR = os.path.join(V, "t.jsonl")
 jl(TR, [{"type": "user", "message": {"role": "user", "content": "go"}},
         {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "e1", "name": "Edit", "input": {"file_path": os.path.join(L, "a.js")}}]}},

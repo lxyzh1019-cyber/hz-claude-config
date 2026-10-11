@@ -6,7 +6,7 @@ owner to open a new session · 3 the ready check asks GitHub · 4 worktrees only
 import json, os, subprocess, sys, tempfile, shutil, stat
 R = os.path.abspath(sys.argv[1]); C = os.path.join(R, "central"); H = os.path.join(C, "hooks"); V = tempfile.mkdtemp(); results = []
 def res(item, name, ok, detail=""):
-    results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
+    ok = bool(ok); results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
 def read(*p):
     try:
         return open(os.path.join(*p), encoding="utf-8").read()

@@ -89,6 +89,11 @@ def _missing(cfg, project_dir, read):
             matchers = " ".join(g.get("matcher", "") for g in hooks.get(event.strip(), []))
             if needle not in matchers:
                 missing.append(name)
+        for event, pair in (exp.get("event_matchers_absent") or {}).items():   # v3.2.15
+            needle, name = pair
+            matchers = " ".join(g.get("matcher", "") for g in hooks.get(event.strip(), []))
+            if needle in matchers:
+                missing.append(name)
         allow = (s.get("permissions") or {}).get("allow") or []
         for rule, name in (exp.get("allow") or {}).items():
             if rule not in allow:

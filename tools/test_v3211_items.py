@@ -5,10 +5,10 @@ Items: 1 Routine = known answer · 2 short test output · 4 lanes without a fixe
 no repeated ⏳ line, ✅ line · 6 Sonnet's named change in .github/ · 7 plan check (Quick read, quoted finds) · 8 token
 report (reading apart from planning, real helper totals) · 9 report link in the Completion lines. Item 3 (hand-back at
 150 k) is not built: see the record."""
-import json, os, subprocess, sys, tempfile, shutil, datetime as dt
+import json, re, os, subprocess, sys, tempfile, shutil, datetime as dt
 C = os.path.abspath(sys.argv[1]); H = os.path.join(C, "hooks"); V = tempfile.mkdtemp(); results = []
 def res(item, name, ok, detail=""):
-    results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
+    ok = bool(ok); results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
 def run(script, inp, proj, **env):
     e = dict(os.environ, CLAUDE_PROJECT_DIR=proj, PYTHONDONTWRITEBYTECODE="1", HZ_RULES_FIRST_OFF="1",
              HZ_STAGE_TAGS_OFF="1", HZ_PLANNER_CHECK_OFF="1", HZ_QUESTIONS_CHECK_OFF="1", HZ_PLAN_ROUNDS_OFF="1",
@@ -121,7 +121,7 @@ open(os.path.join(A, "docs", "reports", "pass-plan-checkpoint-1.md"), "w").write
 sh("git add -A && git commit -qm a && git checkout -qb claude/x", A)
 o = subprocess.run(["python3", "-c", "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['display'])"],
                    capture_output=True, text=True, cwd=H, env=dict(os.environ, CLAUDE_PROJECT_DIR=A, PYTHONDONTWRITEBYTECODE="1")).stdout
-res(9, "the Completion lines carry the report link", "Report: [pass-plan-checkpoint-1.md](https://github.com/o/Weekly-Planner/blob/claude/x/docs/reports/pass-plan-checkpoint-1.md)" in o, o)
+res(9, "the Completion lines carry the report link", re.search(r"Report:\**\s*\[pass-plan-checkpoint-1\.md\]\(https://github\.com/o/Weekly-Planner/blob/claude/x/docs/reports/pass-plan-checkpoint-1\.md\)", o), o)
 shutil.rmtree(V, ignore_errors=True)
 items = sorted({i for i, _ in results}); ok = [i for i in items if all(o for j, o in results if j == i)]
 print(f"\nchecks passed {sum(o for _, o in results)} of {len(results)} · items fully passing {len(ok)} of {len(items)}: {ok}")

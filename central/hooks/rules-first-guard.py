@@ -29,5 +29,20 @@ if tool == "Read" and (path == own or ("hz-rules" in path and path.endswith("rul
     sys.exit(0)
 if tool in set(cfg.get("rules_first_allowed_tools") or ["Read", "Glob", "Grep", "LS", "TodoWrite"]):
     sys.exit(0)
+# v3.2.15: Read, Grep and Glob no longer start the checks (12% of a session's time on Windows), so the Read of the rules
+# is found in the session file at the next checked step.
+try:
+    from _common import read_transcript as _rt
+    for _r in _rt(data.get("transcript_path")):
+        for _b in ((_r.get("message") or {}).get("content") or []) if isinstance((_r.get("message") or {}).get("content"), list) else []:
+            if isinstance(_b, dict) and _b.get("type") == "tool_use" and _b.get("name") == "Read":
+                _p = str((_b.get("input") or {}).get("file_path") or "").replace("\\", "/").lower()
+                if _p == own or ("hz-rules" in _p and _p.endswith("rules/claude-rules.md")):
+                    sess_set("rules-read.json", sid, True)
+                    sys.exit(0)
+except SystemExit:
+    raise
+except Exception:
+    pass
 log("rules-first-guard", {"refused": tool})
 deny_tool(f"Read the working rules first, with the Read tool: {RULES_PATH} — then do this step again.")
