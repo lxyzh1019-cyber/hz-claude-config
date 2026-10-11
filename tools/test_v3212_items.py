@@ -48,12 +48,13 @@ res(6, "a later wake-up with different work: one character, not a new ⏳ line",
 pg("Please go on with the next stage")
 o3 = pg(note(3))
 res(6, "my message starts a new round: the ⏳ line once more", "Still running" in o3, o3[:160])
-rt = lambda sid: run("report-timing.py", {"session_id": sid, "tool_name": "Agent", "tool_input": {"subagent_type": "reviewer", "prompt": "x", "run_in_background": True}}, P, HZ_REPORT_TIMING_OFF=None)
+rt = lambda sid: run("report-timing.py", {"session_id": sid, "tool_name": "Agent", "tool_input": {"subagent_type": "reviewer", "prompt": "x", "run_in_background": True}}, P, HZ_REPORT_TIMING_OFF=None,
+                     HZ_BACKGROUND_WORKERS="1")   # v3.2.14: workers run in the foreground unless this is set
 pg("next", "r7"); o4 = rt("r7"); o5 = rt("r7")
 res(6, "a helper started later in the same round gets '…', not a second ⏳ line", "Working on" in o4 and "one character only" in o5, (o4[:80], o5[:120]))
 res(6, "the wait notice says: no text before tool steps", "no text before tool steps" in read(H, "_common.py"), "")
 gw = lambda extra: run("wait-guard.py", dict({"tool_name": "Bash", "session_id": "w", "tool_input": {"command": "timeout 600 gh run watch 5 --exit-status"}}, **extra), P)
-o6 = gw({"agent_id": "w1"}); o7 = gw({})
+o6 = gw({"agent_id": "w1"}); o7 = run("wait-guard.py", {"tool_name": "Bash", "session_id": "w", "tool_input": {"command": "timeout 600 gh run watch 5 --exit-status"}}, P, HZ_BACKGROUND_WORKERS="1")   # v3.2.14: with foreground workers the main session may wait
 res(6, "the pushing worker may wait for its GitHub run in the foreground", '"deny"' not in o6, o6[:160])
 res(6, "  ...the main session may not, and is told to give the wait to the worker", '"deny"' in o7 and "worker that pushed" in o7, o7[:160])
 # 8 lean main session

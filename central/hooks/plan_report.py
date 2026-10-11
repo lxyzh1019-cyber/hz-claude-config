@@ -53,6 +53,7 @@ def measure(paths):
     m = {"sessions": len(paths), "wall_min": 0.0, "tokens_m": 0.0, "tool_calls": 0, "helpers": 0,
          "test_min": 0.0, "refusals": 0, "floor_s": None}
     floor, slow, by_helper, spans = [], [], {}, []
+    gh_bg = []   # v3.2.14: background GitHub waits as (start, end); counted only while no helper runs
     # v3.2.9: time first, tokens second (owner). Minutes by kind, owner-blind: app, config, plan or waiting.
     tm = {"test runs": 0.0, "waiting for GitHub": 0.0, "other commands": 0.0, "model thinking": 0.0, "waiting for you": 0.0}
     one_test, gh_wait = [], 0.0
@@ -98,7 +99,7 @@ def measure(paths):
                 if "<task-notification>" in _raw:
                     for _id in re.findall(r"<tool-use-id>(\w+)</tool-use-id>", _raw):
                         if _id in bg and _tt:
-                            tm["waiting for GitHub"] += (_tt - bg.pop(_id)) / 60
+                            gh_bg.append((bg.pop(_id), _tt))
                 for b in c if isinstance(c, list) else []:
                     if not isinstance(b, dict):
                         continue
@@ -172,13 +173,28 @@ def measure(paths):
     if floor:
         m["floor_s"] = round(statistics.median(floor), 2)
         tm["hook time on every call"] = m["tool_calls"] * statistics.median(floor) / 60
-    m["time_kinds"] = {k: round(v, 1) for k, v in tm.items()}
     m["one_test_runs"] = len(one_test)
     m["one_test_median_s"] = round(statistics.median(one_test)) if one_test else None
     m["tokens_by_helper"] = {k: round(v[1], 1) for k, v in by_helper.items()}
     for k in ("wall_min", "tokens_m", "test_min"):
         m[k] = round(m[k], 1)
     slow.sort(reverse=True)
+    # v3.2.14: a background GitHub wait costs time only while nothing else runs (10 Oct: "33 min" while workers worked)
+    busy = sorted((s["start"], s["end"]) for s in spans)
+    for a, b in gh_bg:
+        free, cur = 0.0, a
+        for s, e in busy:
+            if e <= cur or s >= b:
+                continue
+            if s > cur:
+                free += s - cur
+            cur = max(cur, e)
+            if cur >= b:
+                break
+        if cur < b:
+            free += b - cur
+        tm["waiting for GitHub"] += free / 60
+    m["time_kinds"] = {k: round(v, 1) for k, v in tm.items()}
     m["parallel"] = parallel_candidates(spans)
     return m, slow[:6], by_helper
 
@@ -187,10 +203,13 @@ def parallel_candidates(spans):
     """v3.2.10: helpers of different stages that ran one after another, edited no file in common, and so could have
     run at the same time. Minutes lost = the shorter of the two runs. Read-only helpers (no edits) are left out."""
     work = sorted([s for s in spans if s["files"] and s["stage"]], key=lambda s: s["start"])
-    out = []
+    out, seen = [], set()
     for a, b in zip(work, work[1:]):
-        if a["stage"] != b["stage"] and b["start"] >= a["end"] and not (a["files"] & b["files"]):
-            out.append({"stages": f"{a['stage']} and {b['stage']}",
+        key = frozenset((a["stage"], b["stage"]))   # v3.2.14: each pair once (10 Oct: "33 and 32", "32 and 33")
+        if a["stage"] != b["stage"] and b["start"] >= a["end"] and not (a["files"] & b["files"]) and key not in seen:
+            seen.add(key)
+            lo, hi = sorted((a["stage"], b["stage"]), key=lambda x: (len(x), x))
+            out.append({"stages": f"{lo} and {hi}",
                         "minutes": round(min(a["end"] - a["start"], b["end"] - b["start"]) / 60)})
     out.sort(key=lambda x: -x["minutes"])
     return {"pairs": out[:3], "minutes": sum(x["minutes"] for x in out)}
@@ -210,6 +229,96 @@ def last_report(plan):
     return best
 
 
+def scorecard(paths):
+    """v3.2.14: the live scorecard. Measures, from the session files, the solutions that depend on what the model
+    writes, so each session proves or disproves them without the owner judging by eye. Returns (rows, data)."""
+    import glob as _g
+    d = {"rounds": 0, "wait_lines": 0, "max_wait_lines": 0, "new_session_asks": 0, "plan_tries": 0, "plan_shown": 0,
+         "reviews": {}, "sonnet": 0, "opus": 0, "main_tok": 0, "all_tok": 0, "pr_n": 0, "part_n": 0, "report_link": 0,
+         "completion": 0, "bg_tests": 0, "fg_tests": 0}
+    for p in paths:
+        R = _load(p)
+        cur, seen = 0, set()
+        for r in R:
+            msg = r.get("message") or {}
+            c = msg.get("content")
+            if r.get("type") == "user":
+                s = c if isinstance(c, str) else " ".join(x.get("text", "") for x in (c or []) if isinstance(x, dict))
+                if s and not s.lstrip().startswith("<") and "agent-message" not in s and not s.startswith("Stop hook") \
+                        and not any(isinstance(x, dict) and x.get("type") == "tool_result" for x in (c if isinstance(c, list) else [])):
+                    d["rounds"] += 1
+                    d["max_wait_lines"] = max(d["max_wait_lines"], cur)
+                    cur = 0
+            if r.get("type") == "assistant":
+                u = msg.get("usage") or {}
+                if msg.get("id") not in seen and u:
+                    seen.add(msg.get("id"))
+                    d["main_tok"] += sum(int(u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+                for b in c if isinstance(c, list) else []:
+                    if not isinstance(b, dict):
+                        continue
+                    if b.get("type") == "text":
+                        t = b.get("text") or ""
+                        if t.lstrip().startswith("⏳"):
+                            d["wait_lines"] += 1
+                            cur += 1
+                        need = re.search(r"I need from you:\**\s*(.+)", t)
+                        if need and re.search(r"\bnew (?:session|chat|window)\b|paste the restart line", need.group(1), re.I):
+                            d["new_session_asks"] += 1
+                        d["pr_n"] += len(re.findall(r"\bPR \d+\b", t))
+                        d["part_n"] += len(re.findall(r"\bPart \d+\b", t))
+                        if "Completion:" in t:
+                            d["completion"] += 1
+                            if re.search(r"Completion:[^\n]*Report: \[", t):
+                                d["report_link"] += 1
+                    if b.get("type") == "tool_use":
+                        n, i = b.get("name"), b.get("input") or {}
+                        if n == "ExitPlanMode":
+                            d["plan_tries"] += 1
+                        if n in ("Agent", "Task"):
+                            st = str(i.get("subagent_type") or "")
+                            if st.startswith("reviewer"):
+                                tk = re.search(r"Task:\s*(.+)", str(i.get("prompt") or ""))
+                                key = re.sub(r"\s*\(.*?\)\s*$", "", tk.group(1).strip())[:60] if tk else "?"
+                                d["reviews"][key] = d["reviews"].get(key, 0) + 1
+                            if "sonnet" in st:
+                                d["sonnet"] += 1
+                            if "opus" in st:
+                                d["opus"] += 1
+            if r.get("type") == "user" and "User has approved your plan" in json.dumps(c, ensure_ascii=False):
+                d["plan_shown"] += 1
+        d["max_wait_lines"] = max(d["max_wait_lines"], cur)
+        d["all_tok"] += d["main_tok"]
+        for f in _g.glob(os.path.join(p[:-6], "subagents", "**", "agent-*.jsonl"), recursive=True):
+            seen2 = set()
+            for r in _load(f):
+                msg = r.get("message") or {}
+                u = msg.get("usage") or {}
+                if r.get("type") == "assistant" and u and msg.get("id") not in seen2:
+                    seen2.add(msg.get("id"))
+                    d["all_tok"] += sum(int(u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+                for b in (msg.get("content") if isinstance(msg.get("content"), list) else []):
+                    if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash" and re.search(
+                            r"npm (run )?test|playwright|SMOKE|test:smoke", str((b.get("input") or {}).get("command"))):
+                        d["bg_tests" if (b.get("input") or {}).get("run_in_background") else "fg_tests"] += 1
+    rev_max = max(d["reviews"].values(), default=0)
+    main_pct = round(100 * d["main_tok"] / d["all_tok"]) if d["all_tok"] else 0
+    son_pct = round(100 * d["sonnet"] / (d["sonnet"] + d["opus"])) if d["sonnet"] + d["opus"] else 0
+    ok = lambda c: "works" if c else "**does not work**"
+    rows = [
+        ("⏳ lines per round (goal: at most 1)", f"max {d['max_wait_lines']} in one round, {d['wait_lines']} in {max(d['rounds'], 1)} rounds", ok(d["max_wait_lines"] <= 1)),
+        ("Asked you to open a new session (goal: 0)", str(d["new_session_asks"]), ok(d["new_session_asks"] == 0)),
+        ("Reviews per pull request (goal: at most 2)", f"max {rev_max}", ok(rev_max <= 2)),
+        ("Plan tries per approval (goal: at most 2)", f"{d['plan_tries']} tries, {d['plan_shown']} approved", ok(d["plan_tries"] <= 2 * max(d["plan_shown"], 1))),
+        ("Main session share of tokens (goal: under 35%)", f"{main_pct}%", ok(main_pct < 35)),
+        ("Sonnet share of worker hand-overs (goal: 40% or more)", f"{son_pct}% ({d['sonnet']} of {d['sonnet'] + d['opus']})", ok(son_pct >= 40)),
+        ("Workers' tests in the foreground (goal: 0 in the background)", f"{d['fg_tests']} foreground, {d['bg_tests']} background", ok(d["bg_tests"] == 0)),
+        ("Report link in the Completion line (goal: every one)", f"{d['report_link']} of {d['completion']}", ok(d["completion"] and d["report_link"] == d["completion"])),
+        ("'Part n' instead of 'PR n' (goal: no 'PR n')", f"PR n: {d['pr_n']} · Part n: {d['part_n']}", ok(d["pr_n"] == 0)),
+    ]
+    return rows, d
+
+
 def main():
     args, folder = sys.argv[1:], ""
     if "--dir" in args:
@@ -222,6 +331,13 @@ def main():
             folder = open(os.path.join(STATE_DIR, "transcripts-dir.txt"), encoding="utf-8").read().strip()
         except OSError:
             folder = ""
+    if "--scorecard" in args:   # v3.2.14: the scorecard alone, for one session file or folder
+        args.remove("--scorecard")
+        p = args[0] if args else ""
+        ps = [p] if p.endswith(".jsonl") else sorted(glob.glob(os.path.join(p, "*.jsonl")))
+        for a, b, c in scorecard(ps)[0]:
+            print(f"| {a} | {b} | {c} |")
+        return
     paths = sessions_for(plan, folder) if plan and folder else []
     if not paths:
         print(f"## Measured part\n\nNo session file names the plan \"{plan}\" (folder: {folder or 'unknown'}).")
@@ -255,7 +371,7 @@ def main():
         out.append("")
     # v3.2.9: the top 3 time sinks, then the top 3 token sinks, each with the usual fix (owner-blind)
     FIX = {"test runs": "make a one-test run start in under 1 minute; workers run tests in the foreground (10-minute timeout)",
-           "waiting for GitHub": "start the next stage while GitHub tests run; keep each GitHub job under 5 minutes",
+           "waiting for GitHub": "keep each GitHub job under 5 minutes; one push per pull request",
            "waiting for you": "fewer stops: join your checks, fewer pull requests, decide questions before approval",
            "model thinking": "fewer steps: read several files in one step, smaller hand-overs",
            "other commands": "look at the slowest steps below",
@@ -287,6 +403,9 @@ def main():
                                                                         for x in pc["pairs"]) + "."]
     else:
         out_top += ["", "**Parallel candidates:** none. Each stage waited for the one before it."]
+    sc, _ = scorecard(paths)
+    out_top += ["", "## Live scorecard (what the model did, measured)", "", "| Solution | Measured | Result |", "|---|---|---|"] + [
+        f"| {a} | {b} | {c} |" for a, b, c in sc]
     out = out[:1] + [""] + out_top + [""] + out[1:]
     out.append("<!-- metrics: " + json.dumps(m) + " -->")
     print("\n".join(out))

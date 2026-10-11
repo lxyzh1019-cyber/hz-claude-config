@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.12: one ⏳ line per round (a round starts with your message); later wake-ups that round show '…' only, and no text comes before tool steps while work runs. The worker that pushes waits for its own GitHub run, so the main session wakes once per worker. Plans name work packages 'Part n — <name>' and pull requests only '#number'. The repo has revision-record.md and the hz-change-guard v18 copy with its revision gate. The main session hands record, plan-file and git work to workers; one review per pull request; pictures and the Proof line before the first push; the report link sits in the first Completion line; long plans get a checkpoint report at every check stop. Packages come with Windows line endings. No setup pull request for your apps. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.14: workers run in the foreground: the main session is not woken while they work, so no '⏳ Working on' lines come between your message and the report (real Claude Code test: 3 replies before, 1 after). Workers started together still run at the same time. The end report has a live scorecard of what the model did (⏳ lines per round, reviews, plan tries, main-session share, Sonnet share, foreground tests, report link, Part names). Also: a Complex hand-over must name its reason (else Routine on Sonnet); the main session waits for GitHub in the foreground; after a restart line the session starts the next stage at once; the report counts only real GitHub waiting. No setup pull request for your apps. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -57,6 +57,10 @@
       {
         "script": "rules-read-guard.py",
         "tools": "Bash"
+      },
+      {
+        "script": "foreground-workers.py",
+        "tools": "Agent|Task"
       }
     ],
     "Stop": [

@@ -259,9 +259,15 @@ Dynamic workflows: one wide step, role file, own files (v3.2.10) | R | **Dynamic
 References are exact by default (v3.2.10) | R | **References are exact.**
 Checkpoint reports and delivery (v3.2.10) | R | **Checkpoint reports.**
 The ⏳ line stands alone (v3.2.10) | R | The ⏳ line always stands alone
-One ⏳ line per round, then '…' (v3.2.12) | R | once per round (Hook): a round starts with my message
+One ⏳ line per round, only for a background command or workflow (v3.2.12, v3.2.14) | R | It is only for a background command or a workflow, once per round
 The pushing worker waits for GitHub (v3.2.12) | R | **The pushing worker waits for GitHub (Hook).**
 Part n and #number (v3.2.12) | R | **Part and #number.**
 Lean main session (v3.2.12) | R | **Lean main session (Hook).**
 Pictures before the first push (v3.2.12) | R | **Pictures before the first push.**
 One review per pull request (v3.2.12) | R | One review per pull request
+Restart line: GitHub first, merged branch never named (v3.2.13) | R | a merged branch never goes in the restart line
+Lane worktrees only, clean-up after merge (v3.2.13) | R | A single worker works in the main folder, never in a worktree
+Workers in the foreground, no wake-ups (v3.2.14) | R | Workers run in the foreground (Hook: the call is rewritten)
+Complex needs a reason (v3.2.14) | R | `Complex because: <reason>` (Hook)
+Main session waits for GitHub in the foreground (v3.2.14) | R | it waits in the foreground the same way, never in the background (Hook)
+Restart line: go on at once (v3.2.14) | R | goes on with the next stage at once

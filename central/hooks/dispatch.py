@@ -81,6 +81,7 @@ def _run(path, raw):
 
 
 contexts, passthrough, reasons, notes, kinds = [], None, [], [], []
+updated = None   # v3.2.14: a tool call rewritten by a check (foreground-workers.py)
 sid = data.get("session_id")
 for e in entries:
     if isinstance(e, str):
@@ -118,6 +119,8 @@ for e in entries:
             obj["systemMessage"] = "\n".join(notes)
         print(json.dumps(obj))
         sys.exit(0)
+    if hso.get("updatedInput") is not None:
+        updated = hso   # v3.2.14: a rewritten tool call survives the joined answer
     if hso.get("additionalContext"):
         contexts.append(hso["additionalContext"])
     elif passthrough is None:
@@ -162,6 +165,10 @@ if reasons:
 out = {}
 if contexts:
     out = {"hookSpecificOutput": {"hookEventName": event, "additionalContext": "\n\n".join(contexts)}}
+if updated is not None:
+    out.setdefault("hookSpecificOutput", {"hookEventName": event})
+    out["hookSpecificOutput"].update({"permissionDecision": updated.get("permissionDecision", "allow"),
+                                      "updatedInput": updated["updatedInput"]})
 elif passthrough is not None:
     out = passthrough
 if notes:

@@ -145,6 +145,12 @@ elif not os.environ.get("HZ_REPORT_TIMING_OFF"):
                 _cpt = _cd(cfg)
                 if _cpt:
                     TIMING_TEXT = _cpt + " " + _RT
+                from _common import lane_cleanup as _lc
+                _rm, _kp = _lc()
+                if _rm:   # v3.2.13: merged and clean lane worktrees go; nothing else is removed
+                    TIMING_TEXT += (" [clean-up] Remove these lane worktrees (merged on GitHub, no uncommitted changes): "
+                                    + "; ".join(f"git worktree remove \"{p}\" && git branch -d {b}" for p, b in _rm)
+                                    + ". Name any other worktree you keep, with its reason, in the report.")
             except Exception as _e2:
                 log("plan-gate", {"checkpoint_error": str(_e2)[:200]})
         elif _ws.get(_sidk):
@@ -254,8 +260,9 @@ if resume:
     br = resume.group(2).rstrip(".;,`")
     msgs.append(f"[resume] This session continues earlier work. First switch to branch {br} (fetch it from origin if it "
                 f"is only on GitHub), read '## Where we are' in {cfg['record_file']} and the newest plan file in plans/, "
-                "then tell me the plan name, its newest Plan vN, the Completion lines and the next stage. Wait for my OK "
-                "before changing anything.")
+                "then tell me in two lines the plan name, its newest Plan vN and the next stage, and start that stage at "
+                "once. Wait for me only when a decision or a plan approval is open, or the branch is merged on GitHub "
+                "(then start from main). v3.2.14: 10 Oct a session waited 15 minutes for an 'ok' before it started.")
 
 # v3.1.24: hand-off after a merge, or once a session is long — done by the session itself, in one reply
 handoff_why = ""
