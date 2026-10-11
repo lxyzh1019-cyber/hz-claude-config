@@ -32,9 +32,6 @@ Or, if the user wants it human-visible, a collapsible section:
 - Date-seeded daily shuffle
 ```
 
-### App repository with a by-screen FEATURES.md (v3.1.30)
-If `FEATURES.md` starts with `<!-- feature-list: by-screen -->`, the manifest is that file: one section per screen, each line ending in `— Proof: <test name | reference picture>`. The regression table's Kept row names its proof (`Proof: pictures <n> screens × <the sizes and looks FEATURES.md names>, <k> changed (all planned) · tests <passed>/<total>`), from the compare instructions in the central agents folder.
-
 ### App / code (single-file HTML, etc.)
 Header comment at the top of the main file:
 

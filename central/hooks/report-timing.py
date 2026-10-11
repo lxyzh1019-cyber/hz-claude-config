@@ -28,4 +28,22 @@ elif tool == "Bash" and inp.get("run_in_background"):
 else:
     sys.exit(0)
 log("report-timing", {"tool": tool})
+# v3.2.12: this round's ⏳ line is now asked for; later wake-ups this round get '…' (plan-gate.py)
+try:
+    import json as _j, os as _o
+    from _common import STATE_DIR as _SD
+    _p = _o.path.join(_SD, "wait-state.json")
+    try:
+        _w = _j.load(open(_p, encoding="utf-8"))
+    except (OSError, ValueError):
+        _w = {}
+    _shown = bool(_w.get(str(data.get("session_id"))))
+    _w[str(data.get("session_id"))] = 1
+    _o.makedirs(_SD, exist_ok=True)
+    _j.dump(dict(list(_w.items())[-20:]), open(_p, "w", encoding="utf-8"))
+except Exception:
+    _shown = False
+if _shown:
+    add_context("PreToolUse", f"[report timing] Still running in the background: {what}. The ⏳ line of this round is "
+                "already shown: end this turn with one character only: '…'. No other text until the full report.")
 add_context("PreToolUse", WAIT_TEXT.format(what=what, line=F.WORKING_LINE))

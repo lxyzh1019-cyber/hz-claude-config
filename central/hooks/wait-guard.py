@@ -39,16 +39,19 @@ if re.search(r"(?:^|[;&|\n]\s*)watch\s", body):
 # "gh run watch" 8 times (30 minutes). Start the watch in the background and go on with the next stage.
 _gh_wait = re.search(r"(?:^|[;&|\n]\s*)(?:timeout\s+\S+\s+)?gh\s+(run\s+watch|pr\s+checks\b[^\n]*--watch)", body) or \
     re.search(r"\b(while|until)\b[\s\S]*?\bdo\b[\s\S]*?\bgh\s+run\b[\s\S]*?\bdone\b", body)   # real: "timeout 1200 gh run watch", "while [ -z $id ]; do id=$(gh run list …)"
-if not inp.get("run_in_background") and _gh_wait:
+# v3.2.12: a worker waits for its own GitHub run in the foreground (runs take under 5 minutes; the Bash limit is 10).
+# The main session then gets one wake-up per worker, not one per GitHub run (Weekly-Planner 10 Oct: 3 extra wake-ups).
+_is_worker = bool(data.get("agent_id"))
+if not inp.get("run_in_background") and _gh_wait and not _is_worker:
     log("wait-guard", {"refused": "github wait in the foreground"})
     try:
         from _common import live_proof
         live_proof("github-wait", {"refused": True})
     except ImportError:
         pass
-    deny_tool("Do not wait for GitHub here. Run the same command in the background (run_in_background, starting with "
-              "'timeout 1800 '). Then go on with the next stage that does not need this result. Its notice tells you "
-              "the result; a failure becomes a Build row 'Fix — <problem>'.")
+    deny_tool("Do not wait for GitHub in the main session. Give the wait to the worker that pushed: it runs "
+              "'timeout 600 gh run watch <id> --exit-status' in the foreground and reports the result. If no worker "
+              "runs, start the watch in the background (run_in_background, 'timeout 1800 ') and go on.")
 # v3.2.1: while the full suite is known to be too slow and is not split yet, no full local run
 try:
     from _common import is_full_test_run, slow_suite_blocks, test_speed_load

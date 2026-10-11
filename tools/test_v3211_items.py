@@ -69,7 +69,7 @@ note = "<task-notification><task-id>bx1</task-id><status>completed</status><summ
 o1 = run("plan-gate.py", {"prompt": note, "session_id": "n5", "transcript_path": M}, P, HZ_REPORT_TIMING_OFF=None)
 o2 = run("plan-gate.py", {"prompt": note, "session_id": "n5", "transcript_path": M}, P, HZ_REPORT_TIMING_OFF=None)
 res(5, "first wake-up with work running: the ⏳ line", "Still running" in o1, o1[:200])
-res(5, "next wake-up, nothing changed: one character, not the ⏳ line again", "Nothing changed" in o2 and "one character" in o2, o2[:200])
+res(5, "next wake-up, nothing changed: one character, not the ⏳ line again", "one character" in o2, o2[:200])
 res(5, "the report-time notice asks for the ✅ Completed line", "✅ Completed:" in read(H, "_common.py"), "")
 # 6 Sonnet's named change in .github/
 def sedit(prompt, f):

@@ -58,6 +58,30 @@ if sub in _planners:
 if sub in _planners[1:] and not re.search(r"^\s*\**Fallback:\**\s*\S", text, re.M | re.I):
     deny_tool(f"Send '{_planners[0]}' first: it plans on the first-choice model. Use '{sub}' only when {_planners[0]} "
               "failed because its model is not available; then start the hand-over with 'Fallback: <the error>'.")
+# v3.2.12: one review per pull request: all findings in one pass, all fixes together, one re-check. Weekly-Planner
+# 10 Oct: 3 reviewer passes for one pull request (16:40, 16:58, 17:03 MDT). The third start of a reviewer for the
+# same task this round gets a notice.
+if str(sub or "").startswith("reviewer"):
+    try:
+        _tk = (re.search(r"(?mi)^\s*\**Task:\**\s*(.+?)\s*$", text) or re.search(r"(.{1,60})", text)).group(1)[:80]
+        _rf = os.path.join(STATE_DIR, "review-rounds.json")
+        try:
+            _rv = json.load(open(_rf, encoding="utf-8"))
+        except (OSError, ValueError):
+            _rv = {}
+        _tk0 = re.sub(r"\s*\(.*?\)\s*$", "", _tk)
+        _rk = str(data.get('session_id')) + '|' + _tk0
+        _rv[_rk] = _rv.get(_rk, 0) + 1
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump(dict(list(_rv.items())[-50:]), open(_rf, "w", encoding="utf-8"))
+        if _rv[_rk] >= 3:
+            from _common import add_context as _ac0
+            _ac0("PreToolUse", f"[one review] This is review {_rv[_rk]} for '{_tk[:50]}'. A review lists every finding in "
+                            "one pass; the worker fixes them all together; one re-check follows. Then the pull request.")
+    except SystemExit:
+        raise
+    except Exception:
+        pass
 if sub in cfg.get("read_only_helpers", []):
     raise SystemExit(0)
 workers = ("opus-worker", "sonnet-worker")

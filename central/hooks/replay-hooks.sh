@@ -1974,11 +1974,11 @@ RS="$T/rs"; mkdir -p "$RS/s1/subagents"; cp "$T/st32.jsonl" "$RS/s1.jsonl"
 o=$(python3 $H/../../tools/replay_sessions.py "$RS/s1.jsonl" 2>&1)
 check "v3.2.0: the replay tool reports plans, workers, main session and the summary for a real session" "Plans: .*showings" "$o"
 check "  ...and the session time without usage-limit stops" "usage-limit stops 2 h 0 min (1)" "$o"
-o=$(echo '{"tool_name":"Bash","tool_input":{"command":"gh run watch 123 --exit-status"}}' | python3 $H/wait-guard.py); check "v3.2.0: waiting for GitHub in the foreground is refused" "Do not wait for GitHub here" "$o"
+o=$(echo '{"tool_name":"Bash","tool_input":{"command":"gh run watch 123 --exit-status"}}' | python3 $H/wait-guard.py); check "v3.2.0: waiting for GitHub in the foreground is refused" "Do not wait for GitHub in the main session" "$o"
 o=$(echo '{"tool_name":"Bash","tool_input":{"command":"timeout 1800 gh run watch 123 --exit-status","run_in_background":true}}' | python3 $H/wait-guard.py); check "  ...the same wait in the background is allowed" "^$" "$o"
 o=$(echo '{"tool_name":"Bash","tool_input":{"command":"gh run view 123 --log-failed"}}' | python3 $H/wait-guard.py); check "  ...reading a finished run is allowed" "^$" "$o"
-o=$(echo '{"tool_name":"Bash","tool_input":{"command":"cd app && timeout 1200 gh run watch 37573375269 --exit-status >/dev/null 2>&1; gh run view 1"}}' | python3 $H/wait-guard.py); check "v3.2.0: the real 'timeout 1200 gh run watch' in the foreground is refused" "Do not wait for GitHub here" "$o"
-o=$(echo '{"tool_name":"Bash","tool_input":{"command":"id=\"\"; while [ -z \"$id\" ]; do id=$(gh run list --limit 1 --json databaseId --jq .[0].databaseId); done"}}' | python3 $H/wait-guard.py); check "  ...and a loop that polls GitHub" "Do not wait for GitHub here" "$o"
+o=$(echo '{"tool_name":"Bash","tool_input":{"command":"cd app && timeout 1200 gh run watch 37573375269 --exit-status >/dev/null 2>&1; gh run view 1"}}' | python3 $H/wait-guard.py); check "v3.2.0: the real 'timeout 1200 gh run watch' in the foreground is refused" "Do not wait for GitHub in the main session" "$o"
+o=$(echo '{"tool_name":"Bash","tool_input":{"command":"id=\"\"; while [ -z \"$id\" ]; do id=$(gh run list --limit 1 --json databaseId --jq .[0].databaseId); done"}}' | python3 $H/wait-guard.py); check "  ...and a loop that polls GitHub" "Do not wait for GitHub in the main session" "$o"
 # v3.2.0: test speed and the test rule per repository
 rm -f "$PROJ/.claude/state/test-speed.json"
 python3 - "$T/ts1.jsonl" <<'PYT'
@@ -2233,7 +2233,7 @@ o=$(echo "{\"session_id\":\"s\",\"transcript_path\":\"$T/rt.jsonl\",\"stop_hook_
 check "  ...and the session summary waits for the one full report" "still running" "$o"
 check "v3.2.2: the summary counts early reports" "early reports" "$(cat $H/stats.py)"
 o=$(echo "{\"session_id\":\"s\",\"hook_event_name\":\"UserPromptSubmit\",\"transcript_path\":\"$T/rt.jsonl\",\"prompt\":\"<task-notification><task-id>a6c2db1703c92c39e</task-id><tool-use-id>toolu_r1</tool-use-id><status>completed</status></task-notification>\"}" | HZ_REPORT_TIMING_OFF= python3 $H/plan-gate.py)
-check "v3.2.2: at a finish notice, the session hears what still runs" "Still running in the background: command gh run watch" "$o"
+check "v3.2.2: at a finish notice, the session hears what still runs (v3.2.12: or '…' when the round's line is shown)" "Still running in the background: command gh run watch\\|already shown" "$o"
 o=$(cd $H && HZ_LATEST_VERSION=9.9.9 python3 -c "import _common as C; print(C.newer_rules_on_github())"; cd $H && HZ_LATEST_VERSION=0.1.0 python3 -c "import _common as C; print('none' if not C.newer_rules_on_github() else 'x')")
 check "v3.2.2: newer rules on GitHub are named in the version line" "9.9.9" "$o"
 check "  ...older or equal rules are not" "none" "$o"

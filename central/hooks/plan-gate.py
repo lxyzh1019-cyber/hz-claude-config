@@ -114,43 +114,53 @@ except OSError:
     pass
 # v3.2.2: report timing — at each finish notice, say whether anything still runs (one full report at the end)
 TIMING_TEXT = ""
-if prompt.lstrip().startswith("<task-notification>") and not os.environ.get("HZ_REPORT_TIMING_OFF"):
+from _common import is_notice_text as _is_wake
+# v3.2.12: one ⏳ line per round. A round starts with my message; after its first ⏳ line, every later wake-up (a
+# finished helper, a hand-back, a background command) ends with '…' only, even when the work changed. Weekly-Planner
+# 10 Oct 16:04-17:03 MDT: 11 different ⏳ lines and 6 'Updating…' lines in one round, one per wake-up.
+_wp = os.path.join(STATE_DIR, "wait-state.json")
+try:
+    _ws = json.load(open(_wp, encoding="utf-8"))
+except (OSError, ValueError):
+    _ws = {}
+_sidk = str(data.get("session_id"))
+if not _is_wake(prompt):
+    if _ws.pop(_sidk, None) is not None:       # my message starts a new round
+        try:
+            json.dump(_ws, open(_wp, "w", encoding="utf-8"))
+        except OSError:
+            pass
+elif not os.environ.get("HZ_REPORT_TIMING_OFF"):
     try:
         from _common import still_running as _sr, read_transcript as _rt3, WAIT_TEXT as _WT, REPORT_TEXT as _RT
         import formats as _F
         # the notice itself may not be in the session file yet when this check runs: count it as read
         _recs = _rt3(data.get("transcript_path")) + [{"type": "user", "message": {"role": "user", "content": prompt}}]
         _left = _sr(_recs, data.get("transcript_path"))
-        TIMING_TEXT = (_WT.format(what=", ".join(_left[:3]) + (f" and {len(_left) - 3} more" if len(_left) > 3 else ""),
-                                  line=_F.WORKING_LINE) if _left else _RT)
-        # v3.2.11: the same work still runs as at the last notice: no new line. Weekly-Planner 10 Oct: 5 identical
-        # '⏳ Working on' lines, one per finished background run of the same three workers.
-        _wp = os.path.join(STATE_DIR, "wait-state.json")
-        if not _left and os.path.exists(_wp):
+        if not _left:
+            TIMING_TEXT = _RT
+            _ws.pop(_sidk, None)
             try:
-                _ws = json.load(open(_wp, encoding="utf-8"))
-                _ws.pop(str(data.get("session_id")), None)
-                json.dump(_ws, open(_wp, "w", encoding="utf-8"))
-            except (OSError, ValueError):
-                pass
-        if _left:
-            try:
-                _ws = json.load(open(_wp, encoding="utf-8"))
-            except (OSError, ValueError):
-                _ws = {}
-            _key = "|".join(sorted(_left))
-            if _ws.get(str(data.get("session_id"))) == _key:
-                # real Claude Code 2.1.296: an empty reply is sent back ("Your previous response had no visible
-                # output"), so the shortest visible reply is one character
-                TIMING_TEXT = ("[report timing] Nothing changed: the same work still runs. End this turn with one "
-                               "character only: '…'. Not the ⏳ line again.")
-            else:
-                _ws[str(data.get("session_id"))] = _key
-                try:
-                    os.makedirs(STATE_DIR, exist_ok=True)
-                    json.dump(dict(list(_ws.items())[-20:]), open(_wp, "w", encoding="utf-8"))
-                except OSError:
-                    pass
+                from _common import checkpoint_due as _cd
+                _cpt = _cd(cfg)
+                if _cpt:
+                    TIMING_TEXT = _cpt + " " + _RT
+            except Exception as _e2:
+                log("plan-gate", {"checkpoint_error": str(_e2)[:200]})
+        elif _ws.get(_sidk):
+            # real Claude Code 2.1.296: an empty reply is sent back ("Your previous response had no visible output"),
+            # so the shortest visible reply is one character
+            TIMING_TEXT = ("[report timing] The ⏳ line of this round is already shown. Work still runs: end this turn "
+                           "with one character only: '…'. No other text, now or before your next tool step.")
+        else:
+            TIMING_TEXT = _WT.format(what=", ".join(_left[:3]) + (f" and {len(_left) - 3} more" if len(_left) > 3 else ""),
+                                     line=_F.WORKING_LINE)
+            _ws[_sidk] = 1
+        try:
+            os.makedirs(STATE_DIR, exist_ok=True)
+            json.dump(dict(list(_ws.items())[-20:]), open(_wp, "w", encoding="utf-8"))
+        except OSError:
+            pass
     except Exception as _e:
         log("plan-gate", {"timing_error": str(_e)[:200]})
 from _common import is_notice_text as _is_notice

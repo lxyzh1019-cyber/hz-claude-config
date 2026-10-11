@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.11: Routine = the answer is known, even across many files (Sonnet); Complex names its reason. Parallel lanes by files, no fixed number; a notice above 5. Workers run tests in the foreground (the background only over 10 minutes), with a summary of the output. No repeated ⏳ line when nothing changed; the full report starts with ✅ Completed. Sonnet may make a change in .github/ that the hand-over names. Plan check: the Quick read passes; each find is quoted. Token report: planning, reading and re-reading apart; helper tokens counted. The Completion lines link the newest report. No setup pull request for your apps. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.12: one ⏳ line per round (a round starts with your message); later wake-ups that round show '…' only, and no text comes before tool steps while work runs. The worker that pushes waits for its own GitHub run, so the main session wakes once per worker. Plans name work packages 'Part n — <name>' and pull requests only '#number'. The repo has revision-record.md and the hz-change-guard v18 copy with its revision gate. The main session hands record, plan-file and git work to workers; one review per pull request; pictures and the Proof line before the first push; the report link sits in the first Completion line; long plans get a checkpoint report at every check stop. Packages come with Windows line endings. No setup pull request for your apps. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

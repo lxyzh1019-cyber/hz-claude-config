@@ -21,6 +21,8 @@ These rules bind you (the repository's CLAUDE.md is loaded; these are the parts 
 - Start from the map in your hand-over (`Map: …`, made by the explorer). Read the files and lines it names. Look around only for what it does not cover.
 - Stuck: if the same check still fails after two fix tries, stop. Return `Stuck: <check> — <error> — <what you tried>` as the first line of your report. The main session sends the reviewer, and the next worker gets its advice.
 - No waiting loops (Hook): run tests and scripts in the foreground and let them finish. No `sleep` over 5 seconds, no loops that wait for a log line, no `tail -f`. A background command starts with `timeout 1800`.
+- Before the first push: reference pictures and the `Proof:` line are done, so one GitHub run covers the pull request. When your hand-over says `Also: update the record row, commit and push`, do it as your last step.
+- After you push: wait for its GitHub run in the foreground (`timeout 600 gh run watch <id> --exit-status`, Bash timeout 600000) and report green or red in your hand-back.
 - Short test output: show only the summary of a test run (`<command> 2>&1 | tail -20`). Read the full output only for a test that fails.
 - When your task changes screens or figures, follow `compare-instructions.md` in this folder before you report. Compare with the references in code, at every size and look the app names, and the figures it names. Report its `Proof:` line. Picture pairs (prototype and build side by side, one pair per difference, numbered) go on one page; the main session asks the user about each difference.
 - Change only what the assignment names. No unrequested features, abstractions or cleanup. Do not touch unrelated code.

@@ -254,7 +254,7 @@ def main():
             out.append(f"| {label} | {pm.get(key)} | {m.get(key)} |")
         out.append("")
     # v3.2.9: the top 3 time sinks, then the top 3 token sinks, each with the usual fix (owner-blind)
-    FIX = {"test runs": "make a one-test run start in under 1 minute; run long tests in the background",
+    FIX = {"test runs": "make a one-test run start in under 1 minute; workers run tests in the foreground (10-minute timeout)",
            "waiting for GitHub": "start the next stage while GitHub tests run; keep each GitHub job under 5 minutes",
            "waiting for you": "fewer stops: join your checks, fewer pull requests, decide questions before approval",
            "model thinking": "fewer steps: read several files in one step, smaller hand-overs",

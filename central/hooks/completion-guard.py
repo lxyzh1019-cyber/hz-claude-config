@@ -80,6 +80,17 @@ open_items = comp["open"] if comp["scoped"] else []
 # v3.2.10: a reply that asks me decisions is waiting on me. Weekly-Planner 9 Oct: the stage was marked partial, this
 # check sent the report back twice, and the session wrote the whole report again (decisions and closing lines twice).
 import formats as _F
+# v3.2.12: the report link is part of the Completion line; when the reply left it out, the next reply gets a saved fix
+# (not a send-back, which would show the report twice)
+try:
+    _rlm = re.search(r"Report: \[([^\]]+)\]", comp.get("display") or "")
+    if _rlm and _rlm.group(1) not in (text or "") and "Completion:" in (text or ""):
+        from _common import save_fixes as _sf
+        _sf(data.get("session_id"), [f"Your Completion line left out the report link. Copy the first Completion line "
+                                     f"word for word, with 'Report: [{_rlm.group(1)}](…)'."])
+        log("completion-guard", {"report_link_missing": _rlm.group(1)})
+except Exception:
+    pass
 if open_items and _F.DECISIONS_HEADER in (text or ""):
     log("completion-guard", {"waiting_by_decisions": len(open_items)})
     open_items = []

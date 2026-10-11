@@ -259,3 +259,9 @@ Dynamic workflows: one wide step, role file, own files (v3.2.10) | R | **Dynamic
 References are exact by default (v3.2.10) | R | **References are exact.**
 Checkpoint reports and delivery (v3.2.10) | R | **Checkpoint reports.**
 The ⏳ line stands alone (v3.2.10) | R | The ⏳ line always stands alone
+One ⏳ line per round, then '…' (v3.2.12) | R | once per round (Hook): a round starts with my message
+The pushing worker waits for GitHub (v3.2.12) | R | **The pushing worker waits for GitHub (Hook).**
+Part n and #number (v3.2.12) | R | **Part and #number.**
+Lean main session (v3.2.12) | R | **Lean main session (Hook).**
+Pictures before the first push (v3.2.12) | R | **Pictures before the first push.**
+One review per pull request (v3.2.12) | R | One review per pull request
