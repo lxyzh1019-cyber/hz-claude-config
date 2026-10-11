@@ -21,6 +21,17 @@ records = read_transcript(data.get("transcript_path"))
 text = last_assistant_text(records)
 if not text:
     sys.exit(0)
+# v3.2.13: the 'I need from you' line never asks me to open a new session or paste a restart line into one (the rules
+# already said so; Weekly-Planner 10 Oct broke it). A saved fix for the next step, not a send-back.
+_need = re.search(r"I need from you:\**\s*(.+)", text)
+if _need and re.search(r"\bnew (?:session|chat|window)\b|paste the restart line", _need.group(1), re.I):
+    try:
+        from _common import save_fixes as _sf, log
+        _sf(data.get("session_id"), ["Your 'I need from you' line asked me to open a new session. Never ask that: this "
+                                     "session carries the plan. Ask only for my merge or check, and go on yourself."])
+        log("validation-line", {"asked_new_session": True})
+    except Exception:
+        pass
 # v3.1.26: a short chat reply in a request that used no tools (a greeting, a quick answer) is not sent back for its
 # closing lines — a send-back re-reads the whole session for a few words. Work reports still are.
 _turn = last_turn(records)

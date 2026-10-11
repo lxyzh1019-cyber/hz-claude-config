@@ -45,7 +45,12 @@ if rm:
     branch = current_branch()
     if comp.get("plan") and norm(rm.group("plan")) != norm(comp["plan"]):
         problems.append(f"The restart line must use the plan name exactly as in the ledger: `{restart_line(comp, branch)}`")
-    if rm.group("branch").rstrip(".;,`") != branch:
+    _named = rm.group("branch").rstrip(".;,`")
+    from _common import branch_merged_on_github as _bm
+    if _named not in ("main", "master") and _bm(_named):
+        problems.append(f"Branch {_named} is merged on GitHub. The restart line names main; the next stage makes its "
+                        "branch from main.")
+    elif _named != branch and not (_named in ("main", "master") and _bm(branch)):
         problems.append(f"The restart line names branch {rm.group('branch')}, but this session is on {branch}.")
     rec = cfg["record_file"]
     try:

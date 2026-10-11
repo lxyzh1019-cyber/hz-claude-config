@@ -5,8 +5,8 @@
    the main session started two "Wait for the PR 4 fix-pass worker" commands.
 2. A command run in the background starts with a time limit of at most 30 minutes (timeout 1800 ...): in the same
    session a background script was still "running" after 11 h 49 m."""
-import re, sys
-from _common import read_hook_input, load_config, deny_tool, log
+import json, os, re, sys
+from _common import read_hook_input, load_config, deny_tool, log, STATE_DIR
 
 data = read_hook_input()
 cfg = load_config()
@@ -42,7 +42,25 @@ _gh_wait = re.search(r"(?:^|[;&|\n]\s*)(?:timeout\s+\S+\s+)?gh\s+(run\s+watch|pr
 # v3.2.12: a worker waits for its own GitHub run in the foreground (runs take under 5 minutes; the Bash limit is 10).
 # The main session then gets one wake-up per worker, not one per GitHub run (Weekly-Planner 10 Oct: 3 extra wake-ups).
 _is_worker = bool(data.get("agent_id"))
-if not inp.get("run_in_background") and _gh_wait and not _is_worker:
+# v3.2.14: with workers in the foreground the main session has nothing else to do while a run goes, so it waits in the
+# foreground too (one turn, no wake-up). A background watch by the main session is refused once per prompt.
+# Weekly-Planner 10 Oct: 4 background watches by the main session, 4 wake-ups.
+_fg_mode = not os.environ.get("HZ_BACKGROUND_WORKERS")
+if _fg_mode and _gh_wait and not _is_worker and inp.get("run_in_background"):
+    from _common import prompt_number as _pn
+    _wf = os.path.join(STATE_DIR, "gh-bg-refused.json")
+    try:
+        _wr = json.load(open(_wf, encoding="utf-8"))
+    except (OSError, ValueError):
+        _wr = []
+    _wk = f"{data.get('session_id')}:{_pn(data.get('session_id'))}"
+    if _wk not in _wr:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump((_wr + [_wk])[-50:], open(_wf, "w", encoding="utf-8"))
+        log("wait-guard", {"refused": "github wait in the background"})
+        deny_tool("Wait for this GitHub run in the foreground: 'timeout 600 gh run watch <id> --exit-status' with the Bash "
+                  "timeout 600000. A background watch wakes this session again later.")
+if not inp.get("run_in_background") and _gh_wait and not _is_worker and not _fg_mode:
     log("wait-guard", {"refused": "github wait in the foreground"})
     try:
         from _common import live_proof

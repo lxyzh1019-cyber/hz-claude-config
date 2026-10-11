@@ -11,7 +11,8 @@ def res(item, name, ok, detail=""):
     results.append((item, ok)); print(f"{item:>2} {'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"  -> {str(detail)[:170]!r}"))
 def run(script, inp, proj, **env):
     e = dict(os.environ, CLAUDE_PROJECT_DIR=proj, PYTHONDONTWRITEBYTECODE="1", HZ_RULES_FIRST_OFF="1",
-             HZ_STAGE_TAGS_OFF="1", HZ_PLANNER_CHECK_OFF="1", HZ_QUESTIONS_CHECK_OFF="1", HZ_PLAN_ROUNDS_OFF="1"); e.update(env)
+             HZ_STAGE_TAGS_OFF="1", HZ_PLANNER_CHECK_OFF="1", HZ_QUESTIONS_CHECK_OFF="1", HZ_PLAN_ROUNDS_OFF="1",
+             HZ_COMPLEX_REASON_OFF="1")   # v3.2.14: these hand-overs predate the reason line; e.update(env)
     for k in [k for k, v in e.items() if v is None]:
         e.pop(k)
     return subprocess.run(["python3", os.path.join(H, script)], input=json.dumps(inp), capture_output=True, text=True, env=e, cwd=proj).stdout

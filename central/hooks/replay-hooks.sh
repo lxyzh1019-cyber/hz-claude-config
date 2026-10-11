@@ -14,6 +14,8 @@ pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
 export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if the planner wrote the plan; the v3.1.30 tests switch it on
 export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
+export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1   # v3.2.14: older fixtures: no reason line, background workers
+export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1   # v3.2.13: no live GitHub in tests; older fixtures start single workers in worktrees
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
 export HZ_PLAN_ROUNDS_OFF=1        # v3.1.33: older plan tests are independent plans; the v3.1.33 tests switch it on
 export HZ_SETUP_PUBLISH_OFF=1      # v3.2.6: older tests check the old setup path (the model commits); the v3.2.6 tests switch publishing on
@@ -869,7 +871,7 @@ o=$(echo '{"prompt":"next step please","session_id":"short1"}' | CLAUDE_PROJECT_
 check "a short session is not asked to hand off" "clean" "$(echo "$o" | grep -c 'hand-off' | sed 's/^0$/clean/')"
 o=$(echo '{"prompt":"Continue R14 / Plan v3 — Sunday v15 on branch claude/sunday-v15; next: Stage 3 of 5.","session_id":"r1"}' | CLAUDE_PROJECT_DIR="$HA" python3 $H/plan-gate.py)
 check "a restart line makes the new session switch to its branch first" "First switch to branch claude/sunday-v15" "$o"
-check "the new session reads Where we are and waits" "Wait for my OK" "$o"
+check "the new session reads Where we are and starts the next stage (v3.2.14: no wait for an OK)" "start that stage at once" "$o"
 o=$(echo "{\"hook_event_name\":\"Stop\",\"session_id\":\"v24\",\"transcript_path\":\"$T/top_old.jsonl\",\"stop_hook_active\":false}" | dp)
 check "a send-back carries only the version line, not the summary" "clean" "$(echo "$o" | grep -c 'Session summary' | sed 's/^0$/clean/')"
 check "the switchboard runs the hand-off check on Stop" "handoff-guard.py" "$(cat $H/config.json)"
@@ -2205,7 +2207,8 @@ o=$(python3 $G/scripts/coverage_gate.py "$T/art.txt" "$T/led.md"; echo "rc=$?")
 check "  ...and its coverage gate names a missing phrase and fails" "MISSING L02.*rc=1" "$(echo $o)"
 # v3.2.2: one report per piece of work (real harness: scenario_early_report.sh)
 rt(){ python3 -c "import json,sys;print(json.dumps({'session_id':'s','tool_name':sys.argv[1],'tool_input':json.loads(sys.argv[2]),**json.loads(sys.argv[3])}))" "$1" "$2" "${3:-{\}}" | HZ_REPORT_TIMING_OFF= python3 $H/report-timing.py; }
-check "v3.2.2: starting a helper tells the main session to wait with the one line" "Still running in the background: the helper" "$(rt Agent '{"subagent_type":"opus-worker"}')"
+check "v3.2.2: starting a helper tells the main session to wait with the one line (v3.2.14: only with background workers)" "Still running in the background: the helper" "$(HZ_BACKGROUND_WORKERS=1 rt Agent '{"subagent_type":"opus-worker"}')"
+check "v3.2.14: a foreground worker gets no wait line" "^$" "$(HZ_BACKGROUND_WORKERS= rt Agent '{"subagent_type":"opus-worker"}')"
 check "  ...a background command too" "the command you are starting" "$(rt Bash '{"command":"gh run watch 1","run_in_background":true}')"
 check "  ...a normal command says nothing" "clean" "$(rt Bash '{"command":"ls"}' | grep -c report | sed 's/^0$/clean/')"
 check "  ...a helper's own tools say nothing" "clean" "$(rt Agent '{"subagent_type":"x"}' '{"agent_id":"a1"}' | grep -c report | sed 's/^0$/clean/')"
@@ -2944,7 +2947,7 @@ helper(os.path.join(S,"m","subagents","agent-a1.jsonl"),3,2,22,"css/app.css")
 helper(os.path.join(S,"m","subagents","workflows","wf_1","agent-b2.jsonl"),5,23,33,"tests/smoke.js")
 o=subprocess.run(["python3",os.path.join(H,"plan_report.py"),"Pass plan","--dir",S],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=A)).stdout
 res("v3.2.10: the report counts workflow helpers","| Helpers started | 2 |" in o,o[:400])
-res("  ...and background GitHub waits (10 min)","**waiting for GitHub**: 10 min" in o,o[:600])
+res("  ...and background GitHub waits, only while no helper runs (v3.2.14: 1 of 10 min)","**waiting for GitHub**: 1 min" in o,o[:600])
 res("  ...and lists parallel candidates (stages 3 and 5, 10 min)","**Parallel candidates:** 10 min" in o and "Stages 3 and 5: 10 min" in o,o[:900])
 # 9) /compact and the early hand-off
 pg=open(os.path.join(H,"plan-gate.py")).read()

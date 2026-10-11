@@ -2,7 +2,7 @@
 """Stop (v3.1.30): a final answer does not leave a pull request in draft. A session that switched its pull request
 back to draft while fixing it (worker-guard asks for this) marks it ready again before the final report, which
 asks the owner to merge it. Progress lines ("⏳ Working on") are exempt; one send-back per prompt."""
-import re, sys
+import os, re, sys
 from _common import (read_hook_input, load_config, read_transcript, last_assistant_text, block, is_progress_report,
                      pr_timeline, use_round, pr_branch_state)
 
@@ -19,6 +19,22 @@ events, running = pr_timeline(records)
 drafts = [b for b, st in pr_branch_state(data.get("session_id")).items() if st == "draft"]
 if running or not drafts:
     sys.exit(0)
+# v3.2.13: ask GitHub, not the session's memory. Weekly-Planner 10 Oct: the owner had merged the pull request at
+# 6:52 PM; this check still asked to mark it ready ("a merged pull request cannot be marked ready again"). Merged,
+# closed, already ready, or GitHub not reachable: no request.
+def _live_draft(branch):
+    try:
+        from _common import run_text
+        import json as _j
+        out = run_text(["gh", "pr", "view", branch, "--json", "state,isDraft"], timeout=15).stdout
+        d = _j.loads(out or "{}")
+        return d.get("state") == "OPEN" and bool(d.get("isDraft"))
+    except Exception:
+        return False
+if not os.environ.get("HZ_PR_LIVE_OFF"):
+    drafts = [b for b in drafts if _live_draft(b)]
+    if not drafts:
+        sys.exit(0)
 r = use_round("pr-ready", data.get("session_id"), 1)
 if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)

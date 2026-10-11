@@ -183,7 +183,7 @@ helper(os.path.join(S, "m", "subagents", "workflows", "wf_1", "agent-b2.jsonl"),
 o = subprocess.run(["python3", os.path.join(H, "plan_report.py"), "Pass plan", "--dir", S], capture_output=True, text=True, env=dict(os.environ, CLAUDE_PROJECT_DIR=A)).stdout
 res(8, "end report lists parallel candidates", "**Parallel candidates:** 10 min" in o, o[:300])
 res(20, "end report counts workflow helpers (2 of 2)", "| Helpers started | 2 |" in o, o[:300])
-res(20, "end report counts background GitHub waits (10 min)", "**waiting for GitHub**: 10 min" in o, o[:400])
+res(20, "end report counts background GitHub waits (10 min; from 3.2.14 only while no helper runs: 1 min)", "**waiting for GitHub**: 10 min" in o or "**waiting for GitHub**: 1 min" in o, o[:400])
 
 shutil.rmtree(V, ignore_errors=True)
 items = sorted({i for i, _ in results}); ok_items = [i for i in items if all(o for j, o in results if j == i)]

@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.2.12
-Built on: 3.2.11
+Version: 3.2.14
+Built on: 3.2.12
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -60,11 +60,14 @@ F49 v3.2.9 (also): the report ranks the Top 3 time sinks and Top 3 token s | v3.
 F50 v3.2.10: dynamic workflows (worker-budget.py finds workflow helper rec | worker-budget.py
 F51 v3.2.11: Routine defined by a known answer (worker-guard.py text; 'ref | worker-guard.py
 F52 v3.2.12: one ⏳ line per round (plan-gate.py and report-timing.py share | plan-gate.py
+F53 v3.2.13: restart lines checked against GitHub (branch_merged_on_github | branch_merged_on_github
+F54 v3.2.14: workers run in the foreground (foreground-workers.py rewrites | foreground-workers.py
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
 
 ## Open problems (stay until fixed with proof or he drops them)
+P02 Model-dependent solutions (one review per pull request, lean main session, Part names, report link copied, short test output) are proven only by a live session | found: 2026-10-11 campaign | next: the live scorecard in each end report shows works / does not work
 P01 Plan marks need one extra plan round (about 10 s and one re-read per revised plan) | found: 2026-10-10 Weekly-Planner session 4f3a9e6e | next: fix when a test way exists (the test program has no plan mode)
 
 ## Fixed (moved from Open; proof required)
@@ -73,7 +76,7 @@ X02 Parallel workers capped at 3, with no file rule | fixed in 3.2.11 | proof: t
 X03 Long test output in workers | fixed in 3.2.11 | proof: tools/test_v3211_items.py item 2
 X04 Sonnet could not make a named change in .github/ | fixed in 3.2.11 | proof: tools/test_v3211_items.py item 6
 X05 Workers ran tests in the background, then sleep loops and early stops (rule conflict) | fixed in 3.2.11 | proof: tools/test_v3211_items.py item 5; real Claude Code scenario_workflow.sh helper D
-X06 Repeated '⏳ Working on' lines: 3.2.11 stopped only identical lines; session 7574e882 showed 11 different ones and 6 'Updating…' lines in one round | fixed in 3.2.12 (one ⏳ line per round, then '…'; no text before tool steps; the pushing worker waits for GitHub) | proof: tools/test_v3212_items.py item 6
+X06 Repeated '⏳ Working on' lines: 3.2.11 and 3.2.12 only told the model what to write, and the lines came back live (Stage 32 screenshot, 11 Oct) | fixed in 3.2.14 (workers in the foreground: no wake-ups) | proof: tools/real-harness/scenario_wakeups.sh 3 replies → 1; tools/test_v3214_items.py item 1
 X07 "PR n" meant both a plan work package and a GitHub pull request | fixed in 3.2.12 (Part n and #number) | proof: tools/test_v3212_items.py item 3
 X08 Repo copy of hz-change-guard older than v18 (no revision gate, no Mitigated / Below expected statuses) | fixed in 3.2.12 | proof: central/skills/hz-change-guard/scripts/revision_gate.py present; files equal the v18 package
 X09 Linux-ending packages listed 109 files in GitHub Desktop | fixed in 3.2.12 (Windows endings, Windows-style dry-run from the real folder state) | proof: dry-run counts in WORKING_RECORD.md (109 → real changes only)
@@ -82,7 +85,19 @@ X12 Three reviews for one pull request | fixed in 3.2.12 (one pass, notice at th
 X13 Pictures and the Proof line after the first push (2 GitHub runs) | fixed in 3.2.12 (rules, worker role file) | proof: tools/test_v3212_items.py item 10
 X14 Report link not in the summary | fixed in 3.2.12 (first Completion line, saved fix) | proof: tools/test_v3212_items.py item 11
 X15 No checkpoint report at a check stop of an older long plan | fixed in 3.2.12 (checkpoint_due at the finish notice) | proof: tools/test_v3212_items.py item 12
+X16 Restart line named a branch already merged on GitHub | fixed in 3.2.13 | proof: tools/test_v3213_items.py item 1
+X17 The session asked the owner to open a new session | fixed in 3.2.13 (saved fix) | proof: tools/test_v3213_items.py item 2
+X18 'Mark ready' asked for a merged pull request | fixed in 3.2.13 (live GitHub state) | proof: tools/test_v3213_items.py item 3
+X19 A worktree per stage, never removed (19 folders) | fixed in 3.2.13 (lanes only, lane names, clean-up of merged and clean lanes) | proof: tools/test_v3213_items.py item 4
+X20 Complex hand-overs without a reason (Opus 62% on a known-answer change) | fixed in 3.2.14 | proof: tools/test_v3214_items.py item 3
+X21 The main session watched GitHub in the background (4 wake-ups) | fixed in 3.2.14 | proof: tools/test_v3214_items.py item 4
+X22 The report counted GitHub waits while workers worked, and listed parallel pairs twice | fixed in 3.2.14 | proof: tools/test_v3214_items.py item 5; session c7347d6a 33 → 25 min
+X23 False 'report not delivered' after a folder change | fixed in 3.2.14 (content, not date) | proof: tools/test_v3214_items.py item 7
+X24 The session waited 15 min for an 'ok' after a restart line | fixed in 3.2.14 | proof: tools/test_v3214_items.py item 8
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
 - 3.2.12: record started; second part added items X11–X15; features listed from FEATURES.md; shipped 3.2.11 items recorded as X-lines; the 150 k hand-back under Removed.
+- 3.2.13: items X16–X19; features listed again from FEATURES.md.
+- 3.2.14 (built on 3.2.12 main; it also carries 3.2.13, which was never installed): X06 reopened and fixed with foreground workers; P02 added; the live scorecard.
+- 3.2.14, second part: X20–X24 from session c7347d6a.

@@ -20,6 +20,8 @@ if any(data.get(k) and str(data.get(k)) != str(data.get("session_id"))
 tool = str(data.get("tool_name") or "")
 inp = data.get("tool_input") or {}
 if tool in ("Agent", "Task"):
+    if not os.environ.get("HZ_BACKGROUND_WORKERS"):
+        sys.exit(0)   # v3.2.14: workers run in the foreground (foreground-workers.py): no wait line, no wake-ups
     what = "the helper you are starting"
 elif tool == "Workflow":
     what = "the workflow you are starting"   # v3.2.10: a workflow runs in the background like a helper

@@ -103,13 +103,45 @@ _max = int(cfg.get("max_parallel_workers", 0))
 if _max and len(_open) >= _max:
     deny_tool(f"{len(_open)} workers already run; the limit is {_max}. Wait for one to report, then start this one.")
 _lane_notice = None
+# v3.2.14: a Complex hand-over names its reason. Weekly-Planner 10 Oct: 'words and numbers' (one money style, one date
+# style: a known answer) went to Opus 3 times as Complex with no reason; Opus was 62% of the tokens. Once per prompt.
+if (re.search(r"(?im)^\s*\**Level:\**\s*Complex\b", text) and not re.search(r"(?im)^\s*\**Complex because:\**\s*\S", text)
+        and not re.search(r"(?i)Escalated from sonnet-worker", text) and not os.environ.get("HZ_COMPLEX_REASON_OFF")):
+    _cf = os.path.join(STATE_DIR, "complex-reason.json")
+    try:
+        _cr = json.load(open(_cf, encoding="utf-8"))
+    except (OSError, ValueError):
+        _cr = []
+    _ck = f"{data.get('session_id')}:{prompt_number(data.get('session_id'))}"
+    if _ck not in _cr:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump((_cr + [_ck])[-50:], open(_cf, "w", encoding="utf-8"))
+        deny_tool("Level: Complex needs a reason line: 'Complex because: <unknown cause | design choice | data | sync | "
+                  "security | schema>'. If the answer is known (an exact table, one style for all, a rename, moving code "
+                  "to one helper), use 'Level: Routine' and sonnet-worker instead.")
+# v3.2.13: a worktree only for a parallel lane. Weekly-Planner 10 Oct: 19 linked worktrees, one per stage, never
+# removed. A single worker works in the main folder on the stage branch made from main. Refused once per prompt.
+if not _open and re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I) and not os.environ.get("HZ_WORKTREE_CHECK_OFF"):
+    _wf = os.path.join(STATE_DIR, "worktree-refused.json")
+    try:
+        _wr = json.load(open(_wf, encoding="utf-8"))
+    except (OSError, ValueError):
+        _wr = []
+    _wk = f"{data.get('session_id')}:{prompt_number(data.get('session_id'))}"
+    if _wk not in _wr:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        json.dump((_wr + [_wk])[-50:], open(_wf, "w", encoding="utf-8"))
+        deny_tool("No other worker runs, so this one needs no worktree. Remove the 'Worktree:' line: a single worker "
+                  "works in the main folder, on the stage branch made from main. Worktrees are only for parallel "
+                  "lanes, named <repo>-lane-a, -lane-b, -lane-c and reused each round.")
 if len(_open) + 1 > int(cfg.get("parallel_notice_above", 5)):
     _lane_notice = (f"[lanes] {len(_open) + 1} workers now run at once. Each one uses the usage limit at the same time; "
                     "start more only when the stages have their own files and end in one joined stop.")
 if _open and not (re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I)
                   and re.search(r"^\s*\**Files:\**\s*\S", text, re.M | re.I)):
     deny_tool("Another worker is running. A parallel worker works in its own worktree and names its files, so no two "
-              "workers edit the same file. Make one with 'git worktree add ../<repo>-<lane> -b claude/<lane>' and add "
+              "workers edit the same file. Use a lane folder: 'git worktree add ../<repo>-lane-<a|b|c> -b claude/<stage>', "
+              "reused each round, and add "
               "the lines 'Worktree: <folder>', 'Files: <the files it changes>' and 'Group: <lane from the plan>'.")
 if _open:
     try:

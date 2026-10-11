@@ -17,9 +17,10 @@ if not text or is_progress_report(text, records, cfg):
     sys.exit(0)
 folder = os.path.join(work_dir(), "docs", "reports")
 now = {}
+import hashlib
 for f in glob.glob(os.path.join(folder, "*.md")):
-    try:
-        now[os.path.basename(f)] = int(os.path.getmtime(f))
+    try:   # v3.2.14: by content, not file date (10 Oct: a new work folder gave report 1 a new date: 2 false reminders)
+        now[os.path.basename(f)] = hashlib.sha1(open(f, "rb").read().replace(b"\r\n", b"\n")).hexdigest()[:16]
     except OSError:
         pass
 path = os.path.join(STATE_DIR, "reports-delivered.json")

@@ -1,4 +1,4 @@
-version: 3.2.12
+version: 3.2.14
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -9,6 +9,7 @@ hooks/_common.py
 hooks/completion-guard.py
 hooks/config.json
 hooks/dispatch.py
+hooks/foreground-workers.py
 hooks/formats.py
 hooks/git-guard.py
 hooks/handoff-guard.py

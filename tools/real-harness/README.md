@@ -51,3 +51,7 @@ Cannot test: the real model's choices, the desktop app screens, phone notices, G
 - `tools/test_v3211_items.py <central dir>` (v3.2.11) — the problems of the 9 and 10 Oct sessions (items 1, 2, 4–9).
   3.2.10: 4 of 20 checks; 3.2.11: 20 of 20. `scenario_workflow.sh` now also has helper D, which tries a background test run:
   3.2.11 refuses it once and the helper runs it in the foreground.
+
+- `scenario_wakeups.sh <central dir> <label> [app folder]` (v3.2.14) — two lane workers started in one message, as sessions
+  do; one stops with a background command still running. Counts the replies the main session shows. Claude Code 2.1.296 on
+  a copy of Weekly-Planner: 3.2.13 (background workers) 3 replies; 3.2.14 (foreground workers) 1 reply, the final one.

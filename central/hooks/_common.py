@@ -826,6 +826,30 @@ def report_link(plan):
         return None
 
 
+def lane_cleanup():
+    """v3.2.13: lane worktrees (<repo>-lane-*) whose pull request is merged on GitHub and whose folder has no uncommitted
+    changes. Only these may be removed; anything else stays and is named in the report."""
+    out, keep = [], []
+    try:
+        lst = run_text(["git", "worktree", "list", "--porcelain"], timeout=10).stdout
+    except Exception:
+        return out, keep
+    for blk in lst.strip().split("\n\n"):
+        p = re.search(r"^worktree (.+)$", blk, re.M)
+        b = re.search(r"^branch refs/heads/(.+)$", blk, re.M)
+        if not p or not b or not re.search(r"-lane-[a-z0-9]+$", p.group(1).rstrip("/\\")):
+            continue
+        try:
+            dirty = run_text(["git", "-C", p.group(1), "status", "--porcelain"], timeout=10).stdout.strip()
+        except Exception:
+            dirty = "?"
+        if not dirty and branch_merged_on_github(b.group(1)):
+            out.append((p.group(1), b.group(1)))
+        else:
+            keep.append((p.group(1), b.group(1), "uncommitted changes" if dirty else "not merged"))
+    return out, keep
+
+
 def checkpoint_due(cfg):
     """v3.2.12: at a stop for the owner's check in a plan with more than 10 Build stages, a new checkpoint report comes
     first. Weekly-Planner 10 Oct: Stage 31 (iPad read) had none, because the plan was made before the v3.2.10 rule.
@@ -971,11 +995,26 @@ def restart_line(comp, branch=None):
     return f"Continue {plan} on branch {branch or current_branch()}; next: {next_stage(comp)}."
 
 
+def branch_merged_on_github(branch):
+    """v3.2.13: True when GitHub shows a merged pull request from this branch. Weekly-Planner 10 Oct: a restart line
+    named claude/consistency-5 after the owner had merged it at 6:52 PM. False when gh is not reachable."""
+    if not branch or branch in ("main", "master") or os.environ.get("HZ_PR_LIVE_OFF"):
+        return False
+    try:
+        out = run_text(["gh", "pr", "list", "--head", branch, "--state", "merged", "--json", "number"], timeout=15).stdout
+        return bool(json.loads(out or "[]"))
+    except Exception:
+        return False
+
+
 def handoff_text(cfg, comp, after_build=False, lessons=False):
     """The hand-off the session does itself in one reply, so the user never has to ask for it."""
     branch = current_branch()
+    if branch not in ("main", "master") and branch_merged_on_github(branch):
+        branch = "main"   # v3.2.13: after the merge the next stage starts from main
     rec = cfg["record_file"]
-    return ("do the hand-off yourself in this reply. I must not have to ask for it.\n"
+    return ("do the hand-off yourself in this reply. I must not have to ask for it. First check GitHub "
+            "(gh pr view): a merged branch is never in the restart line; after a merge it names main.\n"
             f"1) Update '## Where we are' in {rec}. Write the plan name as in the ledger, the newest Plan vN and its "
             "plan file, the next stage, and the restart line. Point to plan files, commits and pull requests; do not "
             f"copy them. Write no keys or passwords. Then commit and push {rec} to {branch}.\n"
