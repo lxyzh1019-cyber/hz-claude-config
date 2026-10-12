@@ -2,7 +2,7 @@
 """PreToolUse hook (Bash and the GitHub pull-request tools): block a commit on main/master and any push to
 main/master, without prompting, and block opening a pull request as a draft — on the command line (gh pr create
 --draft) and through the GitHub tool (create_pull_request with draft set to true; v3.1.30: switching an open one
-back to draft with update_pull_request is allowed). v3.1.30: a pull request opens last (pr_last_check). PRs open ready for
+back to draft is refused from v3.2.17). v3.1.30: a pull request opens last (pr_last_check). PRs open ready for
 review; the user merges on GitHub. Feature-branch commits and pushes pass through untouched. A hook "deny" is
 honoured in auto mode."""
 import os, re, shlex, subprocess, sys
@@ -123,12 +123,15 @@ if tool.startswith("mcp__"):
     if PR_TOOL.match(tool) and tool_input.get("draft") is True and "create_pull_request" in tool:
         deny_tool(f"git-guard: pull requests open ready for review, not as drafts. Call {tool} again with draft set "
                   "to false, or leave the draft field out — create it ready for review. (Switching an open pull "
-                  "request back to draft while it is being fixed is allowed.)")
+                  "request back to draft is not: v3.2.17.)")
     if re.match(r"^mcp__.*create_pull_request$", tool):
         pr_last_check(str(tool_input.get("head") or ""))
         mark("ready", str(tool_input.get("head") or "") or None)
     elif re.match(r"^mcp__.*update_pull_request$", tool) and "draft" in tool_input:
-        mark("draft" if tool_input.get("draft") is True else "ready")
+        if tool_input.get("draft") is True:   # v3.2.17: no switch back to draft (12 Oct: #149 back to draft)
+            deny_tool("git-guard: the pull request stays ready (owner: no draft/ready flip-flop). Put the corrections on it as new "
+                  "commits; the checks run again on the last push.")
+        mark("ready")
     sys.exit(0)
 cmd = (tool_input.get("command") or "")
 if "git" not in cmd and "gh" not in cmd:
@@ -203,7 +206,10 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
         pr_last_check(segment)
         mark("ready")
     elif re.match(r"^(\w+=\S+\s+)*gh\s+pr\s+ready\b", segment.strip()):
-        mark("draft" if "--undo" in segment else "ready")
+        if "--undo" in segment:   # v3.2.17: no switch back to draft (12 Oct: #149 back to draft for the corrections)
+            deny_tool("git-guard: the pull request stays ready (owner: no draft/ready flip-flop). Put the corrections on it as new "
+                  "commits; the checks run again on the last push.")
+        mark("ready")
     args = git_args(segment.strip())
     if not args:
         continue

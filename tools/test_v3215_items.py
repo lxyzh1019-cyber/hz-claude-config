@@ -49,8 +49,11 @@ o = subprocess.run(["python3", os.path.join(H, "dispatch.py")], input=json.dumps
 res("S3", "  ...and on again without it", '"deny"' in o, o[:160])
 # S4
 pg = read(H, "plan-guard.py")
-res("S4", "a revised plan goes on with its marks (updatedInput), no send-back; HZ_PLAN_MARKS_ROUND=1 keeps the old round",
-    "_UPD = dict(" in pg and '"updatedInput": _UPD' in pg and "HZ_PLAN_MARKS_ROUND" in pg, "")
+# v3.2.17: the way changed (the real program shows the plan file and an 'allow' approves without the owner): the marks
+# go into the plan file with no send-back; HZ_PLAN_MARKS_ROUND=1 keeps the old round. Either way passes this item.
+res("S4", "a revised plan goes on with its marks, no send-back; HZ_PLAN_MARKS_ROUND=1 keeps the old round",
+    (("_UPD = dict(" in pg and '"updatedInput": _UPD' in pg) or ('_cur["via"] = "file"' in pg and '"updatedInput"' not in pg))
+    and "HZ_PLAN_MARKS_ROUND" in pg, "")
 # S5
 T0 = os.path.join(V, "e.jsonl"); jl(T0, [{"type": "user", "message": {"role": "user", "content": "go"}}])
 hv = lambda p, sid: run("worker-guard.py", {"tool_name": "Agent", "session_id": sid, "transcript_path": T0, "tool_use_id": "x", "tool_input": {"subagent_type": "opus-worker", "prompt": p}}, A)

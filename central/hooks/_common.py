@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.2.15",
+        "version": "3.2.17",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -95,7 +95,8 @@ DEFAULT_CONFIG = {
                            "PreToolUse ": ["ExitPlanMode", "plan check before approval"],
                            "PreToolUse  ": ["Edit|Write", "edit checks; reads no longer start the checks (v3.2.15)"],
                            "PreToolUse   ": ["SubagentHandback", "worker hand-back check (v3.2.0)"],
-                           "PreToolUse    ": ["Workflow", "dynamic workflow checks (v3.2.10)"]},
+                           "PreToolUse    ": ["Workflow", "dynamic workflow checks (v3.2.10)"],
+                           "PreToolUse     ": ["AskUserQuestion", "question check: notice first, what follows each option (v3.2.17)"]},
         "event_matchers_absent": {"PreToolUse": ["Read|Glob|Grep", "reads no longer start the checks (v3.2.15)"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission",
                   "Read(~/.cache/hz-rules/**)": "reading the central rules without a prompt (v3.1.26)"},
@@ -191,6 +192,15 @@ def read_transcript(path):
                     continue
     except OSError:
         pass
+    # v3.2.17 (P03): at a Stop the session file can lag behind the final answer (real program, 12 Oct). The switchboard
+    # passes the answer from the Stop input; when the file's last answer differs, it is added as the newest record, so
+    # every end-of-answer check reads the answer the owner sees.
+    _final = os.environ.get("HZ_STOP_LAST_MESSAGE") or ""
+    _tp = os.environ.get("HZ_STOP_TRANSCRIPT") or ""
+    if _final.strip() and _tp and os.path.normcase(os.path.abspath(os.path.expanduser(_tp))) == \
+            os.path.normcase(os.path.abspath(path)) and last_assistant_text(records).strip() != _final.strip():
+        records.append({"type": "assistant", "hz_from_stop_input": True,
+                        "message": {"role": "assistant", "content": [{"type": "text", "text": _final}]}})
     return records
 
 
@@ -1195,16 +1205,26 @@ def plan_version_of(text):
 
 def plan_name_of(text):
     """The short plan name from the title '# Plan vN — <name> — <status>', in lower case."""
-    m = re.search(r"(?m)^#*\s*Plan v\d+\s*[—–-]\s*(.+?)\s*$", text or "")
+    # v3.2.17: the title may carry the Rev ("# Plan v11 Rev 4 — name", "# Plan v11 · Rev 4 — name"). 11 Oct: "Rev 4" in
+    # front of the name hid the name, so the check skipped the colours and treated each Rev as a new plan.
+    m = re.search(r"(?m)^#*\s*Plan v\d+(?:\s*[·,(]?\s*\**Rev\s*\d+\**\)?)?\s*[—–-]\s*(.+?)\s*$", text or "")
     if not m:
         return ""
     name = re.split(r"\s+[—–]\s+", m.group(1))[0]
     return re.sub(r"\s+", " ", name).strip().lower()
 
 
+def plan_rev_of(text):
+    """v3.2.17: the Rev number a plan title states ('Plan v11 Rev 4 — …' or '… — Approved 2026-10-10 (Rev 2)'), or None."""
+    m = re.search(r"(?m)^#*\s*Plan v\d+\b.*$", text or "")
+    r = re.search(r"\bRev\s*(\d+)\b", m.group(0)) if m else None
+    return int(r.group(1)) if r else None
+
+
 def plan_norm(text):
     """For comparing: the title's approval words and spacing are not a change."""
     t = re.sub(r"(?i)\b(awaiting approval|approved)\b", " ", text or "")
+    t = re.sub(r"(?m)^(#*\s*Plan v\d+)\s*[·,(]?\s*\**Rev\s*\d+\**\)?", r"\1", t)   # v3.2.17: the Rev in a title is no change
     return re.sub(r"\s+", " ", t).strip()
 
 

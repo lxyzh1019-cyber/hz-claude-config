@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.2.16
-Built on: 3.2.15
+Version: 3.2.17
+Built on: 3.2.16
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -64,13 +64,14 @@ F53 v3.2.13: restart lines checked against GitHub (branch_merged_on_github | bra
 F54 v3.2.14: workers run in the foreground (foreground-workers.py rewrites | foreground-workers.py
 F55 v3.2.15: reads no longer start the checks (app hook list without Read | event_matchers_absent
 F56 v3.2.16: only necessary stops and one pull request per stop (rules, pl | [stops]
+F57 v3.2.17: plan colours through the plan file, Rev after approval, notice | notice-guard.py
+F58 v3.2.17: tappable questions with notice first and what follows each op | ask-guard.py
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
 
 ## Open problems (stay until fixed with proof or he drops them)
 P02 Model-dependent solutions (one review per pull request, lean main session, Part names, report link copied, short test output) are proven only by a live session | found: 2026-10-11 campaign | next: the live scorecard in each end report shows works / does not work
-P01 Plan marks need one extra plan round | found: 2026-10-10 | Mitigated in 3.2.15 (option A: marks on the way; fallback C) | proof needed: the next revised plan shows 1 try with marks on screen
 
 ## Fixed (moved from Open; proof required)
 X01 Known-answer rebuilds went to Opus as "Complex" (26.5 M tokens, 10 Oct) | fixed in 3.2.11 | proof: tools/test_v3211_items.py item 1; session 7574e882: 5 Sonnet hand-overs, 1 correct escalation
@@ -99,6 +100,13 @@ X24 The session waited 15 min for an 'ok' after a restart line | fixed in 3.2.14
 X25 3.2.15: the 22 problems P1–P22 of 11 Oct (lanes refused, Completion order, report tool refused, check time, review after notes, [skip ci], PR conflicts, plan tries, change list) | fixed in 3.2.15 | proof: tools/test_v3215_items.py 32/32 (3.2.14: 5/32); real setup update and wake-up tests
 X26 Full test suites re-run after every small fix (11 Oct: 116 worker test runs, 90 min) | fixed in 3.2.15 (failed checks first; gh run rerun --failed) | proof: tools/test_v3215_items.py S26–S28
 X27 Too many stops and pull requests (11 Oct: 6 pull requests for 2 merge stops); setup pull requests ran the app's tests | fixed in 3.2.16 | proof: tools/test_v3216_items.py 8/8
+P01 Plan marks need one extra plan round — 3.2.15's way (updatedInput + allow) showed no colour and, in the real program, approves a plan without the owner; Revs with "Rev" in the title had no colour at all (v11 Rev 2–4) and were treated as new plans (planner rewrite, 32 min to approval) | fixed in 3.2.17 (name with Rev, newest saved base, marks into the plan file, no allow, fallback A after 1 failed trial) | proof: tools/test_v3217_items.py items 1–5; real program tools/real-harness/scenario_v3217.py window + plan 8/8; replay of the 11 Oct 19:28 showing: shown first try, 77 marks
+X29 Decision stops sent no reminder: notices said only "ready to merge" while 10 and 6 questions waited | fixed in 3.2.17 (notice-guard, notice text, ask-guard, tappable questions) | proof: tools/test_v3217_items.py items 6–7; real program ask + notice 5/5
+X30 Old "[in v7]" points sent a plan back | fixed in 3.2.17 (a note) | proof: tools/test_v3217_items.py item 4
+X31 Answer shown twice after a merge send-back (a worker had read the checks; the last push was notes only) | fixed in 3.2.17 | proof: tools/test_v3217_items.py item 8; replay of the 12 Oct 10:59 Stop: no send-back
+X32 #149 switched back to draft (two rules contradicted each other) | fixed in 3.2.17 (rule removed; git-guard refuses) | proof: tools/test_v3217_items.py item 9
+X33 Scorecard counted refused pull request tries and repeated answers | fixed in 3.2.17 | proof: tools/test_v3217_items.py item 10; 12 Oct session: 1 pull request
+P03 Other Stop checks read the session file, which can lag behind the final answer in the real program | fixed in 3.2.17 (the switchboard passes the Stop input's final answer; read_transcript adds it when the file is behind) | proof: real program tools/real-harness/scenario_v3217.py lag: before, checks read an older answer at 2 of 4 Stops; after, 4 of 4 final answers; tools/test_v3217_items.py item 12
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
@@ -108,3 +116,4 @@ X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PA
 - 3.2.14, second part: X20–X24 from session c7347d6a.
 - 3.2.15: X25; P01 mitigated (waits for its live proof).
 - 3.2.16: X27.
+- 3.2.17: P01, X29–X33 (owner 12 Oct: 1A, 2B with fallback A after 1 trial, 3A, then A A); P01 fixed (Fixed list); P03 found while testing and fixed in the same version (owner: "A").

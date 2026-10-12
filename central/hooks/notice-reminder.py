@@ -32,6 +32,8 @@ try:
     live_proof("notice-reminder", {"tool": tool})
 except ImportError:
     pass
-add_context("PostToolUse", "[notice] A pull request is now ready for review. Before your answer, send me one notice "
-            "with the PushNotification tool (load it with ToolSearch): '<app>: pull request #<number> is ready to "
-            "merge'. Do not mention the notice in the answer. If the tool is not in this session, skip it.")
+# v3.2.17: the notice names everything that waits (11-12 Oct: "ready to merge" while 10 and 6 questions also waited)
+add_context("PostToolUse", "[notice] A pull request is now ready for review. Right before your final answer, send me "
+            "one notice with the PushNotification tool (load it with ToolSearch) that names everything in your 'I need "
+            "from you' line, for example '<app>: 6 questions + merge #<number> waiting' or '<app>: merge #<number> "
+            "waiting'. Do not mention the notice in the answer. If the tool is not in this session, skip it.")

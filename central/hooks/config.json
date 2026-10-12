@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.16: plans keep only necessary stops (a decision only you can make, a merge, or a device read joined with the merge) and one pull request per stop; each stop row names its reason, and the end report counts stops and pull requests. Setup-update commits no longer start the app's GitHub tests. No setup pull request for your apps. claude.ai preferences: unchanged.",
+  "update_notice": "v3.2.17: plans show their coloured Rev marks again, and a change to an approved plan is its next Rev; the plan check never approves a plan for you. A stop that waits on you sends a phone notice that names everything waiting (questions and merges). Decisions come as tappable questions, recommended option first, each option saying 'Ends here' or what it brings back. A pull request stays ready (no switch back to draft). One setup pull request per app (adds tappable questions to the checks). claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -33,6 +33,10 @@
       {
         "script": "plan-guard.py",
         "tools": "ExitPlanMode"
+      },
+      {
+        "script": "ask-guard.py",
+        "tools": "AskUserQuestion"
       },
       {
         "script": "plan-edit-guard.py",
@@ -69,6 +73,7 @@
       "completion-guard.py",
       "handoff-guard.py",
       "pr-ready-guard.py",
+      "notice-guard.py",
       "validation-line.py",
       "qc-guard.py",
       "report-early.py",

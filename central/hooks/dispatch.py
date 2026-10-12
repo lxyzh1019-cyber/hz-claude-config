@@ -34,6 +34,20 @@ if os.path.exists(os.path.join(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd
 tool = data.get("tool_name", "") or ""
 cfg = load_config()
 entries = (cfg.get("dispatch") or {}).get(event, [])
+# v3.2.17 (P03): every end-of-answer check reads the final answer from the Stop input when the session file lags
+if event == "Stop" and data.get("last_assistant_message") and data.get("transcript_path"):
+    os.environ["HZ_STOP_LAST_MESSAGE"] = str(data.get("last_assistant_message"))
+    os.environ["HZ_STOP_TRANSCRIPT"] = str(data.get("transcript_path"))
+# v3.2.17: after the notice send-back the session ends with the single line 'Notice sent.' Its answer was already
+# checked and shown, so only the session summary runs (no second answer, no format send-back on the short line).
+if event == "Stop":
+    try:
+        from _common import read_transcript as _rt, last_assistant_text as _lat
+        _last = str(data.get("last_assistant_message") or "") or _lat(_rt(data.get("transcript_path"))) or ""
+        if re.fullmatch(r"\s*Notice sent\.?\s*", _last):
+            entries = [e for e in entries if (e if isinstance(e, str) else e.get("script")) == "stats.py"]
+    except Exception:
+        pass
 
 JOIN_BLOCKS = event in ("Stop", "SubagentStop")   # every check runs; all reasons go back in one message
 class _R:
@@ -84,7 +98,7 @@ def _run(path, raw):
     return _R(code, out, err)
 
 
-contexts, passthrough, reasons, notes, kinds = [], None, [], [], []
+contexts, passthrough, reasons, notes, kinds, scripts = [], None, [], [], [], []
 updated = None   # v3.2.14: a tool call rewritten by a check (foreground-workers.py)
 sid = data.get("session_id")
 for e in entries:
@@ -115,6 +129,7 @@ for e in entries:
     if JOIN_BLOCKS and obj.get("decision") == "block":
         reasons.append(obj.get("reason", "").strip())
         kinds.append(obj.get("hz_kind") or "fix")
+        scripts.append(e["script"])
         bump_stat(sid, ("sendback:" if obj.get("hz_kind") == "work" else "savedfix:") + e["script"].replace(".py", ""))
         continue
     if obj.get("decision") == "block" or hso.get("permissionDecision") in ("deny", "ask"):
@@ -142,6 +157,15 @@ if reasons and "work" in kinds and event == "Stop":
             refusal_note = True
     except Exception:
         pass
+# v3.2.17: when the only work problem is the missing phone notice, the other problems are saved for the next step, so
+# the session sends the notice and ends with 'Notice sent.' instead of writing the answer again
+if reasons and event == "Stop" and [s for s, k in zip(scripts, kinds) if k == "work"] == ["notice-guard.py"]:
+    _keep = [i for i, s in enumerate(scripts) if s == "notice-guard.py"]
+    _rest = [r_ for i, r_ in enumerate(reasons) if i not in _keep]
+    if _rest:
+        save_fixes(sid, _rest)
+        notes.append("Noted for the next step: " + str(len(_rest)) + " format or record fix(es).")
+    reasons, kinds, scripts = [reasons[i] for i in _keep], ["work"], ["notice-guard.py"]
 if reasons and "work" not in kinds:
     # the re-send instructions in a reason make no sense for a saved fix: keep only the problem itself
     save_fixes(sid, [re.split(r"\s+(?:Send only|Your re-send|Do not repeat|Send the |Then send)", r_, maxsplit=1)[0]

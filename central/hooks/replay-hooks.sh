@@ -14,7 +14,8 @@ pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
 export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if the planner wrote the plan; the v3.1.30 tests switch it on
 export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
-export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1 HZ_SKIP_CI_SOFT=1 HZ_PLAN_MARKS_ROUND=1   # v3.2.15: older fixtures keep the hint and the marks round   # v3.2.14: older fixtures: no reason line, background workers
+export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1 HZ_SKIP_CI_SOFT=1 HZ_PLAN_MARKS_ROUND=1 HZ_NOTICE_CHECK_OFF=1   # v3.2.17: older fixtures send no phone notice
+   # v3.2.15: older fixtures keep the hint and the marks round   # v3.2.14: older fixtures: no reason line, background workers
 export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1   # v3.2.13: no live GitHub in tests; older fixtures start single workers in worktrees
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
 export HZ_PLAN_ROUNDS_OFF=1        # v3.1.33: older plan tests are independent plans; the v3.1.33 tests switch it on
@@ -212,7 +213,7 @@ check "GitHub tool draft pull request is blocked" '"deny"' "$(ggt mcp__github__c
 check "the block says to create it ready for review" "ready for review" "$(ggt mcp__github__create_pull_request '{"title":"x","draft":true}')"
 check "GitHub tool ready pull request passes" "^$" "$(ggt mcp__github__create_pull_request '{"title":"x","draft":false}')"
 check "GitHub tool without a draft field passes" "^$" "$(ggt mcp__github__create_pull_request '{"title":"x"}')"
-check "marking an open pull request draft is allowed again (v3.1.30: back to draft while it is fixed)" '^$' "$(ggt mcp__github__update_pull_request '{"pullNumber":1,"draft":true}')"
+check "v3.2.17: switching an open pull request back to draft is refused (no flip-flop)" "stays ready" "$(ggt mcp__github__update_pull_request '{"pullNumber":1,"draft":true}')"
 check "other GitHub tools pass" "^$" "$(ggt mcp__github__list_pull_requests '{"state":"open"}')"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"mcp__github__create_pull_request","tool_input":{"draft":true}}' | python3 $H/dispatch.py); check "switchboard routes the GitHub pull-request tool to git-guard" '"deny"' "$o"
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"mcp__github__search_code","tool_input":{}}' | python3 $H/dispatch.py); check "switchboard skips other GitHub tools" "^$" "$o"
@@ -794,7 +795,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.15)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.2.17)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "The plan file goes into plans/ in this" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -1495,7 +1496,7 @@ mk130 "$T/b1b.jsonl" worker: reviewer:; o=$(gpr "$T/b1b.jsonl" "gh pr create --t
 mk130 "$T/b1c.jsonl" worker: reviewer: running:; o=$(gpr "$T/b1c.jsonl" "git push -u origin claude/x && gh pr create --fill"); check "v3.1.30: no pull request while a worker runs (real PR 118 order)" "still running" "$o"
 mk130 "$T/b1d.jsonl" bash:"git status"; o=$(gpr "$T/b1d.jsonl" "gh pr create --fill"); check "v3.1.30: a setup pull request with no workers passes" "^$" "$o"
 o=$(gmcp "$T/b1a.jsonl" mcp__github__create_pull_request '{"title":"x"}'); check "v3.1.30: the GitHub tool follows pull request last too" "open the pull request last" "$o"
-o=$(gmcp "$T/b1b.jsonl" mcp__github__update_pull_request '{"pullNumber":118,"draft":true}'); check "v3.1.30: switching an open pull request back to draft is allowed" "^$" "$o"
+o=$(gmcp "$T/b1b.jsonl" mcp__github__update_pull_request '{"pullNumber":118,"draft":true}'); check "v3.2.17: switching an open pull request back to draft is refused" "stays ready" "$o"
 o=$(gmcp "$T/b1b.jsonl" mcp__github__create_pull_request '{"title":"x","draft":true}'); check "v3.1.30: opening a new pull request as a draft is still refused" "not as drafts" "$o"
 wpr(){ python3 -c "import json,sys;print(json.dumps({'hook_event_name':'PreToolUse','tool_name':'Agent','session_id':'b1','transcript_path':sys.argv[1],'tool_input':{'subagent_type':'opus-worker','prompt':sys.argv[2]}}))" "$1" "$2" | python3 $H/worker-guard.py; }
 HO=$'Task: PR 4 fix pass\nLevel: Complex\nMap: js/21-money-data.js lines 1600-1700\nfix the gaps'
@@ -1507,7 +1508,8 @@ check "v3.1.30: opening a pull request marks its branch ready" '"claude/pr118": 
 o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.2.9: a fix worker on the branch of a ready pull request is not sent to switch it to draft" "clean" "$(echo "$o" | grep -c 'back to draft' | sed 's/^0$/clean/')"
 o=$(wpr "$T/b1e.jsonl" $'PR: #118 merged\n'"$HO"); check "v3.1.30: a merged pull request does not block the next worker" "^$" "$o"
 o=$(wpr "$T/b1e.jsonl" $'PR: #118 not touched\n'"$HO"); check "v3.1.30: a worker that leaves the branch alone may say so" "^$" "$o"
-gs "$T/b1e.jsonl" "gh pr ready 118 --undo" >/dev/null
+o=$(gs "$T/b1e.jsonl" "gh pr ready 118 --undo"); check "v3.2.17: gh pr ready --undo is refused" "stays ready" "$o"
+python3 -c "import json,sys;p=sys.argv[1];d=json.load(open(p));d.setdefault('b1',{})['claude/pr118']='draft';json.dump(d,open(p,'w'))" "$PROJ/.claude/state/pr-branches.json"   # a draft left by an older version
 check "v3.1.30: back to draft is recorded" '"claude/pr118": "draft"' "$(cat $PROJ/.claude/state/pr-branches.json)"
 o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.1.30: after back to draft the fix worker may start" "^$" "$o"
 FINAL=$'Fixed.\n\nConfidence: High · Status: Checked\n---\n> 📌 **Result:** Ready to merge.\n> 👉 **I need from you:** Merge 118.\n> ➡️ **Next:** done.'
@@ -1799,13 +1801,14 @@ check "  ...only the newest change is marked in the body" "clean" "$(grep -c '�
 check "  ...Rev 2 shrinks to one line in the list" "🟩 \*\*Rev 2\*\* — [0-9]* lines changed" "$(cat "$PROJ/plans/cur.md")"
 o=$(pagain "$T/r_no.jsonl")
 o=$(pe "$T/r_no.jsonl" "$PROJ/plans/cur.md" "The header is the same" "The header is new"); check "v3.2.0: editing a plan that is not approved is allowed" "^$" "$o"
-o=$(pe "$T/r_ok.jsonl" "$PROJ/plans/cur.md" "The header is the same" "The header is new"); check "v3.2.0: editing an approved plan file is refused" "Plan v1 is approved. Do not edit its file." "$o"
-check "  ...it points to the next version" "Change the title to Plan v2" "$o"
+o=$(pe "$T/r_ok.jsonl" "$PROJ/plans/cur.md" "The header is the same" "The header is new"); check "v3.2.0: editing an approved plan file is refused" "Plan v1 Rev [0-9]* is approved. Do not edit its file." "$o"
+check "  ...it points to the next Rev (v3.2.17)" "Make the change as Plan v1 Rev [0-9]* in a new plan file" "$o"
 o=$(pe "$T/r_ok.jsonl" "$PROJ/plans/cur.md" "Awaiting approval" "Approved"); check "v3.2.0: changing only the title to Approved is allowed" "^$" "$o"
 o=$(pe "$T/r_ok.jsonl" "$PROJ/plans/cur.md" "# Plan v1 —" "# Plan v2 —"); check "v3.2.0: moving the file to Plan v2 is allowed" "^$" "$o"
 sed 's/The header is the same on every screen\./The header is new./' "$PROJ/plans/cur.md" > "$T/rv1d.md"
-o=$(pr "$T/r_ok.jsonl" "$T/rv1d.md"); check "v3.2.0: a changed Plan v1 after Approve is sent back as the next version" "Plan v1 is approved, so this change is the next version" "$o"
-sed 's/# Plan v1 —/# Plan v2 —/' "$T/rv1d.md" > "$T/rv2.md"
+o=$(pr "$T/r_ok.jsonl" "$T/rv1d.md"); check "v3.2.17: a changed Plan v1 after Approve is its next Rev (owner 1A)" "Plan v1 .u00b7 Rev [0-9]*) to the plan file" "$o"
+check "  ...not sent back as the next version" "clean" "$(echo "$o" | grep -c 'this change is the next version' | sed 's/^0$/clean/')"
+sed 's/# Plan v1 —/# Plan v2 —/; s/The header is new\./The header is new and green./' "$T/rv1d.md" > "$T/rv2.md"
 o=$(pr "$T/r_ok.jsonl" "$T/rv2.md"); check "v3.2.0: Plan v2 starts again at Rev 1, compared with v1" "Plan v2 .u00b7 Rev 1" "$o"
 check "  ...its change list says since Plan v1" "what changed since Plan v1" "$(cat "$PROJ/plans/cur.md")"
 check "  ...Plan v2 needs no planner (the main session writes later versions)" "clean" "$(echo "$o" | grep -c 'planner helper' | sed 's/^0$/clean/')"
