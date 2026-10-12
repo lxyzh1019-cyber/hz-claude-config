@@ -281,3 +281,5 @@ Lanes meet before me (v3.2.15) | R | **Lanes meet before me.**
 What changed list (v3.2.15) | R | **What changed.**
 Big plans start with the planner (v3.2.15) | R | **Big plans start with the planner.**
 Failed checks first (v3.2.15) | R | **Failed checks first (Hook).**
+Only necessary stops (v3.2.16) | R | **Only necessary stops.**
+One pull request per stop (v3.2.16) | R | **One pull request per stop.**

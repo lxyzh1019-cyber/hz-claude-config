@@ -273,6 +273,10 @@ def scorecard(paths):
                             d["wait_lines"] += 1
                             cur += 1
                         need = re.search(r"I need from you:\**\s*(.+)", t)
+                        if need and re.search(r"(?i)\bmerge\b", need.group(1)):   # v3.2.16: stops for a merge
+                            d["merge_stops"] = d.get("merge_stops", 0) + 1
+                        if need and re.search(r"(?i)\b(merge|decide|answer|approve|iPad|read|check)\b", need.group(1)):
+                            d["stops"] = d.get("stops", 0) + 1
                         if need and re.search(r"\bnew (?:session|chat|window)\b|paste the restart line", need.group(1), re.I):
                             d["new_session_asks"] += 1
                         d["pr_n"] += len(re.findall(r"\bPR \d+\b", t))
@@ -283,6 +287,9 @@ def scorecard(paths):
                                 d["report_link"] += 1
                     if b.get("type") == "tool_use":
                         n, i = b.get("name"), b.get("input") or {}
+                        if (n == "Bash" and re.search(r"\bgh\s+pr\s+create\b", str(i.get("command") or ""))) or \
+                                re.search(r"create_pull_request", str(n)):
+                            d["prs"] = d.get("prs", 0) + 1
                         if n == "ExitPlanMode":
                             d["plan_tries"] += 1
                         if n in ("Agent", "Task"):
@@ -344,6 +351,9 @@ def scorecard(paths):
         ("Asked you to open a new session (goal: 0)", str(d["new_session_asks"]), ok(d["new_session_asks"] == 0)),
         ("Reviews per pull request (goal: at most 2)", f"max {rev_max}", ok(rev_max <= 2)),
         ("Plan tries per approval (goal: at most 2)", f"{d['plan_tries']} tries, {d['plan_shown']} approved", ok(d["plan_tries"] <= 2 * max(d["plan_shown"], 1))),
+        ("Stops for you (goal: only necessary ones)", f"{d.get('stops', 0)} stops in {max(d['rounds'], 1)} rounds", "measured"),
+        ("Pull requests per merge stop (goal: 1)", f"{d.get('prs', 0)} pull requests opened, {d.get('merge_stops', 0)} merge stops",
+         ok(d.get("prs", 0) <= max(d.get("merge_stops", 0), 1))),
         ("Check time (goal: under 5% of the session)", f"about {d.get('check_min', 0)} min ({_tc} tool calls, {_per:.1f} s per check run)", "measured"),
         ("Main session share of tokens (goal: under 35%)", f"{main_pct}%", ok(main_pct < 35)),
         ("Sonnet share of worker hand-overs (goal: 40% or more)", f"{son_pct}% ({d['sonnet']} of {d['sonnet'] + d['opus']})", ok(son_pct >= 40)),
