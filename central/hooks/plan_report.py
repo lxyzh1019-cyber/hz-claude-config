@@ -249,6 +249,7 @@ def scorecard(paths):
     for p in paths:
         R = _load(p)
         cur, seen = 0, set()
+        pr_ids, plan_ids, pushed, merge_round = set(), set(), [], False   # v3.2.17
         for r in R:
             msg = r.get("message") or {}
             c = msg.get("content")
@@ -259,6 +260,19 @@ def scorecard(paths):
                     d["rounds"] += 1
                     d["max_wait_lines"] = max(d["max_wait_lines"], cur)
                     cur = 0
+                    pushed, merge_round = [], False
+            if r.get("type") == "user" and isinstance(c, list):   # v3.2.17: results of pull requests and plans
+                for x in c:
+                    if isinstance(x, dict) and x.get("type") == "tool_result":
+                        rt = json.dumps(x.get("content"), ensure_ascii=False)
+                        if x.get("tool_use_id") in pr_ids and "/pull/" in rt and not re.search(
+                                r"(?i)hook error|denied|refused|git-guard", rt):
+                            d["prs"] = d.get("prs", 0) + 1
+                tr = r.get("toolUseResult")
+                if isinstance(tr, dict) and isinstance(tr.get("plan"), str) and "filePath" in tr:
+                    d["plans_approved"] = d.get("plans_approved", 0) + 1
+                    if any(s in tr["plan"] for s in "🟦🟩🟧🟪"):
+                        d["plans_colour"] = d.get("plans_colour", 0) + 1
             if r.get("type") == "assistant":
                 u = msg.get("usage") or {}
                 if msg.get("id") not in seen and u:
@@ -273,8 +287,14 @@ def scorecard(paths):
                             d["wait_lines"] += 1
                             cur += 1
                         need = re.search(r"I need from you:\**\s*(.+)", t)
-                        if need and re.search(r"(?i)\bmerge\b", need.group(1)):   # v3.2.16: stops for a merge
-                            d["merge_stops"] = d.get("merge_stops", 0) + 1
+                        if need and re.search(r"(?i)\bmerge\b", need.group(1)) and not merge_round:
+                            d["merge_stops"] = d.get("merge_stops", 0) + 1   # v3.2.17: once per round (a repeat
+                            merge_round = True                                 # of the answer is not a second stop)
+                        if need and not re.match(r"(?i)\W*(nothing|none)\b", need.group(1)):
+                            qs = bool(re.search(r"❓", t)) or bool(re.search(r"(?i)\b(answer|decide|questions?)\b", need.group(1)))
+                            d["waits"] = d.get("waits", 0) + 1
+                            if pushed and (not qs or any(re.search(r"(?i)\b(question|decision|answer)s?\b", m_) for m_ in pushed)):
+                                d["waits_noticed"] = d.get("waits_noticed", 0) + 1
                         if need and re.search(r"(?i)\b(merge|decide|answer|approve|iPad|read|check)\b", need.group(1)):
                             d["stops"] = d.get("stops", 0) + 1
                         if need and re.search(r"\bnew (?:session|chat|window)\b|paste the restart line", need.group(1), re.I):
@@ -289,7 +309,9 @@ def scorecard(paths):
                         n, i = b.get("name"), b.get("input") or {}
                         if (n == "Bash" and re.search(r"\bgh\s+pr\s+create\b", str(i.get("command") or ""))) or \
                                 re.search(r"create_pull_request", str(n)):
-                            d["prs"] = d.get("prs", 0) + 1
+                            pr_ids.add(b.get("id"))   # v3.2.17: counted when it opened (refused tries are not)
+                        if n == "PushNotification":
+                            pushed.append(str(i.get("message") or ""))
                         if n == "ExitPlanMode":
                             d["plan_tries"] += 1
                         if n in ("Agent", "Task"):
@@ -360,6 +382,11 @@ def scorecard(paths):
         ("Workers' tests in the foreground (goal: 0 in the background)", f"{d['fg_tests']} foreground, {d['bg_tests']} background", ok(d["bg_tests"] == 0)),
         ("Report link in the Completion line (goal: every one)", f"{d['report_link']} of {d['completion']}", ok(d["completion"] and d["report_link"] == d["completion"])),
         ("'Part n' instead of 'PR n' (goal: no 'PR n')", f"PR n: {d['pr_n']} · Part n: {d['part_n']}", ok(d["pr_n"] == 0)),
+        # v3.2.17: the colour on approved plans, and a notice for every answer that waits on me
+        ("Approved plans with colour marks (goal: every changed one)", f"{d.get('plans_colour', 0)} of {d.get('plans_approved', 0)}",
+         ok(d.get("plans_colour", 0) == d.get("plans_approved", 0)) if d.get("plans_approved") else "measured"),
+        ("Waiting answers with a notice that names them (goal: every one)", f"{d.get('waits_noticed', 0)} of {d.get('waits', 0)}",
+         ok(d.get("waits_noticed", 0) == d.get("waits", 0)) if d.get("waits") else "measured"),
     ]
     return rows, d
 

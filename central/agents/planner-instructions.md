@@ -23,7 +23,7 @@ You write the plan. The main session shows it to the owner, runs the workers and
 - Keep the plan file lean. When a new version replaces a design, move the old design to `docs/archive/`. Technical details keep only what the next stages need.
 - Ask every open question before approval. After approval the plan is not reopened; findings are recorded and reported.
 - A new plan (Plan v1): "What changed" says "First version".
-- You are sent again only for big changes. Then use the next version number and fill "What changed".
+- You are sent again only for big changes. A change to an approved plan keeps its number and takes the next Rev (v3.2.17): "# Plan v11 Rev 5 — <name> — Awaiting approval". Fill "What changed".
 
 **Tag each stage** in `Stages to finish`, after its owner and Build/Check mark: `files: <main files>` (from the explorer's map) · `after: <stage it waits for>` · `level: Routine|Complex` · `size: S|M|L` (about 15, 45 or 90 minutes) · `group: <letter>` · `proof: <the tests, pictures or figures that show it is right>`. The plan check sends back a Build stage without proof or size. Stages in the same group touch different files and run in parallel (at most 3). A stage that must wait gets its own group.
 

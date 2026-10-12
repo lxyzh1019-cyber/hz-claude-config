@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """PreToolUse hook on Edit/Write/MultiEdit (v3.2.0): an approved plan file is not edited. A change after my Approve
-is the next Plan vN, shown in plan mode. Allowed: edits to plans not yet approved, an edit that moves the file to a
-higher version number, and an edit that changes only the title's approval words.
+is its next Rev (v3.2.17; owner 10 and 12 Oct), shown in plan mode. Allowed: edits to plans not yet approved, an edit
+that moves the file to a higher version or a higher Rev, and an edit that changes only the title's approval words.
 Cause: in the Weekly-Planner consistency pass the session wrote three decisions into the approved Plan v1 file
 directly, so no new version and no change view followed."""
 import os
 from _common import (read_hook_input, deny_tool, log, read_transcript, plan_store_load, plan_mark_approved,
-                     plan_norm, plan_version_of, plan_name_of, live_proof)
+                     plan_norm, plan_version_of, plan_name_of, live_proof, plan_rev_of)
 from planmarks import strip_marks as strip_change_block
 
 data = read_hook_input()
@@ -37,9 +37,12 @@ else:
 nv = plan_version_of(new)
 if nv is not None and nv > ver:
     raise SystemExit(0)
+if nv == ver and (plan_rev_of(new) or 1) > (plan_rev_of(old) or 1):   # v3.2.17: the next Rev of the approved plan
+    raise SystemExit(0)
 if plan_norm(strip_change_block(new)) == plan_norm(strip_change_block(old)):
     raise SystemExit(0)
 log("plan-edit-guard", {"refused": os.path.basename(path), "version": ver})
 live_proof("plan-edit-guard", {"refused": os.path.basename(path), "version": ver})
-deny_tool(f"Plan v{ver} is approved. Do not edit its file. Change the title to Plan v{ver + 1}, make the change, and "
-          "show it in plan mode for my Approve. The plan check adds the coloured marks by itself.")
+_r = plan_rev_of(old) or 1
+deny_tool(f"Plan v{ver} Rev {_r} is approved. Do not edit its file. Make the change as Plan v{ver} Rev {_r + 1} in a new "
+          "plan file and show it in plan mode for my Approve. The plan check adds the coloured marks by itself.")

@@ -38,6 +38,35 @@ for r in turn:
             results[b.get("tool_use_id")] = json.dumps(b.get("content"), ensure_ascii=False)
 if not last_push or setup or refused_by_safety_check(turn):
     sys.exit(0)
+# v3.2.17: checks read by a worker in this turn count too. Weekly-Planner 12 Oct: the worker read the green code run, the
+# main session then pushed record notes only ([skip ci]), and this check sent the answer back, so it showed twice.
+if not checks and not checked_before:
+    try:
+        import glob as _g, os as _o
+        from datetime import datetime as _dt
+        def _ts(r):
+            return _dt.fromisoformat(str(r.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        _start = min((_ts(r) for r in turn if r.get("timestamp")), default=None)
+        _tp = str(data.get("transcript_path") or "")
+        _sub = _o.path.join(_o.path.splitext(_tp)[0], "subagents")
+        for _f in _g.glob(_o.path.join(_sub, "*.jsonl")):
+            if _start is None or _o.path.getmtime(_f) < _start:
+                continue
+            for _l in open(_f, encoding="utf-8", errors="replace"):
+                if "gh " not in _l:
+                    continue
+                try:
+                    _r = json.loads(_l)
+                except ValueError:
+                    continue
+                if _r.get("timestamp") and _ts(_r) < _start:
+                    continue
+                for _b in (((_r.get("message") or {}).get("content")) or []):
+                    if isinstance(_b, dict) and _b.get("type") == "tool_use" and CHECKS.search(
+                            str((_b.get("input") or {}).get("command") or "")):
+                        checked_before = True
+    except Exception:
+        pass
 # v3.2.10: a last push that changed only notes (the record, docs, plans) needs no new wait when the checks of the code
 # before it were read this turn. Weekly-Planner 9 Oct: 8 minutes waiting for a run on a record-only commit.
 if not checks and checked_before:

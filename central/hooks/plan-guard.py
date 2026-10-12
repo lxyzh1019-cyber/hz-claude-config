@@ -4,7 +4,7 @@ v3.2.0: the plan check makes the change view itself. It saves each plan it shows
 it compares the two texts and puts "Changed since last time" right under the title: only the changed lines, with the
 round's square. The model writes no change list and no Rev markers.
 - A plan keeps its number while we discuss it; each changed showing is a new round.
-- My Approve closes the version. A changed text with the same number after Approve is sent back: it is the next version.
+- My Approve closes a round. A changed text with the same number after Approve is its next Rev (v3.2.17, owner).
 - The planner helper writes the first showing of each version; later rounds of the same version may come from the
   main session.
 It also sends a plan back before I see it when it has HTML, no framed Summary, no "Stages to finish" with owners,
@@ -14,6 +14,7 @@ The plan text is taken from the tool input, or from a plan file the input names,
 import glob, os, re, time
 import json
 from _common import read_hook_input, deny_tool, log, read_transcript, PROJECT_DIR, PLAN_TEMPLATE, load_config, last_turn
+from _common import plan_version_of, plan_rev_of
 cfg_ = load_config()
 
 data = read_hook_input()
@@ -84,11 +85,19 @@ _sec = re.search(r"(?ms)^##\s*Design decisions\b.*?(?=^##\s|\Z)", _rec)
 if _sec:
     _norm = lambda s: re.sub(r"\s+", " ", s).strip().lower()
     _plan_n = _norm(text)
-    _missing = []
+    _missing, _old_missing = [], []
+    _vnow = plan_version_of(text) if "plan_version_of" in globals() else None
     for _line in _sec.group(0).splitlines():
         _m = re.match(r"^\s*[-*]\s*\[agreed\]\s*(.+?)\s*(?:—|-{1,2})\s*search:\s*(.+?)\s*$", _line, re.I)
         if _m and _norm(_m.group(2).strip("`\"'")) not in _plan_n:
-            _missing.append(_m.group(1)[:60] + " (search: " + _m.group(2).strip("`\"'") + ")")
+            _item = _m.group(1)[:60] + " (search: " + _m.group(2).strip("`\"'") + ")"
+            # v3.2.17: a point marked for an earlier approved plan ('[in v7]') is a note, not a send-back. 11 Oct: two
+            # finished night-check points of Plan v7 sent Plan v11 back.
+            _iv = re.match(r"\s*\[in v(\d+)\]", _m.group(1))
+            if _iv and _vnow is not None and int(_iv.group(1)) < _vnow:
+                _old_missing.append(_item)
+            else:
+                _missing.append(_item)
     if _missing:
         problems.append("These agreed design decisions are not in the plan. Add each one with its search phrase. If one "
                         "is not agreed after all, mark it open in the record. Missing: " + "; ".join(_missing[:8])
@@ -175,13 +184,37 @@ if _open_q and not os.environ.get("HZ_QUESTIONS_CHECK_OFF"):   # test switch onl
                     "written in as decided, so I only approve it.")
     reasons.append("open questions in the plan")
 # v3.2.0: versions and Revs. Version = approvals; Rev = each showing inside a version, from Rev 1.
-_store = plan_mark_approved(plan_store_load(), read_transcript(data.get("transcript_path")))
+_records = read_transcript(data.get("transcript_path"))
+_store = plan_mark_approved(plan_store_load(), _records)
 _name, _ver = plan_name_of(text), plan_version_of(text)
+# v3.2.17: a title the check cannot read never skips the colours silently: it is the plan shown last
+if _ver is not None and not _name and _store.get("last"):
+    _name = _store["last"]
+    live_proof("plan-guard", {"note": "plan name not readable in the title; used the plan shown last"})
+# v3.2.17 (owner, 12 Oct: "B, fallback on A after 1 trial"): the marks go into the plan file before the approval window
+# reads it (proven in the real program 2.1.296). The trial: the plan Claude Code kept at the last approval must hold the
+# squares. If it does not, the marks come back the old way (A): one more showing of the same plan.
+try:
+    _lastres = None
+    for _r in _records:
+        _tr = _r.get("toolUseResult")
+        if isinstance(_tr, dict) and isinstance(_tr.get("plan"), str) and "filePath" in _tr:
+            _lastres = _tr["plan"]
+    _le = (_store["plans"].get(_store.get("last") or "") or {}) if isinstance(_store.get("plans"), dict) else {}
+    _lc = _le.get("cur") or {}
+    if _lastres is not None and _lc.get("via") == "file" and _lc.get("n") and not _store.get("marks_mode"):
+        _store["marks_mode"] = "file" if any(s in _lastres for s in "🟦🟩🟧🟪") else "round"
+        plan_store_save(_store)
+        live_proof("plan-guard", {"marks_trial": _store["marks_mode"]})
+except (AttributeError, TypeError, ValueError):
+    pass
 _entry = (_store["plans"].get(_name) if _name else None) or None
 # v3.2.0: a new session (or the first session on 3.2.0) has no saved plan yet. The newest committed plan file with the
 # same plan name and a lower version (an approved one: approved plans are committed in plans/) becomes the base, so
 # the first change in the new session still gets its coloured marks.
-if _name and _ver is not None and not _entry and not os.environ.get("HZ_PLAN_ROUNDS_OFF"):
+# v3.2.17: also when the saved plan is older than a committed one (11 Oct: the saved copy was Rev 1 of 13:24, the
+# committed file Rev 3, because Revs 2 and 3 had unreadable titles)
+if _name and _ver is not None and not os.environ.get("HZ_PLAN_ROUNDS_OFF"):
     _best = None
     for _f in glob.glob(os.path.join(PROJECT_DIR, "plans", "*.md")):
         if plan_file and os.path.normcase(os.path.abspath(_f)) == os.path.normcase(os.path.abspath(plan_file)):
@@ -191,20 +224,23 @@ if _name and _ver is not None and not _entry and not os.environ.get("HZ_PLAN_ROU
         except OSError:
             continue
         _fv = plan_version_of(_ft)
-        if plan_name_of(_ft) == _name and _fv is not None and _fv < _ver and (not _best or _fv > _best[0]):
-            _best = (_fv, _ft)
-    if _best:
-        _entry = {"version": _best[0], "rev": 1, "text": _best[1], "approved": True, "history": []}
-        live_proof("plan-guard", {"base": f"committed Plan v{_best[0]} from plans/"})
+        # v3.2.17: the same version counts too (a Rev of an approved plan); the highest version and Rev wins
+        _fr = plan_rev_of(_ft) or 1
+        if plan_name_of(_ft) == _name and _fv is not None and _fv <= _ver and (not _best or (_fv, _fr) > _best[:2]):
+            _best = (_fv, _fr, _ft)
+    if _best and (not _entry or (_best[0], _best[1]) > (int(_entry.get("version") or 0), int(_entry.get("rev") or 1))):
+        _entry = {"version": _best[0], "rev": _best[1], "text": _best[2], "approved": True, "history": []}
+        live_proof("plan-guard", {"base": f"committed Plan v{_best[0]} Rev {_best[1]} from plans/"})
 _rounds_on = not os.environ.get("HZ_PLAN_ROUNDS_OFF")       # test switch only
 _base, _rev, _since, _hist = None, 1, "", []
 if _name and _ver is not None and _rounds_on and _entry:
     _ev = int(_entry.get("version") or 0)
     _same = plan_norm(_entry.get("text")) == plan_norm(text)
     if _ver == _ev and _entry.get("approved") and not _same:
-        problems.append(f"Plan v{_ver} is approved, so this change is the next version. Change the title to "
-                        f"Plan v{_ver + 1} and show it again.")
-        reasons.append("changed after approval")
+        # v3.2.17 (owner, 10 Oct and 12 Oct, choice 1A): a change to an approved plan is its next Rev, not a new number
+        _r0 = int(_entry.get("rev") or 1)
+        _base, _rev, _since = _entry.get("text"), _r0 + 1, f"Rev {_r0} (approved)"
+        _hist = (_entry.get("history") or []) + [_entry.get("cur") or {"rev": _r0, "n": 0}]
     elif _ver < _ev:                     # numbering started again (seen in the money session: v19, then v1):
         _base, _rev, _since, _hist = _entry.get("text"), 1, f"Plan v{_ev}", []   # no send-back; still compared
         live_proof("plan-guard", {"note": f"version went from v{_ev} to v{_ver}"})
@@ -273,12 +309,19 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
             with open(plan_file, "w", encoding="utf-8") as _f:
                 _f.write(_final)
             live_proof("plan-guard", {"marks": "written into the plan file", "version": _ver, "rev": _rev})
-            if os.environ.get("HZ_PLAN_MARKS_ROUND"):   # fallback C: the old extra round
+            _cur["via"] = "file"
+            if os.environ.get("HZ_PLAN_MARKS_ROUND") or _store.get("marks_mode") == "round":   # fallback A
+                _cur["via"] = "round"
+                if _name and _ver is not None and _rounds_on:
+                    _store["plans"][_name] = {"version": _ver, "rev": _rev, "text": text, "base": _base, "since": _since,
+                                              "history": _hist, "cur": _cur, "approved": False, "file": plan_file}
+                    _store["last"] = _name
+                    plan_store_save(_store)
                 deny_tool(f"The plan check added the coloured change marks (Plan v{_ver} · Rev {_rev}) to the plan "
                           "file. Show the plan again now. Change nothing.")
-            # v3.2.15 (P01, option A): the plan goes on to the owner with its marks, rewritten on its way (updatedInput),
-            # instead of one more round. The answer is printed once, at the end of this check.
-            _UPD = dict(data.get("tool_input") or {}, plan=_final)
+            # v3.2.17 (B): Claude Code reads the plan file for the approval window after this check, so the marks are
+            # on screen without another round. Never 'allow' here: in the real program an allow approves the plan
+            # without the owner (tools/real-harness/scenario_plan_window.py).
             shown_text = _final
         except OSError:
             pass
@@ -313,6 +356,10 @@ if model and _main.get("id") and _main["id"] not in model:   # v3.1.30: the plan
     size_note += (f" This session runs on {model}; the work after approval needs only {_main.get('name')}: type "
                   f"{_main.get('switch')} — the planner helper still plans on the first-choice model.")
 _out = {"systemMessage": size_note}
+if "_old_missing" in globals() and _old_missing:
+    _out.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})["additionalContext"] = (
+        "[earlier points] Points agreed for an earlier plan are not in this plan: " + "; ".join(_old_missing[:6]) +
+        ". If one still applies, carry it in the next Rev; if it is finished, mark its record line 'done'.")
 # v3.2.16: only necessary stops, one pull request per stop. A stop row (a stage for the owner) names its reason:
 # 'stop: decision', 'stop: merge' or 'stop: device read'. A notice, not a send-back (owner, 11 Oct: "I only need few
 # necessary stops, not safe ones").
@@ -325,9 +372,8 @@ try:
                  "make, a merge (one pull request per round), or a device read joined with the merge. Mark each stop row "
                  "'stop: decision', 'stop: merge' or 'stop: device read'; turn the rest into report lines. No reason yet: "
                  + "; ".join(_noreason[:4]) + ".")
-        _out.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})["additionalContext"] = _note
+        _h = _out.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})
+        _h["additionalContext"] = ((_h.get("additionalContext") or "") + "\n" + _note).strip()
 except Exception:
     pass
-if globals().get("_UPD"):
-    _out.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"}).update({"permissionDecision": "allow", "updatedInput": _UPD})
 print(json.dumps(_out))

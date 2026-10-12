@@ -1,4 +1,4 @@
-version: 3.2.16
+version: 3.2.17
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -6,6 +6,7 @@ agents/opus-worker-instructions.md
 agents/planner-instructions.md
 agents/reviewer-instructions.md
 hooks/_common.py
+hooks/ask-guard.py
 hooks/change_list.py
 hooks/completion-guard.py
 hooks/config.json
@@ -15,6 +16,7 @@ hooks/formats.py
 hooks/git-guard.py
 hooks/handoff-guard.py
 hooks/merge-guard.py
+hooks/notice-guard.py
 hooks/notice-reminder.py
 hooks/plan-edit-guard.py
 hooks/plan-gate.py

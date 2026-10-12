@@ -69,9 +69,9 @@ SQUARES = {1: "🟦", 2: "🟩", 3: "🟧", 0: "🟪"}
 CHANGE_BLOCK_TITLE = "Changes in this version"          # made by the plan check, never by the model
 CHANGE_BLOCK_MAX_LINES = 40
 QUICK_READ_GOAL_WORDS = 250     # v3.2.9: a goal, not a limit; the plan check only notes it
-PLAN_RULES = ("Plan vN counts my approvals. Rev counts each showing inside a version and starts at Rev 1 for each "
-              "version. My Approve closes the version; after it, a change is the next Plan vN; never edit the "
-              "approved file. Do not write Rev marks yourself: the plan check puts the coloured square and label in "
+PLAN_RULES = ("Plan vN numbers a plan. Rev counts each showing inside a version and starts at Rev 1 for each "
+              "version. After my Approve, a change to the same plan is its next Rev: Plan v11 Rev 5 after an approved "
+              "Rev 4. Save it as a new file; never edit the approved file. Do not write Rev marks yourself: the plan check puts the coloured square and label in "
               "front of each line changed since I last looked. If it asks you to show the plan again, show it again "
               "and change nothing. The plan starts with a Quick read I can scan in one place: Summary (3 lines), What "
               "changed (at most 5 plain lines with the result, no history), Decisions (open ones only; each option says "

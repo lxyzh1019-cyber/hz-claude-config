@@ -57,7 +57,7 @@ Build state first; no building while deciding | R | Build state first; no buildi
 Changes from approval are questions | R | **Changes from what I approved are questions, not news.**
 Prototype and build side by side (new v3.1.28) | R | prototype and build side by side
 Plan numbering continues; plan file holds latest | R | Plan numbers continue across sessions
-Version counts approvals (v3.2.0; was: Rev = plan version) | R | Plan vN counts my approvals.
+Plan number and Rev (v3.2.17; was: version counts approvals) | R | Plan vN numbers a plan.
 R-numbers vs plan versions | R | R-numbers count work rounds and never restart
 Plan files in plan mode, plans/ folder, commit approved, delete drafts | R | Delete plans that were never approved
 Shape first, then one plan version | R | **Shape first, then one plan version (Hook).**
@@ -181,7 +181,7 @@ Reviewer on call at three moments (new) | R | **Reviewer on call (Hook).**
 Reviewer when stuck (new) | R | `Reviewer advice: …`
 Reviewer before done (new) | R | `Reviewer before done (<plan name>): <verdict>`
 Pull request opens last (v3.1.30) | R | only after every worker and the reviewer finished
-Open ready pull request back to draft while fixed (v3.1.30) | R | first switch it back to draft (`gh pr ready <n> --undo`)
+Open ready pull request stays ready while fixed (v3.2.17; was: back to draft) | R | the change goes on it as new commits and it stays ready
 Final report marks the pull request ready (v3.1.30) | R | The final report marks it ready (Hook)
 Reviewer before every pull request (v3.1.30) | R | before every pull request (its check refuses one without it)
 No waiting commands in the main session too | R | no waiting loops or `tail -f`
@@ -192,7 +192,7 @@ By-screen feature list with proof per line (v3.1.30) | R | gives each line a pro
 Planner fallback on Opus only with Fallback line (v3.1.30) | R | `planner-opus` with `Fallback: <error>`
 Ready-to-merge notice to my account (v3.1.30) | R | send me a notice before the answer (PushNotification, Hook)
 Version counts approvals; Rev counts showings, restarts per version (v3.2.0) | R | Rev counts each showing inside a version and starts at Rev 1 for each version.
-Approve in plan mode closes the version (v3.2.0) | R | My Approve in plan mode closes the version.
+After Approve a change is the next Rev (v3.2.17; was: next version) | R | a change to the same plan (also one agreed in chat) is its next Rev
 No edit of an approved plan file except its title (v3.2.0) | R | Do not edit an approved plan file
 Coloured marks placed by code (v3.2.0) | R | **Coloured changes by code (Hook).**
 Change list: newest showing in full, older ones one line (v3.2.0) | R | older showings as one line each
@@ -209,7 +209,7 @@ First plan contents and title (format file) | F | <short plan name> — Awaiting
 Up to 3 parallel workers, own worktree (v3.2.0) | R | **Parallel workers (Hook).**
 Stage tags: files, after, level, tests, group (v3.2.0) | R | The planner tags each stage with files, after, level, tests and group.
 Night work with stacked pull requests (v3.2.0) | R | **Night work (Hook).**
-Phone notice when you need me (v3.2.0) | R | **Phone notice when you need me.**
+Phone notice that names what waits (v3.2.17) | R | **Phone notice when you need me (Hook).**
 Main session notice above 50% of context (v3.2.10) | R | The main session gets a notice above 50% of its context
 Batch reads after 5 single reads (v3.2.0) | R | After 5 single-read steps in a row
 Test map and saved tools (v3.2.0) | R | **Test map and saved tools.**
@@ -283,3 +283,5 @@ Big plans start with the planner (v3.2.15) | R | **Big plans start with the plan
 Failed checks first (v3.2.15) | R | **Failed checks first (Hook).**
 Only necessary stops (v3.2.16) | R | **Only necessary stops.**
 One pull request per stop (v3.2.16) | R | **One pull request per stop.**
+Questions as taps, with what follows (v3.2.17) | R | **Questions as taps, with what follows (Hook).**
+Each option says what follows it (v3.2.17) | R | "Ends here." or "Brings back: <what we must talk about again>"
