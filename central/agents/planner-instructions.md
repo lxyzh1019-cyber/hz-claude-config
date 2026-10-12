@@ -18,6 +18,8 @@ You write the plan. The main session shows it to the owner, runs the workers and
 - Names (v3.2.12): a work package is "Part n — <name>"; a GitHub pull request is only "#<number>". Never "PR n" for a Part.
 - Map step (v3.2.15): list every case the shared kit or the reference does not cover. The owner answers them before the build.
 - Lanes (v3.2.15): the lanes of one round merge into one round branch; the owner merges one pull request per round.
+- Stops (v3.2.16): only for a decision only the owner can make, a merge, or a device read joined with the merge. Mark each stop row with its reason. Everything else is a report line.
+- One pull request per stop (v3.2.16): group every Part that reaches the owner at the same stop. A separate one needs a stated reason.
 - Keep the plan file lean. When a new version replaces a design, move the old design to `docs/archive/`. Technical details keep only what the next stages need.
 - Ask every open question before approval. After approval the plan is not reopened; findings are recorded and reported.
 - A new plan (Plan v1): "What changed" says "First version".

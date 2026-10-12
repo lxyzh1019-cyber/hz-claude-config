@@ -313,6 +313,21 @@ if model and _main.get("id") and _main["id"] not in model:   # v3.1.30: the plan
     size_note += (f" This session runs on {model}; the work after approval needs only {_main.get('name')}: type "
                   f"{_main.get('switch')} — the planner helper still plans on the first-choice model.")
 _out = {"systemMessage": size_note}
+# v3.2.16: only necessary stops, one pull request per stop. A stop row (a stage for the owner) names its reason:
+# 'stop: decision', 'stop: merge' or 'stop: device read'. A notice, not a send-back (owner, 11 Oct: "I only need few
+# necessary stops, not safe ones").
+try:
+    _stops = [l for l in (text or "").splitlines() if re.match(r"^\s*\d+\.\s", l) and re.search(r"·\s*You\s*·|\(Check\)|·\s*Check\b", l)
+              and not re.search(r"\(done\b|— done\b", l)]
+    _noreason = [l.strip()[:60] for l in _stops if not re.search(r"(?i)stop:\s*(decision|merge|device read)", l)]
+    if _noreason:
+        _note = (f"[stops] This plan has {len(_stops)} open stops for me. Keep only necessary ones: a decision only I can "
+                 "make, a merge (one pull request per round), or a device read joined with the merge. Mark each stop row "
+                 "'stop: decision', 'stop: merge' or 'stop: device read'; turn the rest into report lines. No reason yet: "
+                 + "; ".join(_noreason[:4]) + ".")
+        _out.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})["additionalContext"] = _note
+except Exception:
+    pass
 if globals().get("_UPD"):
-    _out["hookSpecificOutput"] = {"hookEventName": "PreToolUse", "permissionDecision": "allow", "updatedInput": _UPD}
+    _out.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"}).update({"permissionDecision": "allow", "updatedInput": _UPD})
 print(json.dumps(_out))

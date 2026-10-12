@@ -122,7 +122,8 @@ def _publish(project_dir, branch, version, staged):
         name = (_git(project_dir, "config", "user.name") or type("x", (), {"stdout": ""})).stdout.strip() or "hz-claude-config setup"
         mail = (_git(project_dir, "config", "user.email") or type("x", (), {"stdout": ""})).stdout.strip() or "hz-setup@users.noreply.github.com"
         r = _git(wt, "-c", "user.name=" + name, "-c", "user.email=" + mail, "commit", "-q", "-m",
-                 f"Setup update (automatic, v{version})", timeout=left(15))
+                 f"Setup update (automatic, v{version})\n\n[skip ci] The hook list changes only .claude/; the app's tests prove "
+                 "nothing about it (v3.2.16; 3.2.15 setup ran 6 GitHub checks for nothing).", timeout=left(15))
         if not r or r.returncode != 0:
             return None
         r = _git(wt, "push", "-q", "-u", "origin", branch, timeout=left(25))

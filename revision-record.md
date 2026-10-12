@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.2.15
-Built on: 3.2.14
+Version: 3.2.16
+Built on: 3.2.15
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -63,6 +63,7 @@ F52 v3.2.12: one ⏳ line per round (plan-gate.py and report-timing.py share | p
 F53 v3.2.13: restart lines checked against GitHub (branch_merged_on_github | branch_merged_on_github
 F54 v3.2.14: workers run in the foreground (foreground-workers.py rewrites | foreground-workers.py
 F55 v3.2.15: reads no longer start the checks (app hook list without Read | event_matchers_absent
+F56 v3.2.16: only necessary stops and one pull request per stop (rules, pl | [stops]
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
@@ -97,6 +98,7 @@ X23 False 'report not delivered' after a folder change | fixed in 3.2.14 (conten
 X24 The session waited 15 min for an 'ok' after a restart line | fixed in 3.2.14 | proof: tools/test_v3214_items.py item 8
 X25 3.2.15: the 22 problems P1–P22 of 11 Oct (lanes refused, Completion order, report tool refused, check time, review after notes, [skip ci], PR conflicts, plan tries, change list) | fixed in 3.2.15 | proof: tools/test_v3215_items.py 32/32 (3.2.14: 5/32); real setup update and wake-up tests
 X26 Full test suites re-run after every small fix (11 Oct: 116 worker test runs, 90 min) | fixed in 3.2.15 (failed checks first; gh run rerun --failed) | proof: tools/test_v3215_items.py S26–S28
+X27 Too many stops and pull requests (11 Oct: 6 pull requests for 2 merge stops); setup pull requests ran the app's tests | fixed in 3.2.16 | proof: tools/test_v3216_items.py 8/8
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
@@ -105,3 +107,4 @@ X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PA
 - 3.2.14 (built on 3.2.12 main; it also carries 3.2.13, which was never installed): X06 reopened and fixed with foreground workers; P02 added; the live scorecard.
 - 3.2.14, second part: X20–X24 from session c7347d6a.
 - 3.2.15: X25; P01 mitigated (waits for its live proof).
+- 3.2.16: X27.
