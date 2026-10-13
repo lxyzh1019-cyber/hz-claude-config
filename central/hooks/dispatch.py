@@ -34,6 +34,19 @@ if os.path.exists(os.path.join(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd
 tool = data.get("tool_name", "") or ""
 cfg = load_config()
 entries = (cfg.get("dispatch") or {}).get(event, [])
+# v3.3.0: wait up to 3 s for the session file to catch up with the last steps (12 Oct: a report sent 8 s before the
+# check was not yet in the file, so the report was sent back and sent a third time)
+if event == "Stop" and data.get("last_assistant_message") and data.get("transcript_path"):
+    try:
+        import time as _tm
+        from _common import read_transcript as _rt0, last_assistant_text as _lat0
+        _want = str(data.get("last_assistant_message")).strip()
+        for _i in range(12):
+            if (_lat0(_rt0(data.get("transcript_path"))) or "").strip() == _want:
+                break
+            _tm.sleep(0.25)
+    except Exception:
+        pass
 # v3.2.17 (P03): every end-of-answer check reads the final answer from the Stop input when the session file lags
 if event == "Stop" and data.get("last_assistant_message") and data.get("transcript_path"):
     os.environ["HZ_STOP_LAST_MESSAGE"] = str(data.get("last_assistant_message"))
@@ -44,7 +57,8 @@ if event == "Stop":
     try:
         from _common import read_transcript as _rt, last_assistant_text as _lat
         _last = str(data.get("last_assistant_message") or "") or _lat(_rt(data.get("transcript_path"))) or ""
-        if re.fullmatch(r"\s*Notice sent\.?\s*", _last):
+        # v3.3.0: also the one-line 'Done: …' that ends any send-back
+        if re.fullmatch(r"\s*(Notice sent\.?|Done:[^\n]{1,400})\s*", _last):
             entries = [e for e in entries if (e if isinstance(e, str) else e.get("script")) == "stats.py"]
     except Exception:
         pass
@@ -181,6 +195,13 @@ if reasons and "work" not in kinds:
 if reasons:
     body = reasons[0] if len(reasons) == 1 else "Fix all of these in one reply:\n" + "\n".join(
         f"{i}. {r}" for i, r in enumerate(reasons, 1))
+    # v3.3.0: one clear instruction. When every problem is a missing action (notice, report, checks, record), the
+    # session does the actions and ends with one line 'Done: …', never a second answer (12 Oct: three instructions that
+    # contradicted each other gave a second answer and a pasted report). A wrong answer (qc-guard, handoff-guard) is
+    # still written again.
+    if event == "Stop" and not ({"qc-guard.py", "handoff-guard.py", "validation-line.py", "completion-guard.py"} & set(scripts)):
+        body = ("Do only these actions now, then end your turn with one line: 'Done: <what you did>.' Do not write "
+                "your answer again.\n" + "\n".join(f"{i}. {r}" for i, r in enumerate(reasons, 1)))
     bump_stat(sid, "sendbacks")
     out = {"decision": "block", "reason": body}
     # v3.1.23: a send-back keeps the notices; v3.1.24: only the version line, so the summary shows once, at the end

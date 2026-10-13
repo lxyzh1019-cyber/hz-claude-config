@@ -203,18 +203,8 @@ elif bullets >= 1 or len(prompt) > 200:
                 "'Checked against:' and 'Removes/consolidates:' lines — then wait for approval. Escalate to a full "
                 "Plan vN if the work touches shared state, config, or the data model. Executor: sonnet-worker.")
 
-if (msgs and not skip) or any(w in low for w in FIX_WORDS):
-    msgs.append("[plan-gate] Before proposing: read the request ledger and hotspot rows in "
-                f"{cfg['record_file']} for the area this touches; state them under 'Checked against:'.")
-if any(w in low for w in FIX_WORDS):
-    msgs.append("[plan-gate] This looks like a fix. In the same turn, update the area's hotspot row: +1 fix round; "
-                "+1 recurrence if the same symptom came back; +1 regression if an earlier fix caused this; "
-                "+1 workaround for each exception or compensating patch added.")
-
-alerts = hotspot_alerts(cfg)
-if alerts:
-    log("plan-gate", {"hotspot_alerts": alerts})
-    msgs += ["[hotspot] " + a for a in alerts]
+# v3.3.0: the hotspot counter is removed (no hit measured in the 11-12 Oct sessions; piece 1, owner 13 Oct)
+alerts = []
 
 # planner suggestion: only when a plan is required. The hook cannot switch models; the user runs /model fable.
 if msgs and not skip and (bullets >= 3 or triggers):

@@ -69,47 +69,40 @@ SQUARES = {1: "🟦", 2: "🟩", 3: "🟧", 0: "🟪"}
 CHANGE_BLOCK_TITLE = "Changes in this version"          # made by the plan check, never by the model
 CHANGE_BLOCK_MAX_LINES = 40
 QUICK_READ_GOAL_WORDS = 250     # v3.2.9: a goal, not a limit; the plan check only notes it
-PLAN_RULES = ("Plan vN numbers a plan. Rev counts each showing inside a version and starts at Rev 1 for each "
-              "version. After my Approve, a change to the same plan is its next Rev: Plan v11 Rev 5 after an approved "
-              "Rev 4. Save it as a new file; never edit the approved file. Do not write Rev marks yourself: the plan check puts the coloured square and label in "
-              "front of each line changed since I last looked. If it asks you to show the plan again, show it again "
-              "and change nothing. The plan starts with a Quick read I can scan in one place: Summary (3 lines), What "
-              "changed (at most 5 plain lines with the result, no history), Decisions (open ones only; each option says "
-              "what I get), Next steps (the next 3, then '… N more steps in the full plan below'). Write the word count "
-              "and the minutes (words / 200, at least 1) in its title line. Aim for about " + str(QUICK_READ_GOAL_WORDS) +
-              " words; it is a goal, not a limit. Everything else goes below the line, in the full plan. Ask every open "
-              "question before approval; after approval the plan is not reopened.")
+PLAN_RULES = ("One page: about 300 words above Technical details (a goal, not a limit). Plan vN numbers a plan; Rev "
+              "counts each showing. After my Approve, a change to the same plan is its next Rev: Plan v11 Rev 5 after "
+              "an approved Rev 4, written by you and saved as a new file; never edit the approved file. Do not write Rev "
+              "marks or a change block yourself; the check adds them and the colour line. If it asks you to show the "
+              "plan again, show exactly the file's text. Stages: few and large, one line each, with "
+              "lane, model, step budget (S 30 · M 60 · L 100) and run order. Lanes for stages that share no files. "
+              "My decisions on record stay in the working record. Ask every open question before approval.")
+
 PLAN_TEMPLATE = """# Plan vN — <short plan name> — Awaiting approval
 
 **Quick read** · <words> words · about <minutes> min
 
 **Summary**
-- Goal: <one line, in everyday words>
-- Done: <x of y stages>. Next: <next step>
-- I need from you: <one action>
+- Goal: <one line>. Done when: <measured result>.
+- Stages: <n> · lanes: <n> · stops for you: <n> · pull requests: <n>.
+- I need from you: <one action>.
 
 **What changed since <last version>** (first showing: First version)
 - <the result of each change, one plain line, at most 5 lines>
 
-**Decisions:** None open. (or: 1. <question> **A** <what you get> · **B** <what you get> · Recommend: <A>)
+**Decisions:** None open. (or: 1. <question> **A** <what you get> (ends here) · **B** <what you get> (brings back: …) · Recommend: A)
 
-**Next steps**
-- <step>: <what you will see>
-- <step>: <what you will see>
-- <step>: <what you will see>
-- … <n> more steps in the full plan below
+**Stops**
+- Round 1: merge #— and device read (stages 1–3).
 
----
-
-## The full plan
-<decisions on record, the work per pull request, your stops, Stages to finish with tags, Technical details>
+**Limits**
+- GitHub run about <n> min · one-test run <n> s · <other limit this plan hits>.
 
 Stages to finish
 <n> stages: <x> build steps by Claude, then <y> checks (<what they are>)
-1. <stage> · Claude · Build · files: <main files> · after: — · level: Routine · size: S · group: A · proof: <tests, pictures or figures that show it is right>
+1. <stage> · Claude · Build · files: <main files> · after: — · level: Routine · size: M · group: A · steps: 60 · proof: <tests or pictures>
 2. <stage> · You · Check
 
-Technical details: <file names, line numbers, commits, code, and any longer detail — only here>"""
+Technical details: <file names, line numbers, commits, code — only here; workers read this>"""
 
 
 def quick_read_words(text):

@@ -249,7 +249,7 @@ def scorecard(paths):
     for p in paths:
         R = _load(p)
         cur, seen = 0, set()
-        pr_ids, plan_ids, pushed, merge_round = set(), set(), [], False   # v3.2.17
+        _sent_plan = None; pr_ids, plan_ids, pushed, merge_round = set(), set(), [], False   # v3.2.17
         for r in R:
             msg = r.get("message") or {}
             c = msg.get("content")
@@ -271,7 +271,7 @@ def scorecard(paths):
                 tr = r.get("toolUseResult")
                 if isinstance(tr, dict) and isinstance(tr.get("plan"), str) and "filePath" in tr:
                     d["plans_approved"] = d.get("plans_approved", 0) + 1
-                    if any(s in tr["plan"] for s in "🟦🟩🟧🟪"):
+                    if any(s in (_sent_plan or "") for s in "🟦🟩🟧🟪"):   # v3.3.0: what the window showed
                         d["plans_colour"] = d.get("plans_colour", 0) + 1
             if r.get("type") == "assistant":
                 u = msg.get("usage") or {}
@@ -310,6 +310,8 @@ def scorecard(paths):
                         if (n == "Bash" and re.search(r"\bgh\s+pr\s+create\b", str(i.get("command") or ""))) or \
                                 re.search(r"create_pull_request", str(n)):
                             pr_ids.add(b.get("id"))   # v3.2.17: counted when it opened (refused tries are not)
+                        if n == "ExitPlanMode":
+                            _sent_plan = str(i.get("plan") or "")
                         if n == "PushNotification":
                             pushed.append(str(i.get("message") or ""))
                         if n == "ExitPlanMode":
@@ -388,6 +390,62 @@ def scorecard(paths):
         ("Waiting answers with a notice that names them (goal: every one)", f"{d.get('waits_noticed', 0)} of {d.get('waits', 0)}",
          ok(d.get("waits_noticed", 0) == d.get("waits", 0)) if d.get("waits") else "measured"),
     ]
+    # v3.3.0: the lead playbook, measured. Worker steps that only read, find-one-fix-one loops, worker waits for GitHub,
+    # code pushes, and the refused steps per check (a cost Claude Code without the setup does not have).
+    _w = {"steps": 0, "reads": 0, "loops": 0, "gh_waits": 0, "pushes": 0, "skip": 0}
+    _ref = {}
+    _RD = re.compile(r"^\s*(cd [^&;]+(&&|;)\s*)?(grep|rg|sed -n|cat|head|tail|ls|find|wc|git (status|diff|log|show))\b")
+    for p in paths:
+        for f in [p] + _g.glob(os.path.join(p[:-6], "subagents", "**", "agent-*.jsonl"), recursive=True):
+            is_w = f != p
+            seq = []
+            for r in _load(f):
+                c = (r.get("message") or {}).get("content")
+                for b in (c if isinstance(c, list) else []):
+                    if not isinstance(b, dict):
+                        continue
+                    if b.get("type") == "tool_use":
+                        n, inp = b.get("name"), (b.get("input") or {})
+                        cmd = str(inp.get("command") or "") if n == "Bash" else ""
+                        if n == "Bash" and re.search(r"\bgit\s+push\b", cmd):
+                            _w["pushes"] += 1
+                            _w["skip"] += "[skip ci]" in cmd
+                        if not is_w:
+                            continue
+                        if n == "Bash" and re.search(r"npm (run )?test|playwright|SMOKE|test:failed", cmd):
+                            seq.append("T")
+                        elif n in ("Edit", "Write", "MultiEdit"):
+                            seq.append("E")
+                        elif n in ("Read", "Grep", "Glob") or (n == "Bash" and _RD.search(cmd)):
+                            seq.append("R")
+                        else:
+                            seq.append("O")
+                        if n == "Bash" and re.search(r"\bgh\s+(run\s+watch|pr\s+checks\b[^\n]*--watch)", cmd):
+                            _w["gh_waits"] += 1
+                    elif b.get("type") == "tool_result":
+                        tx = json.dumps(b.get("content"), ensure_ascii=False)[:300]
+                        m = re.search(r"Pre\w+:(\w+) hook error: (\S+(?: \S+){0,5})", tx)
+                        if m:
+                            k = m.group(2)[:40]
+                            _ref[k] = _ref.get(k, 0) + 1
+            if is_w and len(seq) > 5 and "E" in seq:
+                s = "".join(seq)
+                _w["steps"] += len(s)
+                _w["reads"] += s.count("R")
+                _w["loops"] += len(re.findall(r"T[^T]*E[^T]*(?=T)", s))
+    d["lead"] = _w
+    d["refused_by"] = _ref
+    _rs = round(100 * _w["reads"] / _w["steps"]) if _w["steps"] else 0
+    rows += [
+        ("Worker steps that only read (goal: under 25%)", f"{_rs}% ({_w['reads']} of {_w['steps']})",
+         ok(_rs < 25) if _w["steps"] else "measured"),
+        ("Find one, fix one: test → fix → test loops (goal: 1 per worker)", f"{_w['loops']}", "measured"),
+        ("Workers waiting for GitHub (goal: 0)", f"{_w['gh_waits']}", ok(_w["gh_waits"] == 0)),
+        ("Code pushes (goal: one per finished stage)", f"{_w['pushes'] - _w['skip']} code, {_w['skip']} notes only",
+         "measured"),
+        ("Refused steps: a cost without the setup there is none (goal: few)", f"{sum(_ref.values())}: " + ", ".join(
+            f"{v}× {k}" for k, v in sorted(_ref.items(), key=lambda kv: -kv[1])[:4]), "measured"),
+    ]
     return rows, d
 
 
@@ -406,7 +464,11 @@ def main():
     if "--scorecard" in args:   # v3.2.14: the scorecard alone, for one session file or folder
         args.remove("--scorecard")
         p = args[0] if args else ""
-        ps = [p] if p.endswith(".jsonl") else sorted(glob.glob(os.path.join(p, "*.jsonl")))
+        ps = [p] if p.endswith(".jsonl") else sorted(glob.glob(os.path.join(p, "*.jsonl")), key=os.path.getmtime)
+        if "--all" in args:
+            args.remove("--all")
+        elif ps:   # v3.3.0: one session by default, so the comparison is fair
+            ps = ps[-1:]
         for a, b, c in scorecard(ps)[0]:
             print(f"| {a} | {b} | {c} |")
         return
@@ -475,9 +537,15 @@ def main():
                                                                         for x in pc["pairs"]) + "."]
     else:
         out_top += ["", "**Parallel candidates:** none. Each stage waited for the one before it."]
-    sc, _ = scorecard(paths)
-    out_top += ["", "## Live scorecard (what the model did, measured)", "", "| Solution | Measured | Result |", "|---|---|---|"] + [
+    sc, _sd = scorecard(paths[-1:])   # v3.3.0: the newest session only; the plan total is in the table above
+    out_top += ["", "## Live scorecard (newest session, measured)", "", "| Solution | Measured | Result |", "|---|---|---|"] + [
         f"| {a} | {b} | {c} |" for a, b, c in sc]
+    # v3.3.0 feedback loop: one row per rule; the cost is measured here, the session fills the gain and the call
+    _rb = _sd.get("refused_by") or {}
+    out_top += ["", "## Rule rows (feedback loop)", "", "Fill the gain and the call. A rule with no measured gain in 2 reports is removed; worse than without the setup → reverse.", "",
+                "| Rule or check | Cost this session | Gain seen | Keep / change / remove |", "|---|---|---|---|"] + [
+        f"| {k} | {v} refused steps | | |" for k, v in sorted(_rb.items(), key=lambda kv: -kv[1])] + [
+        "| (each rule changed in this plan) | | | |"]
     out = out[:1] + [""] + out_top + [""] + out[1:]
     out.append("<!-- metrics: " + json.dumps(m) + " -->")
     print("\n".join(out))

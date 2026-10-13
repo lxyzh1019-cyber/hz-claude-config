@@ -1341,8 +1341,9 @@ def test_speed_note(cfg, minutes, cmd, stopped=False):
     limit = float(cfg.get("full_test_max_minutes", 5))
     if minutes > float(st.get("slowest_full_minutes") or 0):
         st["slowest_full_minutes"], st["command"] = round(minutes, 1), str(cmd)[:200]
-    if stopped:
-        st["stopped_by_limit"] = True
+    # v3.3.0: the latest full run decides; a suite made fast switches the refusal off by itself
+    st["latest_full_minutes"] = round(minutes, 1)
+    st["stopped_by_limit"] = bool(stopped)
     msg = ""
     if (minutes > limit or stopped) and not st.get("told") and not test_split_done(cfg):
         st["told"] = True
@@ -1451,8 +1452,8 @@ def background_test_note(cfg, records):
 def slow_suite_blocks(cfg):
     """True while the full suite is known to be too slow and is not split yet."""
     st = test_speed_load()
-    slow = float(st.get("slowest_full_minutes") or 0) > float(cfg.get("full_test_max_minutes", 5)) or \
-        st.get("stopped_by_limit")
+    _m = st.get("latest_full_minutes", st.get("slowest_full_minutes"))   # v3.3.0: the latest run, not the slowest ever
+    slow = float(_m or 0) > float(cfg.get("full_test_max_minutes", 5)) or st.get("stopped_by_limit")
     return bool(slow) and not test_split_done(cfg)
 
 

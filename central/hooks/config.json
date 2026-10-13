@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.2.17: plans show their coloured Rev marks again, and a change to an approved plan is its next Rev; the plan check never approves a plan for you. A stop that waits on you sends a phone notice that names everything waiting (questions and merges). Decisions come as tappable questions, recommended option first, each option saying 'Ends here' or what it brings back. A pull request stays ready (no switch back to draft). One setup pull request per app (adds tappable questions to the checks). claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.0: a one-page lead playbook replaces the long rules. Rule 0: the setup must make the work better than without it, or it is reversed. Plans are one page; the plan window shows exactly the coloured text you approve. Workers get exact hand-overs (files and lines, test command, step budget) and do not wait for GitHub; one push per finished stage. Fewer refusals: they are fixed instead. Every end report has a row per rule (keep, change or remove). No setup pull request. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -47,10 +47,6 @@
         "tools": "Agent|Task|Workflow"
       },
       {
-        "script": "report-timing.py",
-        "tools": "Agent|Task|Bash|Workflow"
-      },
-      {
         "script": "record-edit-guard.py",
         "tools": "Edit|Write|MultiEdit"
       },
@@ -72,7 +68,6 @@
       "record-guard.py",
       "completion-guard.py",
       "handoff-guard.py",
-      "pr-ready-guard.py",
       "notice-guard.py",
       "validation-line.py",
       "qc-guard.py",

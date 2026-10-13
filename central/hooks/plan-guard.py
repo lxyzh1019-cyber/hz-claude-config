@@ -94,8 +94,8 @@ if _sec:
             # v3.2.17: a point marked for an earlier approved plan ('[in v7]') is a note, not a send-back. 11 Oct: two
             # finished night-check points of Plan v7 sent Plan v11 back.
             _iv = re.match(r"\s*\[in v(\d+)\]", _m.group(1))
-            if _iv and _vnow is not None and int(_iv.group(1)) < _vnow:
-                _old_missing.append(_item)
+            if _iv:   # v3.3.0: the plan carries only points agreed since the last approval; the record keeps the rest
+                continue
             else:
                 _missing.append(_item)
     if _missing:
@@ -109,7 +109,7 @@ lines = [l.lstrip("#>*-• ").strip().lower() for l in raw_lines]
 if not any(re.match(r"^\|\s*\**summary\**\s*\|", l, re.I) or re.match(r"^\**summary\**\s*$", l, re.I)
            for l in raw_lines[:15]):
     problems.append("Start the plan right under its title with the Quick read, as in the shape below: Quick read, "
-                    "Summary, What changed, Decisions, Next steps. Use everyday words, with no file names or code.")
+                    "Summary, What changed, Decisions, Stops, Limits. Use everyday words, with no file names or code.")
 if not any(l.startswith("stages to finish") for l in lines):
     problems.append("Add 'Stages to finish' with every stage to the real goal, one per line. Examples: build, test, "
                     "merge, deploy, device check. Mark each stage 'Claude' or 'You'.")
@@ -235,7 +235,9 @@ _rounds_on = not os.environ.get("HZ_PLAN_ROUNDS_OFF")       # test switch only
 _base, _rev, _since, _hist = None, 1, "", []
 if _name and _ver is not None and _rounds_on and _entry:
     _ev = int(_entry.get("version") or 0)
-    _same = plan_norm(_entry.get("text")) == plan_norm(text)
+    import planmarks as _pm0   # v3.3.0: the marks and the colour line are no change (the marked text shown again)
+    _qr = lambda s: re.sub(r"(\*\*Quick read\*\*)\s*·[^\n]*", r"\1", _pm0.strip_marks(s or ""))
+    _same = plan_norm(_qr(_entry.get("text"))) == plan_norm(_qr(text))
     if _ver == _ev and _entry.get("approved") and not _same:
         # v3.2.17 (owner, 10 Oct and 12 Oct, choice 1A): a change to an approved plan is its next Rev, not a new number
         _r0 = int(_entry.get("rev") or 1)
@@ -267,7 +269,7 @@ try:
 except (OSError, ValueError, ImportError):
     pass
 from _common import agent_on_pc as _aop
-if (re.search(r"(?m)^#*\s*Plan v\d+", text) and (_first_showing or _big)
+if (re.search(r"(?m)^#*\s*Plan v\d+", text) and _first_showing   # v3.3.0 (owner 2A): a Rev is written by the session
         and any(_aop(x) for x in (cfg_.get("planner_helpers") or ["planner", "planner-opus"]))   # v3.2.7: only if it exists here
         and not os.environ.get("HZ_PLANNER_CHECK_OFF")):   # test switch only
     _planners = cfg_.get("planner_helpers") or ["planner", "planner-opus"]
@@ -303,6 +305,26 @@ _final = text
 if _base is not None:
     _final, (_n, _g) = planmarks.apply(text, _base, _ver, _rev, _hist, _since)
     _cur = {"rev": _rev, "n": _n, "gist": _g}
+    # v3.3.0 (owner, choice A): one change list. Under "What changed since …" one line from the check names the colours.
+    if _n:
+        try:
+            _L = _final.split("\n")
+            _L = [l for l in _L if not l.startswith("🎨 ")]
+            _h = next((i for i, l in enumerate(_L) if re.match(r"(?i)^\s*\**\s*what changed since", l)
+                       and "Changes in this version" not in l), None)
+            if _h is not None:
+                _e = _h + 1
+                while _e < len(_L) and (not _L[_e].strip() or _L[_e].lstrip().startswith(("-", "*", "•"))):
+                    if not _L[_e].strip() and _e > _h + 1 and _L[_e - 1].strip():
+                        break
+                    _e += 1
+                _old = [f"{planmarks.square(int(h.get('rev') or 1))} Rev {int(h.get('rev') or 1)}" for h in (_hist or [])[-3:]
+                        if isinstance(h, dict) and h.get("rev")]
+                _L.insert(_e, "🎨 " + f"{planmarks.square(_rev)} **Rev {_rev}** marks {_n} changed line{'s' if _n != 1 else ''}"
+                          + "".join(" · " + o for o in reversed(_old)))
+                _final = "\n".join(_L)
+        except Exception:
+            pass
 if _base is not None and plan_norm(shown_text) != plan_norm(_final):
     if plan_file:
         try:
@@ -310,7 +332,13 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
                 _f.write(_final)
             live_proof("plan-guard", {"marks": "written into the plan file", "version": _ver, "rev": _rev})
             _cur["via"] = "file"
-            if os.environ.get("HZ_PLAN_MARKS_ROUND") or _store.get("marks_mode") == "round":   # fallback A
+            # v3.3.0 (owner 1A): the desktop app's approval window shows the plan text the session sends, not the file
+            # (12 Oct: you saw 292 words without marks; the file you approved had 402 words and 22 marks). When the
+            # sent text lacks the marks, the session shows the plan once more with exactly the marked text.
+            _sent = str((data.get("tool_input") or {}).get("plan") or "")
+            _sent_lacks = bool(_sent) and _final != text and \
+                re.sub(r"\s+", " ", _sent).strip() != re.sub(r"\s+", " ", _final).strip()
+            if os.environ.get("HZ_PLAN_MARKS_ROUND") or _store.get("marks_mode") == "round" or _sent_lacks:
                 _cur["via"] = "round"
                 if _name and _ver is not None and _rounds_on:
                     _store["plans"][_name] = {"version": _ver, "rev": _rev, "text": text, "base": _base, "since": _since,
@@ -318,7 +346,7 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
                     _store["last"] = _name
                     plan_store_save(_store)
                 deny_tool(f"The plan check added the coloured change marks (Plan v{_ver} · Rev {_rev}) to the plan "
-                          "file. Show the plan again now. Change nothing.")
+                          f"file {plan_file}. Read that file and show the plan again with exactly its text. Change nothing.")
             # v3.2.17 (B): Claude Code reads the plan file for the approval window after this check, so the marks are
             # on screen without another round. Never 'allow' here: in the real program an allow approves the plan
             # without the owner (tools/real-harness/scenario_plan_window.py).

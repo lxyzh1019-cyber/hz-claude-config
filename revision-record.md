@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.2.17
-Built on: 3.2.16
+Version: 3.3.0
+Built on: 3.2.17
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -66,6 +66,10 @@ F55 v3.2.15: reads no longer start the checks (app hook list without Read | even
 F56 v3.2.16: only necessary stops and one pull request per stop (rules, pl | [stops]
 F57 v3.2.17: plan colours through the plan file, Rev after approval, notice | notice-guard.py
 F58 v3.2.17: tappable questions with notice first and what follows each op | ask-guard.py
+F59 v3.3.0: lead playbook with Rule 0, payoff score and the feedback loop | **Rule 0.**
+F60 v3.3.0: hand-overs carry Files lines, Test and Steps; workers do not wait | A hand-over carries the map
+F61 v3.3.0: plan window shows the marked text you approve; one colour line | Read that file and show the plan again
+F62 v3.3.0: scorecard one session by default, lead rows, rule rows in reports | ## Rule rows (feedback loop)
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
@@ -107,6 +111,10 @@ X31 Answer shown twice after a merge send-back (a worker had read the checks; th
 X32 #149 switched back to draft (two rules contradicted each other) | fixed in 3.2.17 (rule removed; git-guard refuses) | proof: tools/test_v3217_items.py item 9
 X33 Scorecard counted refused pull request tries and repeated answers | fixed in 3.2.17 | proof: tools/test_v3217_items.py item 10; 12 Oct session: 1 pull request
 P03 Other Stop checks read the session file, which can lag behind the final answer in the real program | fixed in 3.2.17 (the switchboard passes the Stop input's final answer; read_transcript adds it when the file is behind) | proof: real program tools/real-harness/scenario_v3217.py lag: before, checks read an older answer at 2 of 4 Stops; after, 4 of 4 final answers; tools/test_v3217_items.py item 12
+X34 Rules grew by patches (6,955 words), no removal loop, refusals instead of fixes; config cost more than it measurably saved on 12 Oct | fixed in 3.3.0 (lead playbook, Rule 0, feedback loop, refusals turned into fixes) | proof: tools/test_v330_items.py 36/36 (3.2.17: 1 of 10 items); replay 892/892
+X35 The desktop plan window shows the sent text, not the file: colours unseen, and what you saw differed from what you approved | fixed in 3.3.0 (1A) | proof: replay of the real 12 Oct Rev 5 (one extra showing, then it passes with 32 marks); real program plan scenario 5/5
+X36 Workers waited 157 min for GitHub; 32 code pushes; 43% of worker steps were reads | fixed in 3.3.0 (workers hand back; one push per finished stage; hand-over map) | proof: item test items 6–7; next live scorecard measures it
+X37 "sleep 5;" and "Worktree: none" were refused by mistake; 18 full test runs refused (12 Oct) | fixed in 3.3.0 (a worker's full run becomes its hand-over's fast test; the latest full-run time switches the refusal off) | proof: item test item 5; replay of the 12 Oct refusals: 14 of 18 full runs rewritten, 4 were the lead's own
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
@@ -116,4 +124,5 @@ X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PA
 - 3.2.14, second part: X20–X24 from session c7347d6a.
 - 3.2.15: X25; P01 mitigated (waits for its live proof).
 - 3.2.16: X27.
+- 3.3.0: X34–X37 (owner 13 Oct: pieces 1–2 approved, 1A, 2A, A A).
 - 3.2.17: P01, X29–X33 (owner 12 Oct: 1A, 2B with fallback A after 1 trial, 3A, then A A); P01 fixed (Fixed list); P03 found while testing and fixed in the same version (owner: "A").
