@@ -43,7 +43,26 @@ def exists():
     return setup_branch_state(PROJECT_DIR, branch) in ("pending", "unknown")   # v3.2.5: a branch not pushed does not count
 
 
-if exists():
+def _merged_and_current():
+    # v3.3.0: the update is merged ('settled') and this folder's setup is current: the pending note is old.
+    # HZ_Trout_Map 13 Oct: #8 had merged the 3.2.17 update, yet every later session was told "Do the setup update first".
+    try:
+        from _common import setup_branch_state
+        # merged: main's history names this branch (GitHub's merge message "… from <owner>/<branch>"). An empty branch
+        # is 'settled' too but is never merged, so it still does not release the session (v3.2.4).
+        if setup_branch_state(PROJECT_DIR, branch) not in ("settled", "none"):
+            return False
+        for _m in ("origin/main", "origin/master", "main", "master"):
+            _r = subprocess.run(["git", "log", _m, "-300", "--format=%s %b"], cwd=PROJECT_DIR, capture_output=True,
+                                text=True, encoding="utf-8", timeout=10)
+            if _r.returncode == 0:
+                return ("/" + branch) in _r.stdout or (" " + branch) in _r.stdout
+        return False
+    except Exception:
+        return False
+
+
+if exists() or _merged_and_current():
     try:
         os.remove(path)
     except OSError:

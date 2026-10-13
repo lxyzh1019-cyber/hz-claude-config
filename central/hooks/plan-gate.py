@@ -137,7 +137,12 @@ elif not os.environ.get("HZ_REPORT_TIMING_OFF"):
         # the notice itself may not be in the session file yet when this check runs: count it as read
         _recs = _rt3(data.get("transcript_path")) + [{"type": "user", "message": {"role": "user", "content": prompt}}]
         _left = _sr(_recs, data.get("transcript_path"))
-        if not _left:
+        if not _left and not _ws.get(_sidk):
+            # v3.3.1: nothing of this round was waiting (no ⏳ line): a wake-up with nothing new gets one line, not a
+            # report (HZ_Trout_Map 13 Oct: two wake-ups, two full answers)
+            TIMING_TEXT = ("[wake] Nothing of this round was still running. If nothing changed that I must act on, end "
+                           "this turn with one line: 'No change.' No report and no closing lines.")
+        elif not _left:
             TIMING_TEXT = _RT
             _ws.pop(_sidk, None)
             try:

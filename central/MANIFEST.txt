@@ -1,4 +1,4 @@
-version: 3.3.0
+version: 3.3.1
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -45,6 +45,7 @@ hooks/stubupdate.py
 hooks/test-speed.py
 hooks/validation-line.py
 hooks/wait-guard.py
+hooks/wake-guard.py
 hooks/worker-budget.py
 hooks/worker-guard.py
 rules/CLAUDE-rules.md

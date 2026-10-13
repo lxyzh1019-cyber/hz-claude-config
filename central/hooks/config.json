@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.3.0: a one-page lead playbook replaces the long rules. Rule 0: the setup must make the work better than without it, or it is reversed. Plans are one page; the plan window shows exactly the coloured text you approve. Workers get exact hand-overs (files and lines, test command, step budget) and do not wait for GitHub; one push per finished stage. Fewer refusals: they are fixed instead. Every end report has a row per rule (keep, change or remove). No setup pull request. claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.1: no false 'Do the setup update first' after a setup update is merged; a question right after your message needs no phone notice; one send-back per turn; a session no longer wakes itself to re-check a pull request, and a wake-up with nothing new is one line. One setup pull request per app (adds the wake-up check). claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -37,6 +37,10 @@
       {
         "script": "ask-guard.py",
         "tools": "AskUserQuestion"
+      },
+      {
+        "script": "wake-guard.py",
+        "tools": "ScheduleWakeup"
       },
       {
         "script": "plan-edit-guard.py",
