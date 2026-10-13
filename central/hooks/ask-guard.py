@@ -22,7 +22,18 @@ pushes = [str((b.get("input") or {}).get("message") or "")
           for b in (((r.get("message") or {}).get("content")) or []) if isinstance(b, dict)
           and b.get("type") == "tool_use" and b.get("name") == "PushNotification"]
 problems = []
-if not any(re.search(r"(?i)\b(question|decision|answer|choose|choice)s?\b", p) for p in pushes):
+# v3.3.1: a notice only when I may be away: 5 minutes or more since my last message. HZ_Trout_Map 13 Oct: the greeting
+# question right after my first message was refused for a missing notice.
+_away = True
+try:
+    from datetime import datetime as _d, timezone as _tz
+    _t0 = next((r.get("timestamp") for r in turn if r.get("timestamp")), None)
+    if _t0:
+        _age = (_d.now(_tz.utc) - _d.fromisoformat(str(_t0).replace("Z", "+00:00"))).total_seconds() / 60
+        _away = _age >= float(cfg.get("ask_notice_after_minutes", 5))
+except Exception:
+    pass
+if _away and not any(re.search(r"(?i)\b(question|decision|answer|choose|choice)s?\b", p) for p in pushes):
     problems.append(f"First send me one phone notice with the PushNotification tool (load it with ToolSearch) that "
                     f"names what waits, for example '<app>: {len(qs)} question{'s' if len(qs) != 1 else ''} waiting "
                     f"for you'.")

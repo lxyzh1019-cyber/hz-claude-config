@@ -58,7 +58,8 @@ if event == "Stop":
         from _common import read_transcript as _rt, last_assistant_text as _lat
         _last = str(data.get("last_assistant_message") or "") or _lat(_rt(data.get("transcript_path"))) or ""
         # v3.3.0: also the one-line 'Done: …' that ends any send-back
-        if re.fullmatch(r"\s*(Notice sent\.?|Done:[^\n]{1,400})\s*", _last):
+        if re.fullmatch(r"\s*(Notice sent\.?|No change\.?|Done:[^\n]{1,400})\s*", _last):   # v3.3.1: 'No change.'
+
             entries = [e for e in entries if (e if isinstance(e, str) else e.get("script")) == "stats.py"]
     except Exception:
         pass
@@ -180,6 +181,13 @@ if reasons and event == "Stop" and [s for s, k in zip(scripts, kinds) if k == "w
         save_fixes(sid, _rest)
         notes.append("Noted for the next step: " + str(len(_rest)) + " format or record fix(es).")
     reasons, kinds, scripts = [reasons[i] for i in _keep], ["work"], ["notice-guard.py"]
+# v3.3.1: one send-back per turn. After a send-back, new problems are saved for the next step, never sent back again
+# (HZ_Trout_Map 13 Oct: a setup send-back, then a notice send-back, so the answer showed three times). Safety stays.
+if reasons and event == "Stop" and data.get("stop_hook_active") and "qc-guard.py" not in scripts:
+    save_fixes(sid, reasons)
+    log("dispatch", {"event": event, "sent_back": 0, "saved_after_sendback": len(reasons)})
+    print(json.dumps({"systemMessage": "Noted for the next step: " + str(len(reasons)) + " fix(es). One send-back per turn."}))
+    sys.exit(0)
 if reasons and "work" not in kinds:
     # the re-send instructions in a reason make no sense for a saved fix: keep only the problem itself
     save_fixes(sid, [re.split(r"\s+(?:Send only|Your re-send|Do not repeat|Send the |Then send)", r_, maxsplit=1)[0]

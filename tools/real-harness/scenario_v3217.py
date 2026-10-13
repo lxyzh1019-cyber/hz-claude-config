@@ -12,7 +12,7 @@ Scenarios:
 import json, os, re, shutil, subprocess, sys, time
 import pexpect, pyte
 
-CENTRAL = os.path.abspath(sys.argv[1]); WANT = sys.argv[2:] or ["window", "plan", "ask", "notice", "lag"]
+CENTRAL = os.path.abspath(sys.argv[1]); WANT = sys.argv[2:] or ["window", "plan", "ask", "notice", "lag", "wake"]
 HERE = os.path.dirname(os.path.abspath(__file__)); CLAUDE = os.environ.get("CLAUDE_BIN", "claude")
 BASE = os.environ.get("HARNESS_DIR", "/tmp/hz-harness-3217"); PORT = [8170]
 ok_all = []
@@ -234,5 +234,14 @@ if "lag" in WANT:
     say("lag: every end-of-answer check reads the final answer, even when the file lags", reads and "old" not in reads, (lags, reads))
     say("lag: the merge request without a check reading is sent back (the check read the right answer)",
         "Before you ask me to merge, read the checks" in log, (lags, log[-300:]))
+
+if "wake" in WANT:   # v3.3.1: no self wake-ups after a stop
+    B = setup("wake", dispatch_hooks({"UserPromptSubmit": None, "PreToolUse": "ScheduleWakeup"}))
+    r = Run(B, [{"text": "Checking later.", "tools": [{"id": "s1", "name": "ScheduleWakeup", "input": {"prompt": "check the pull request", "delaySeconds": 3000, "reason": "merge"}}]},
+                {"text": "ENDED-TURN"}], mode="default")
+    s = r.type("merge request sent", 20); r.close()
+    import glob as _gl
+    _hit = sum(1 for f in _gl.glob(f"{B}/req.log.req*.json") if "Do not schedule a re-check" in open(f, encoding="utf-8", errors="replace").read())
+    say("wake: the real program refuses the session's own wake-up after a stop", _hit >= 1, s[-400:])
 
 print(f"\nreal program: {sum(ok_all)} of {len(ok_all)} passed")

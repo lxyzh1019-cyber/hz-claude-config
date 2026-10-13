@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.2.17",
+        "version": "3.3.1",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
@@ -96,7 +96,8 @@ DEFAULT_CONFIG = {
                            "PreToolUse  ": ["Edit|Write", "edit checks; reads no longer start the checks (v3.2.15)"],
                            "PreToolUse   ": ["SubagentHandback", "worker hand-back check (v3.2.0)"],
                            "PreToolUse    ": ["Workflow", "dynamic workflow checks (v3.2.10)"],
-                           "PreToolUse     ": ["AskUserQuestion", "question check: notice first, what follows each option (v3.2.17)"]},
+                           "PreToolUse     ": ["AskUserQuestion", "question check: notice first, what follows each option (v3.2.17)"],
+                           "PreToolUse      ": ["ScheduleWakeup", "no self wake-ups after a stop (v3.3.1)"]},
         "event_matchers_absent": {"PreToolUse": ["Read|Glob|Grep", "reads no longer start the checks (v3.2.15)"]},
         "allow": {"Bash(git commit:*)": "commit permission", "Bash(gh pr ready:*)": "ready-PR permission",
                   "Read(~/.cache/hz-rules/**)": "reading the central rules without a prompt (v3.1.26)"},
@@ -1574,7 +1575,8 @@ WAIT_TEXT = ("[report timing] Still running in the background: {what}. End this 
              "Write no report, no closing lines and no text before tool steps until it ends. Later notices this round: '…' only. "
              "When the last one has finished, write one full report.")
 REPORT_TEXT = ("[report timing] Every helper and background command has finished. Write the one full report now. "
-               "Start it with one line: '✅ Completed: <the names from your last ⏳ line> · Build <n> of <m> done'. "
+               "Start it with one line: '✅ Completed: <the names from your last ⏳ line> · Build <n> of <m> done' (leave "
+               "out '· Build …' when there is no plan). "
                "Then the report, with the closing lines. Do not repeat an earlier report: give only what is new.")
 
 
