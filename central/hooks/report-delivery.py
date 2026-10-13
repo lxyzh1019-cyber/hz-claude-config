@@ -65,5 +65,4 @@ if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
 log("report-delivery", {"missing": missing})
 block("The report " + ", ".join(f"docs/reports/{n}" for n in missing) + " is written but I have not got it. Send the "
-      "file to me with SendUserFile (load it with ToolSearch). In your reply give its Quick read and the file name. Do "
-      "not repeat the rest of your report.")
+      "file to me with SendUserFile (load it with ToolSearch) and name it in one line. Do not paste the report.")

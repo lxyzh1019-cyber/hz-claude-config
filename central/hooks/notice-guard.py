@@ -47,5 +47,4 @@ try:
 except ImportError:
     pass
 block(f"{why} Send me one phone notice now with the PushNotification tool (load it with ToolSearch). Name everything in "
-      f"your 'I need from you' line, for example '<app>: {what} + merge #<number> waiting'. Then end your turn with "
-      "exactly this one line and nothing else: Notice sent.", kind="work")
+      f"your 'I need from you' line, for example '<app>: {what} + merge #<number> waiting'.", kind="work")

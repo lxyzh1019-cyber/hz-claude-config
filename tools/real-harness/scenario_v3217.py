@@ -137,11 +137,14 @@ if "plan" in WANT:   # the real plan check: Rev 2 of an approved Plan v1
               {"plans/test-v1.md": PLAN1})
     r = Run(B, [{"text": "Writing.", "tools": [{"id": "w1", "name": "Write", "input": {"file_path": "PLANPATH", "content": PLAN2}}]},
                 {"text": "Here is Rev 2.", "tools": [{"id": "p1", "name": "ExitPlanMode", "input": {}}]},
+                # v3.3.0 (1A): the first call carries the unmarked text, so the check asks for the marked file once
+                {"text": "Showing the marked plan.", "tools": [{"id": "p2", "name": "ExitPlanMode", "input": {}}]},
                 {"text": "DONE-AFTER-APPROVAL"}])
-    s = r.type("show me the change as a Rev", 20)
+    s = r.type("show me the change as a Rev", 25)
     shown = "Would you like to proceed?" in s
-    say("plan: the plan check passes the Rev of an approved plan at once and the window shows it", shown
-        and "sent back" not in r.all, s[-800:])
+    import glob as _gl
+    _asks = sum(1 for f in _gl.glob(f"{B}/req.log.req*.json") if "Read that file and show the plan again" in open(f, encoding="utf-8", errors="replace").read())
+    say("plan: the check asks for the marked text (1A) before the window shows the Rev", _asks >= 1, (_asks, s[-400:]))
     say("plan: the changed line carries the coloured Rev 2 mark in the window", re.search(r"Rev 2\*{0,2} — Stage 2: LINE-B, now green", s), s[-800:])
     say("plan: the window waits for the owner (no approval by the check)", "User approved" not in s, s[-300:])
     s = r.key("2", 10)   # "Yes, manually approve edits"

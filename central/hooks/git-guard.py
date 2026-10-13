@@ -246,6 +246,18 @@ if _adds and re.search(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b", cmd) and "[skip ci]"
     if _files and len(_files) == sum(len(shlex.split(a.replace("\\", "/"), posix=False)) for a in _adds) and all(
             any(f == n or f.startswith(n) or ("/" + n) in f or f.endswith("/" + n) for n in _notes) for f in _files):
         _notes_hint = True
+# v3.3.0: add [skip ci] to the commit message itself instead of refusing the commit (a refused step costs a whole turn)
+if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
+    _m = re.search(r"(\bcommit\b[^\n]*?\s-m\s+)([\"'])(.*?)(\2)", cmd, re.S)
+    if _m and "$(" not in _m.group(3):
+        _new = cmd[:_m.start(3)] + _m.group(3) + " [skip ci]" + cmd[_m.end(3):]
+        import json as _j3
+        from _common import log as _lg3
+        _lg3("git-guard", {"notes_only_commit": "skip ci added"})
+        print(_j3.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                         "updatedInput": dict(tool_input, command=_new),
+                         "additionalContext": "[git-guard] Notes only: [skip ci] was added to the commit message."}}))
+        sys.exit(0)
 if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
     # v3.2.15: refused once per prompt (the hint alone was ignored: 11 Oct, notes pushes started second GitHub runs)
     try:

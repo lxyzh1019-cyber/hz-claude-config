@@ -14,7 +14,7 @@ pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
 export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if the planner wrote the plan; the v3.1.30 tests switch it on
 export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
-export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1 HZ_SKIP_CI_SOFT=1 HZ_PLAN_MARKS_ROUND=1 HZ_NOTICE_CHECK_OFF=1   # v3.2.17: older fixtures send no phone notice
+export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1 HZ_SKIP_CI_SOFT=1 HZ_PLAN_MARKS_ROUND=1 HZ_NOTICE_CHECK_OFF=1 HZ_HANDOVER_CHECK_OFF=1 HZ_WORKER_GH_WAIT=1   # v3.2.17/v3.3.0: older fixtures send no notice and no map lines
    # v3.2.15: older fixtures keep the hint and the marks round   # v3.2.14: older fixtures: no reason line, background workers
 export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1   # v3.2.13: no live GitHub in tests; older fixtures start single workers in worktrees
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
@@ -93,7 +93,7 @@ NEWH='| Area / feature | Fix rounds | Recurrences | Regressions caused | Workaro
 NEWS='|---|---|---|---|---|---|---|'
 rec "$NEWH" "$NEWS" '| login sync | 3 | 0 | 0 | 0 | lost data | no |'
 o=$(echo '{}' | python3 $H/session-start.py); check "session-start alerts on 3 fix rounds" "Area 'login sync' has hit" "$o"
-o=$(echo '{"prompt":"what time is it"}' | python3 $H/plan-gate.py); check "plan-gate alerts on any prompt at threshold" "redesign threshold" "$o"
+o=$(echo '{"prompt":"what time is it"}' | python3 $H/plan-gate.py); check "v3.3.0: the hotspot counter is removed (no redesign alert)" "clean" "$(echo "$o" | grep -c "redesign threshold" | sed "s/^0$/clean/")"
 rec "$NEWH" "$NEWS" '| login sync | 3 | 0 | 0 | 0 | lost data | yes 2026-09-25 |'
 o=$(echo '{}' | python3 $H/session-start.py); check "no alert once reviewed" "clean" "$(echo "$o" | grep -c 'has hit the redesign threshold' | sed 's/^0$/clean/')"
 rec "$NEWH" "$NEWS" '| timer | 1 | 0 | 0 | 3 | extra guards | no |'
@@ -104,8 +104,8 @@ rec '| Area / feature | Fix rounds | Recurrences | Last symptom | Rewrite-vs-rep
 o=$(echo '{}' | python3 $H/session-start.py); check "old table format still parses" "recurrences 2" "$o"
 rec "$NEWH" "$NEWS" '| | 0 | 0 | 0 | 0 | | no |'
 o=$(echo '{}' | python3 $H/session-start.py); check "blank seed row is ignored" "clean" "$(echo "$o" | grep -c 'redesign threshold' | sed 's/^0$/clean/')"
-o=$(echo '{"prompt":"the timer is broken again"}' | python3 $H/plan-gate.py); check "fix words trigger counter reminder" "+1 fix round" "$o"
-check "fix words trigger read-history step" "Checked against:" "$o"
+o=$(echo '{"prompt":"the timer is broken again"}' | python3 $H/plan-gate.py); check "v3.3.0: fix words no longer ask for a hotspot row" "clean" "$(echo "$o" | grep -c "+1 fix round" | sed "s/^0$/clean/")"
+check "  ...and no read-history step either" "clean" "$(echo "$o" | grep -c "hotspot rows" | sed "s/^0$/clean/")"
 o=$(echo '{"prompt":"- rename the home tab label"}' | python3 $H/plan-gate.py); check "micro-plan asks for both new lines" "Removes/consolidates:" "$o"
 check "micro-plan names sonnet-worker" "Executor: sonnet-worker" "$o"
 o=$(echo '{"prompt":"the sync layer keeps breaking"}' | python3 $H/plan-gate.py); check "design trigger names opus-worker" "Executor: opus-worker" "$o"
@@ -937,7 +937,7 @@ o=$(echo "{\"transcript_path\":\"$HC/t.jsonl\",\"session_id\":\"cg9\",\"stop_hoo
 check "an unlabelled check row is sent back to get its (Check) label, so ticking it never moves it to Build" "Add ' (Check)' to the end of these row names" "$o"
 o=$(cd "$H" && CLAUDE_PROJECT_DIR="$PROJ" python3 -c "import sys;sys.path.insert(0,'.');from _common import *;print(completion_summary(load_config())['line'])")
 check "a plan without checks keeps the plain line" "^Completion: [0-9][0-9]* of [0-9][0-9]* done" "$o"
-check "the rules name rows by the plan name only (no R-number)" "plan name only" "$(cat $H/../rules/CLAUDE-rules.md)"
+check "v3.3.0: the rules start with Rule 0" "Rule 0." "$(cat $H/../rules/CLAUDE-rules.md)"
 # --- v3.1.24c: closing lines without colour codes or sizes
 cat > "$T/jargon.jsonl" <<'J'
 {"type":"user","message":{"role":"user","content":"go"}}
@@ -1216,7 +1216,7 @@ o=$(HZ_CHAT_REPLY_MAX_CHARS= vl "$T/bgnote.jsonl"); check "a short note while ba
 # --- v3.1.26e: build state first; no building while deciding; ask before building
 o=$(echo '{}' | python3 $H/session-start.py); check "session start: the Result line starts with the build state" "Result line starts with one of" "$o"
 check "session start: no building while I'm still deciding; ask first" "ask me first. Build only after my yes" "$o"
-check "the rules carry the same three rules" "Build state first; no building while I'm still deciding" "$(cat $H/../rules/CLAUDE-rules.md)"
+check "v3.3.0: the rules carry the payoff score" "Value = 0.6 × time saved + 0.4 × tokens saved" "$(cat $H/../rules/CLAUDE-rules.md)"
 P2="$H/../../docs/claude-ai-preferences.txt"
 check "claude.ai preferences: build state in the Result line" "Start the 📌 Result line with where the build stands" "$(cat $P2)"
 check "claude.ai preferences: no files while I'm deciding" "don't make files" "$(cat $P2)"
@@ -1277,8 +1277,9 @@ check "  ...open points are not required" "clean" "$(echo "$o" | grep -c 'Colour
 o=$(echo '{}' | python3 $H/session-start.py)
 check "session start: pushing the work branch is always fine, merging stays mine" "You can push the work branch (never main) without asking" "$o"
 check "session start: shape first, then one plan version" "Then write one plan with every agreed point" "$o"
-check "the rules: queued for approval, never blocked" "QUEUED — after approval" "$(cat $H/../rules/CLAUDE-rules.md)"
-check "the plan shape says Rev = version" "Rev counts each showing inside a version" "$o"
+check "v3.3.0: the rules: the lead plans, workers build" "The main session is the lead" "$(cat $H/../rules/CLAUDE-rules.md)"
+check "the plan shape says Rev counts each showing" "Rev \"
+              \"counts each showing" "$(cat $H/formats.py)"
 
 # ---- v3.1.28
 # 1 the step limit counts the worker's own record (the Sunday v15 counter saw 21 of a worker's 320 steps)
@@ -1352,11 +1353,11 @@ print(f"{n} rules, {bad} missing")
 PY
 )
 check "every rule of the old rules text is still there (coverage list)" " 0 missing" "$miss"
-check "  ...and the list covers at least 160 rules" "^1[6-9][0-9] rules\|^[2-9][0-9][0-9] rules" "$(echo "$miss" | tail -1)"
+check "  ...and the list covers at least 100 rules (v3.3.0: the lead playbook)" "^1[0-9][0-9] rules\|^[2-9][0-9][0-9] rules" "$(echo "$miss" | tail -1)"
 echo "MEASURE rules file: $(python3 -c "import sys;print(len(open(sys.argv[1],encoding='utf-8').read()))" "$R") characters (no limit; measured only)"
 # 5 the new rules are in the rules, the worker instructions and the session start
-check "the rules: one-line answer to a new-session suggestion" "Restart: yes — use the restart line" "$(cat $R)"
-check "the rules: prototype and build side by side" "prototype and build side by side" "$(cat $R)"
+check "v3.3.0: the rules: find all, fix all, check once" "Find all, fix all, check once" "$(cat $R)"
+check "v3.3.0: the rules: byte to byte from my design file, one comparison at the end" "copy it byte to byte at the start" "$(cat $R)"
 check "worker instructions: several files in one step" "Read all the files or parts you need in one step" "$(cat $H/../agents/opus-worker-instructions.md)"
 check "worker instructions: no waiting loops" "No waiting loops" "$(cat $H/../agents/opus-worker-instructions.md)"
 check "worker instructions: step 80 / 100" "Around step 80" "$(cat $H/../agents/opus-worker-instructions.md)"
@@ -1522,7 +1523,8 @@ o=$(wpr "$T/b1e.jsonl" "$HO"); check "v3.1.30: the next stage on a new branch is
 git checkout -q - ; git checkout -q - 2>/dev/null; git checkout -q master 2>/dev/null || git checkout -q main 2>/dev/null
 rm -f "$PROJ/.claude/state/pr-branches.json"
 wt(){ python3 -c "import json,sys;print(json.dumps({'tool_name':'Bash','tool_input':{'command':sys.argv[1],'run_in_background':sys.argv[2]=='bg'}}))" "$1" "$2" | python3 $H/wait-guard.py; }
-o=$(wt "sleep 30 && cat out.txt" fg); check "v3.1.30: sleep 30 is refused" "No waiting commands" "$o"
+o=$(wt "sleep 45 && cat out.txt" fg); check "v3.3.0: sleep 45 is refused (30 s runs)" "No waiting commands" "$o"
+o=$(wt "sleep 5; cat out.txt" fg); check "v3.3.0: sleep 5; runs (it was refused by mistake)" "^$" "$o"
 o=$(wt "sleep 2 && npm test" fg); check "v3.1.30: a short sleep of 2 seconds passes" "^$" "$o"
 o=$(wt 'until grep -q "DONE" .claude/state/worker.log; do sleep 20; done' fg); check "v3.1.30: a wait-for-the-worker loop is refused" "No waiting commands" "$o"
 o=$(wt "tail -f .claude/state/worker.log" fg); check "v3.1.30: tail -f is refused" "No waiting commands" "$o"
@@ -1592,7 +1594,7 @@ o=$(wt "sleep 120; echo waited" bg); check "v3.1.30 real: 'Wait two minutes for 
 NOTE=$'<task-notification>\n<task-id>af2dce1f14543ecec</task-id>\n<tool-use-id>toolu_01EQ7gDRMLSiEyW1Vod1NAQE</tool-use-id>\n<status>completed</status>\n<summary>Agent "Verify copy, flow and old-screen claims" finished</summary>\n</task-notification>'
 o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'n1','prompt':sys.argv[1]}))" "$NOTE" | python3 $H/plan-gate.py); check "v3.1.30 real: a worker notice gets no plan-gate text (79 of 106 in the session)" "^$" "$o"
 o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'n1','prompt':sys.argv[1]}))" "$NOTE" | python3 $H/skill-router.py); check "v3.1.30 real: a worker notice gets no skill-router text" "^$" "$o"
-o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'n1','prompt':'Fix the money page layout and logic, all of it'}))" | python3 $H/plan-gate.py); check "v3.1.30: a real request still gets the plan-gate text" "plan-gate" "$o"
+o=$(python3 -c "import json,sys;print(json.dumps({'session_id':'n1','prompt':'Fix the money page layout and logic, all of it'}))" | python3 $H/plan-gate.py); check "v3.3.0: a fix request gets no hotspot text any more" "clean" "$(echo "$o" | grep -c "hotspot" | sed "s/^0$/clean/")"
 python3 - "$T/async.jsonl" "$NOTE" <<'PYEOF'
 import json,sys
 out,note=sys.argv[1],sys.argv[2]
@@ -1818,8 +1820,8 @@ open(sys.argv[2],'w').write(open(sys.argv[1]).read().replace("User has approved 
 PYX
 check "v3.2.0: the approval wording is the real one from your sessions" "has approved your plan" "$(cat $H/_common.py)"
 rm -rf "$PROJ/plans" "$PROJ/.claude/state/plan-store.json"
-check "v3.2.0: the rules say Rev counts showings and restarts per version" "starts at Rev 1 for each version" "$(cat $H/../rules/CLAUDE-rules.md)"
-check "v3.2.0: the format file gives the plan rules to the session start (v3.2.9: with the Quick read)" "Do not write Rev marks yourself" "$(cat $H/formats.py)"
+check "v3.3.0: the rules: a change after approval is the next Rev" "a change is the next Rev of the same plan" "$(cat $H/../rules/CLAUDE-rules.md)"
+check "v3.2.0: the format file gives the plan rules to the session start (v3.3.0: one page)" "Do not write Rev" "$(cat $H/formats.py)"
 check "v3.2.0: the planner writes no marks" "Do not write Rev marks" "$(cat $H/../agents/planner-instructions.md)"
 check "v3.2.0: the approved-plan edit check is registered" "plan-edit-guard.py" "$(cat $H/config.json)"
 O=$(grep -n -i -E "iPad 1194|Pop|Calm" "$H/../seed/FEATURES.md" | head -3)
@@ -2848,7 +2850,7 @@ res("  ...but it is stopped at 40","Test-run limit reached (40)" in o,o)
 o=run("report-timing.py",{"session_id":sid,"tool_name":"Workflow","tool_input":{"script":"x"}},P,HZ_REPORT_TIMING_OFF=None)
 res("v3.2.10: the main session gets the wait line when it starts a workflow","the workflow you are starting" in o and "Working on" in o,o)
 cfg=json.load(open(os.path.join(H,"config.json")))
-res("  ...and the switchboard sends Workflow to the wait-line and workflow checks",any(x.get("script")=="report-timing.py" and "Workflow" in x["tools"] for x in cfg["dispatch"]["PreToolUse"]) and any(x.get("script")=="worker-guard.py" and "Workflow" in x["tools"] for x in cfg["dispatch"]["PreToolUse"]),"")
+res("  ...and the switchboard sends Workflow to the workflow checks (v3.3.0: report-timing retired)",all(x.get("script")!="report-timing.py" for x in cfg["dispatch"]["PreToolUse"]) and any(x.get("script")=="worker-guard.py" and "Workflow" in x["tools"] for x in cfg["dispatch"]["PreToolUse"]),"")
 for f in ("../../stub/settings.json","../stub-files/settings.json"):
     s=json.load(open(os.path.join(H,f)))
     res("v3.2.10: the app hook list covers Workflow ("+f.split("/")[-2]+")",any("Workflow" in (g.get("matcher") or "") for g in s["hooks"]["PreToolUse"]),"")

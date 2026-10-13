@@ -1,0 +1,15 @@
+# Earlier item-test checks that v3.3.0 changes on purpose (owner, 13 Oct: piece 1 table, piece 2 playbook, 1A, 2A).
+# Each line: test · check · why. The new behaviour is proven by tools/test_v330_items.py.
+3210 · item 2 · switchboard sends Workflow to the wait-line check · report-timing is retired (its problem is gone)
+3210 · item 17 · rules: one push after the review · replaced by one push per finished stage (owner choice A, 13 Oct)
+3212 · item 6 · the pushing worker may wait for its GitHub run · workers do not wait for GitHub (157 min on 12 Oct)
+3212 · item 10 · rules: pictures and Proof line before the first push · moved to the worker file
+3213 · item 4 · a single worker with a worktree is refused once · logged, not refused ("Worktree: none" was refused on 12 Oct)
+3215 · S5 · a single worker without a lane is refused a worktree · logged, not refused (same reason)
+3215 · S18 · reading the rules with a shell command is refused · allowed without a prompt (17 refusals, 11-12 Oct)
+3215 · S24 · a notes-only commit without [skip ci] is refused once · [skip ci] is added to the message instead
+3217 · item 2 · a Rev is shown at once · the session shows the file's marked text once (owner 1A: you see what you approve)
+3217 · item 4 · an old '[in v7]' point is a note · not demanded and not noted (decisions on record stay in the record)
+3217 · item 5 · the B trial switches marks_mode · replaced by 1A (the desktop window shows the sent text)
+3217 · item 6 · 'Notice sent.' / notice-only send-back · one instruction for every missing action, ending with 'Done: …'
+3211, 3214, 3215 · hand-over fixtures without Files lines, Test and Steps · the new hand-over check (pass with the check off)

@@ -31,6 +31,8 @@ def strip_marks(text):
     t = _BLOCK.sub("", (text or "").replace("\r\n", "\n"))   # v3.2.1: plan files on Windows end lines with CRLF
     out, fence = [], False
     for line in t.split("\n"):
+        if line.startswith("🎨 "):   # v3.3.0: the colour line under "What changed" is made by the check
+            continue
         if line.strip().startswith("```"):
             fence = not fence
             out.append(line)
@@ -50,7 +52,11 @@ _TAGS = re.compile(r"\s*·\s*(files|after|level|size|group|proof|tests):.*$", re
 
 def _key(line):
     """Compare without list numbers (renumbering is not a change) and without spacing."""
+    line = _QR.sub(r"\1", line)   # v3.3.0: the Quick read word count is set by the check, not a change
     return re.sub(r"\s+", " ", _NUM.sub("", line.strip())).strip().lower()
+
+
+_QR = re.compile(r"(\*\*Quick read\*\*)\s*·.*$")
 
 
 def _core(line):

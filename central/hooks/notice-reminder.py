@@ -24,6 +24,26 @@ elif re.match(r"^mcp__.*create_pull_request$", tool):
     ready = inp.get("draft") is not True
 elif re.match(r"^mcp__.*update_pull_request$", tool):
     ready = inp.get("draft") is False
+# v3.3.0: the 9 PM reminder comes at the next step after 9 PM Edmonton time, not only at a new message from me
+# (12 Oct: one turn ran from 14:03 to 22:54 without a message, so the reminder never came)
+try:
+    import os as _os
+    from _common import edmonton_hour, STATE_DIR as _SD
+    from datetime import datetime as _d
+    _ev = _d.now().strftime("%Y-%m-%d")
+    _np = _os.path.join(_SD, "evening-reminder.json")
+    try:
+        _done = json.load(open(_np, encoding="utf-8")).get("day")
+    except (OSError, ValueError):
+        _done = None
+    if edmonton_hour() >= int(cfg.get("evening_hour", 21)) and _done != _ev and not ready:
+        _os.makedirs(_SD, exist_ok=True)
+        json.dump({"day": _ev}, open(_np, "w", encoding="utf-8"))
+        log("notice-reminder", {"evening": True})
+        add_context("PostToolUse", "[evening] It is after 9 PM in Edmonton. In your next final answer, add one sentence "
+                    "to the 'I need from you' line: \"Before you sleep, type 'night check'.\"")
+except Exception:
+    pass
 if not ready:
     sys.exit(0)
 log("notice-reminder", {"tool": tool})

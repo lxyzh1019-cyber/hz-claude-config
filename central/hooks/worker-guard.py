@@ -124,7 +124,8 @@ if (re.search(r"(?im)^\s*\**Level:\**\s*Complex\b", text) and not re.search(r"(?
 _declared_lane = bool(re.search(r"(?im)^\s*\**Group:\**\s*\S", text) and re.search(r"(?im)^\s*\**Files:\**\s*\S", text))
 # v3.2.15: a declared lane (Group and Files) may use its worktree even when it starts first (11 Oct: Part 7, the first of
 # three lanes started together, was refused and waited 50 minutes)
-if not _open and not _declared_lane and re.search(r"^\s*\**Worktree:\**\s*\S", text, re.M | re.I) and not os.environ.get("HZ_WORKTREE_CHECK_OFF"):
+# v3.3.0: no refusal any more ("Worktree: none — main folder" was refused on 12 Oct); the line is only logged
+if not _open and not _declared_lane and re.search(r"^\s*\**Worktree:\**\s*(?!none\b)\S", text, re.M | re.I) and not os.environ.get("HZ_WORKTREE_CHECK_OFF") and os.environ.get("HZ_WORKTREE_REFUSE"):
     _wf = os.path.join(STATE_DIR, "worktree-refused.json")
     try:
         _wr = json.load(open(_wf, encoding="utf-8"))
@@ -229,6 +230,21 @@ if sub == "sonnet-worker":
             json.dump(tries, f)
     except OSError:
         pass
+# v3.3.0 (owner, 13 Oct: "the lead plans, workers do"): a building hand-over carries the map, so the worker does not
+# search again (12 Oct: 43% of worker steps were reads, 211 of them after the work had started), the fast test command,
+# and the step budget for its size.
+if sub in ("opus-worker", "sonnet-worker") and not os.environ.get("HZ_HANDOVER_CHECK_OFF"):
+    _miss = []
+    _fl = re.search(r"(?im)^\s*\**Files:\**\s*(.+)$", text)
+    if not _fl or not re.search(r":\d+|\blines?\s+\d+|L\d+", text[_fl.start():_fl.start() + 1500]):
+        _miss.append("'Files:' with the files and line numbers from the map (path:line)")
+    if not re.search(r"(?im)^\s*\**Test:\**\s*\S", text):
+        _miss.append("'Test:' with the fast test command for this change")
+    if not re.search(r"(?im)^\s*\**Steps:\**\s*\d+", text):
+        _miss.append("'Steps:' with the step budget (S 30 · M 60 · L 100)")
+    if _miss:
+        log("worker-guard", {"hand-over missing": _miss})
+        deny_tool("A hand-over carries the map, so the worker does not search again. Add: " + "; ".join(_miss) + ".")
 log("worker-guard", {"worker": sub, "level": lvl, "escalated": bool(escalated)})
 if _lane_notice:
     from _common import add_context as _ac

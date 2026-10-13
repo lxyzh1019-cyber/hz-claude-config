@@ -131,6 +131,22 @@ a = state["agents"].setdefault(aid, {"calls": 0, "tools": {}, "warned": False})
 a["calls"] = int(a.get("calls", 0)) + 1
 a["tools"][tool] = int(a["tools"].get(tool, 0)) + 1
 rf = record_file()
+# v3.3.0: the hand-over's 'Steps: N' is this worker's budget (S 30 · M 60 · L 100): the wrap-up notice comes at N, the
+# hard stop at 1.5 × N (never below the general stop)
+try:
+    if rf:
+        for _l in open(rf, encoding="utf-8", errors="replace"):
+            _r = json.loads(_l)
+            if _r.get("type") == "user":
+                _c = (_r.get("message") or {}).get("content")
+                _c = _c if isinstance(_c, str) else " ".join(str(b.get("text") or "") for b in (_c or []) if isinstance(b, dict))
+                _sb = _re.search(r"(?im)^\s*\**Steps:\**\s*(\d+)", _c)
+                if _sb:
+                    warn = int(_sb.group(1))
+                    stop = max(stop, int(warn * 1.5))
+                break
+except (OSError, ValueError):
+    pass
 rec = read_record(rf) if rf else None
 counted = rec["steps"] if rec else None
 n = counted if counted is not None else a["calls"]
@@ -320,7 +336,8 @@ if (tool == "Bash" and rf and _is_test(_cmd2) and not _re.search(r"SMOKE_ONLY=|t
                 pass
             log("worker-budget", {"agent": aid, "said": "failed checks first"})
             _advise("PreToolUse", "[failed first] The last test run failed. Re-run only the failed checks first "
-                    "(npm run test:failed, or SMOKE_ONLY=<the failed checks>); run the full suite once, at the end.")
+                    "(npm run test:failed, or SMOKE_ONLY=<the failed checks>); run the full suite once, at the end. Find all, "
+                    "fix all, check once: list every failure of that run and fix them all before the one rerun.")
     except SystemExit:
         raise
     except Exception:
@@ -351,9 +368,9 @@ if say == "time warn":
 if say == "time stop":
     deny_tool(f"Time limit reached ({lim[1]} minutes). Stop your own runs if any still go. Then write your report: "
               "what is done (with evidence), what is left, and anything half-finished.")
-if say == "tests warn":
-    deny_tool(f"You ran {tests} test runs. Find all, fix all, check once: list every open problem, fix them together, "
-              "then run the tests one time. Retry this step if it is that run.")
+if say == "tests warn":   # v3.3.0: advice, not a refusal (6 refusals on 12 Oct)
+    _advise("PreToolUse", f"[find all] You ran {tests} test runs. List every open problem, fix them together, then run "
+            "the tests one time.")
 if say == "tests stop":
     deny_tool(f"Test-run limit reached ({tests}). Stop and write your report: what passes, what still fails, and your "
               "fix for each. The main session decides the next step.")

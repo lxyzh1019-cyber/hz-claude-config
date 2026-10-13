@@ -65,7 +65,7 @@ if _has_screens and not _refs:
     facts.append("[references] This app has screens but no picture references yet "
                  f"({cfg.get('reference_dir', 'tests/reference')}). Before any stage that changes a screen, add a stage "
                  "that makes them, as the compare instructions say. Then every screen change is checked against them.")
-if (float(_ts.get("slowest_full_minutes") or 0) > _lim or _ts.get("stopped_by_limit")) and not (_split and float(_split.group(1)) <= _lim):
+if (float(_ts.get("latest_full_minutes", _ts.get("slowest_full_minutes")) or 0) > _lim or _ts.get("stopped_by_limit")) and not (_split and float(_split.group(1)) <= _lim):
     facts.append(f"[test rule] A full test run here took {_ts.get('slowest_full_minutes')} minutes"
                  + (" and was stopped by the time limit" if _ts.get("stopped_by_limit") else "") + f"; the aim is "
                  f"{int(_lim)} or less. No full local runs until the suite is split (fast loop here, full suite on "

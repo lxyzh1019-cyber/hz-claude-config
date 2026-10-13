@@ -13,12 +13,13 @@ cfg = load_config()
 inp = data.get("tool_input") or {}
 cmd = str(inp.get("command") or "")
 limit = int(cfg.get("background_max_seconds", 1800))
-max_sleep = float(cfg.get("max_sleep_seconds", 5))
+max_sleep = float(cfg.get("max_sleep_seconds", 30))   # v3.3.0: short sleeps cost less than a refused step
 UNIT = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
 
 def seconds(tok):
-    m = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd]?)", tok or "")
+    tok = (tok or "").rstrip(";&|)")   # v3.3.0: "sleep 5;" was read as no number and refused (17 refusals, 11-12 Oct)
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([smhd]?)", tok)
     return float(m.group(1)) * UNIT[m.group(2)] if m else None
 
 
@@ -46,6 +47,12 @@ _is_worker = bool(data.get("agent_id"))
 # foreground too (one turn, no wake-up). A background watch by the main session is refused once per prompt.
 # Weekly-Planner 10 Oct: 4 background watches by the main session, 4 wake-ups.
 _fg_mode = not os.environ.get("HZ_BACKGROUND_WORKERS")
+# v3.3.0 (owner, 13 Oct): a worker does not wait for GitHub. It pushes and hands back; the lead starts the next stage and
+# reads the result before the merge stop. 12 Oct: workers waited 157 min for 32 GitHub runs.
+if _gh_wait and _is_worker and not os.environ.get("HZ_WORKER_GH_WAIT"):
+    log("wait-guard", {"refused": "worker waits for GitHub"})
+    deny_tool("Do not wait for GitHub. Your push is done: hand back now with the run id. The lead reads the result "
+              "before the merge stop.")
 if _fg_mode and _gh_wait and not _is_worker and inp.get("run_in_background"):
     from _common import prompt_number as _pn
     _wf = os.path.join(STATE_DIR, "gh-bg-refused.json")
@@ -73,13 +80,38 @@ if not inp.get("run_in_background") and _gh_wait and not _is_worker and not _fg_
 # v3.2.1: while the full suite is known to be too slow and is not split yet, no full local run
 try:
     from _common import is_full_test_run, slow_suite_blocks, test_speed_load
+    if is_full_test_run(cmd, cfg) and slow_suite_blocks(cfg) and _is_worker:
+        # v3.3.0: the worker's hand-over names its fast test ('Test:'); the full run becomes that command in place.
+        # 12 Oct: 18 refused full runs, each one a wasted step; GitHub runs the full suite.
+        try:
+            from _common import read_transcript as _rt
+            _ho = ""
+            for _r in _rt(data.get("transcript_path")):
+                if _r.get("type") == "user":
+                    _c = (_r.get("message") or {}).get("content")
+                    _ho = _c if isinstance(_c, str) else " ".join(str(b.get("text") or "") for b in (_c or []) if isinstance(b, dict))
+                    break
+            _tl = re.search(r"(?im)^\s*\**Test:\**\s*`?([^`\n]+?)`?\s*$", _ho)
+            if _tl and _tl.group(1).strip() not in cmd and not re.fullmatch(r"\s*npm\s+(run\s+)?test\s*", _tl.group(1)):
+                _cd = re.match(r"\s*(cd\s+(?:\"[^\"]+\"|'[^']+'|\S+)\s*(?:&&|;)\s*)", cmd)
+                _new = (_cd.group(1) if _cd else "") + _tl.group(1).strip()
+                log("wait-guard", {"full run replaced": _new[:120]})
+                print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                                  "updatedInput": dict(inp, command=_new),
+                                  "additionalContext": "[test] The full suite runs on GitHub. Your fast test command "
+                                                       "from the hand-over ran instead."}}))
+                sys.exit(0)
+        except SystemExit:
+            raise
+        except Exception:
+            pass
     if is_full_test_run(cmd, cfg) and slow_suite_blocks(cfg):
         _st = test_speed_load()
         log("wait-guard", {"refused": "full local test run, suite too slow"})
         deny_tool(f"The full test suite here is too slow ({_st.get('slowest_full_minutes')} min"
                   + (", stopped by the time limit" if _st.get("stopped_by_limit") else "") + "). Do not run it locally "
                   "until it is split. Use the fast loop (the tests the test map names), and run the full suite on "
-                  "GitHub. The plan needs the stage that splits it.")
+                  "GitHub. The fast test command is the 'Test:' line of your hand-over.")
 except ImportError:
     pass
 if problems:

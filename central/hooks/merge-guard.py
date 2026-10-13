@@ -82,6 +82,28 @@ if not checks and checked_before:
     except Exception:
         pass
 failed = any(re.search(r"\bfail(?:ed|ing|ure)?\b|\bX\s", results.get(i, ""), re.I) for i in checks)
+# v3.3.0: remember the commit whose checks were read green; a later turn that pushed only notes after it passes
+# (12 Oct 22:09: the newest commit held only the report; its code had been read green in the turn before)
+try:
+    import os as _o3
+    from _common import run_text as _rt3, STATE_DIR as _SD3, load_config as _lc3
+    _sf = _o3.path.join(_SD3, "checks-read.json")
+    if (checks and not failed) or (not checks and checked_before):
+        _head = _rt3(["git", "rev-parse", "HEAD"], timeout=10).stdout.strip()
+        if _head:
+            _o3.makedirs(_SD3, exist_ok=True)
+            json.dump({"sha": _head}, open(_sf, "w", encoding="utf-8"))
+    elif not checks and not checked_before:
+        _sha = json.load(open(_sf, encoding="utf-8")).get("sha")
+        _nts = tuple(_lc3().get("notes_paths") or ["WORKING_RECORD.md", "FEATURES.md", "docs/", "plans/"])
+        _fl = [f for f in _rt3(["git", "diff", "--name-only", f"{_sha}..HEAD"], timeout=10).stdout.splitlines() if f.strip()]
+        _ok = _rt3(["git", "merge-base", "--is-ancestor", _sha, "HEAD"], timeout=10).returncode == 0
+        if _sha and _ok and all(f.startswith(_nts) or f in _nts for f in _fl):
+            sys.exit(0)
+except SystemExit:
+    raise
+except Exception:
+    pass
 says_red = re.search(r"\b(red|fail(?:ed|ing|s)?)\b", text, re.I)
 if checks and (not failed or says_red):
     sys.exit(0)
@@ -90,4 +112,4 @@ if (r[1] if r is not None else not data.get("stop_hook_active")):
     block(("The checks of your last push failed. Fix them first, or say plainly in the reply that they are red and why "
            "I should merge anyway." if checks else
            "Before you ask me to merge, read the checks of your last push: gh pr checks <number> --watch (or gh run "
-           "watch). Then answer again with the result."), kind="work")
+           "watch). Then report the result in one line."), kind="work")

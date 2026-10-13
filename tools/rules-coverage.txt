@@ -4,10 +4,10 @@
 # C = CLAUDE.md (this repository's own rules), D = docs/model-guidance-sources.md, T = central/hooks/_common.py (the
 # plan shape given at session start). The replay suite fails if any phrase is missing. Add a line for every new rule.
 Rules cannot be waived without my authorization | R | only my explicit authorization can
-No invented exceptions | R | No exceptions for speed, size or low risk
+# removed v3.3.0 (lead playbook; history in revision-record.md): No invented exceptions
 Rules override chat preferences in a repository | R | they override my claude.ai chat preferences
 Enforcement grades Native/Hook/Prose | R | **Prose** (yours
-Prose rules are never called guaranteed | R | Never call a prose rule guaranteed
+# removed v3.3.0 (lead playbook; history in revision-record.md): Prose rules are never called guaranteed
 Environment: desktop app, cloud and local sessions, no terminal | R | I never use a terminal
 Local sessions start on main or a branch from current main | R | Start a local session only on `main`
 Changes reach GitHub through a pull request; clones Pull origin | R | **Pull origin**
@@ -27,119 +27,119 @@ QC4 expected result and stop sign | R | if you see anything else, stop and tell 
 QC5 check after | R | **QC5 Check after.**
 QC6 QA read-through | R | **QC6 QA read-through.**
 Full packages for hz-claude-config | C | **Full packages.**
-Check work against artifacts; own proposal too | R | your own proposal included
-Re-verify when challenged | R | When challenged, re-verify
-Read the history first | R | **Read the history first.**
-Whole-artifact check | R | **Whole-artifact check.**
-Environment first | R | **Environment first.**
-Walk-through check | R | **Walk-through check:**
-No unverified UI steps | R | **No unverified UI steps:**
-Corrections fix the class | R | **Corrections fix the class:**
-Approved scope order | R | latest approved decision → unchanged approved items
-Reconcile the record before revising | R | Reconcile the record
-Reopen settled decisions only for reasons | R | Reopen a settled decision only when I ask
-Conflicts, duplication, obsolete mechanisms | R | Remove conflicts, duplication and obsolete mechanisms
-Stable acceptance criteria; new requirements named | R | Keep acceptance criteria stable
-Problems come with a fix | R | **Problems come with a fix:**
-Find all, fix all, check once | R | **Find all, fix all, check once.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): Check work against artifacts; own proposal too
+# removed v3.3.0 (lead playbook; history in revision-record.md): Re-verify when challenged
+# removed v3.3.0 (lead playbook; history in revision-record.md): Read the history first
+# removed v3.3.0 (lead playbook; history in revision-record.md): Whole-artifact check
+# removed v3.3.0 (lead playbook; history in revision-record.md): Environment first
+# removed v3.3.0 (lead playbook; history in revision-record.md): Walk-through check
+# removed v3.3.0 (lead playbook; history in revision-record.md): No unverified UI steps
+# removed v3.3.0 (lead playbook; history in revision-record.md): Corrections fix the class
+# removed v3.3.0 (lead playbook; history in revision-record.md): Approved scope order
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reconcile the record before revising
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reopen settled decisions only for reasons
+# removed v3.3.0 (lead playbook; history in revision-record.md): Conflicts, duplication, obsolete mechanisms
+# removed v3.3.0 (lead playbook; history in revision-record.md): Stable acceptance criteria; new requirements named
+# removed v3.3.0 (lead playbook; history in revision-record.md): Problems come with a fix
+Find all, fix all, check once | W | **Find all, fix all, check once.**
 Changing hz-claude-config: test first, one batch, build in chat, deploy before next design | C | **Changing `hz-claude-config`.**
-Modes Routine/Diagnostic/Redesign | R | System Design/Redesign
-Analysis is not approval; smallest diff bias | R | The smallest diff must not bias architecture
-Request ledger | R | **Request ledger.**
-Hotspot counter thresholds | R | The limits are 3 fix rounds, 2 recurrences, 1 regression or 3 workarounds
-Hotspot block until reviewed | R | "rewrite-vs-repair reviewed?"
-Plan mode default | R | Plan mode is the default (Native)
-Two tiers | R | **Two tiers (Hook says which).**
-Skip the plan only on my words | R | "skip the plan", "no plan" or "run it directly"
-Keep going after approval | R | **Keep going.**
-Discussion is not approval | R | Discussion is not approval.
-Build state first; no building while deciding | R | Build state first; no building while I'm still deciding
-Changes from approval are questions | R | **Changes from what I approved are questions, not news.**
-Prototype and build side by side (new v3.1.28) | R | prototype and build side by side
-Plan numbering continues; plan file holds latest | R | Plan numbers continue across sessions
-Plan number and Rev (v3.2.17; was: version counts approvals) | R | Plan vN numbers a plan.
-R-numbers vs plan versions | R | R-numbers count work rounds and never restart
-Plan files in plan mode, plans/ folder, commit approved, delete drafts | R | Delete plans that were never approved
-Shape first, then one plan version | R | **Shape first, then one plan version (Hook).**
-Design decisions lines and coverage | R | `- [agreed] <point> — search: <phrase>`
-Mark agreed lines [in vN] | R | `[in vN]`
+Modes Routine/Diagnostic/Redesign | W | System Design/Redesign
+# removed v3.3.0 (lead playbook; history in revision-record.md): Analysis is not approval; smallest diff bias
+# removed v3.3.0 (lead playbook; history in revision-record.md): Request ledger
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hotspot counter thresholds
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hotspot block until reviewed
+# removed v3.3.0 (lead playbook; history in revision-record.md): Plan mode default
+# removed v3.3.0 (lead playbook; history in revision-record.md): Two tiers
+# removed v3.3.0 (lead playbook; history in revision-record.md): Skip the plan only on my words
+# removed v3.3.0 (lead playbook; history in revision-record.md): Keep going after approval
+# removed v3.3.0 (lead playbook; history in revision-record.md): Discussion is not approval
+# removed v3.3.0 (lead playbook; history in revision-record.md): Build state first; no building while deciding
+# removed v3.3.0 (lead playbook; history in revision-record.md): Changes from approval are questions
+Prototype and build side by side (new v3.1.28) | W | prototype and build side by side
+# removed v3.3.0 (lead playbook; history in revision-record.md): Plan numbering continues; plan file holds latest
+# removed v3.3.0 (lead playbook; history in revision-record.md): Plan number and Rev (v3.2.17; was: version counts approvals)
+# removed v3.3.0 (lead playbook; history in revision-record.md): R-numbers vs plan versions
+# removed v3.3.0 (lead playbook; history in revision-record.md): Plan files in plan mode, plans/ folder, commit approved, delete drafts
+# removed v3.3.0 (lead playbook; history in revision-record.md): Shape first, then one plan version
+# removed v3.3.0 (lead playbook; history in revision-record.md): Design decisions lines and coverage
+# removed v3.3.0 (lead playbook; history in revision-record.md): Mark agreed lines [in vN]
 Plan shape given at session start (format file) | F | PLAN_TEMPLATE = """# Plan vN — <short plan name> — Awaiting approval
 Summary at the top of every plan (v3.2.9: in the Quick read) | F | **Summary**
-Changes in this version block | R | "Changes in this version"
-Everyday words above Technical details | R | Above Technical details: no file names
-Must-see parts stay above Technical details | R | Keep everything I must see (Summary, decisions, deviations, stages) above
-Check lines | R | `Removes/consolidates:` (or "none")
-Checked against line | R | `Checked against:`
-Stages to finish | R | **Stages to finish.**
-Ledger rows by plan name only | R | plan name only
-Queued for approval, never blocked | R | QUEUED — after approval
-Build vs Check stages | R | **Build** = what Claude changes and proves
-Check label sent back | R | named with `(Check)`
-Failed check adds a Fix row | R | `Fix — <problem>`
-Multi-app plans in the first app's record | R | Multi-app plans keep their stages in the first app's record
-Revisions: full consolidated plan, no appended amendments | R | no appended amendments
-Update approved baseline | R | update the record's baseline, keeping unchanged commitments
-No HTML | R | No HTML anywhere
-Rev squares and cycle | R | 🟦 **Rev 1** · 🟩 **Rev 2** · 🟧 **Rev 3** · 🟪 **Rev 4**
+Changes in this version block | F | "Changes in this version"
+# removed v3.3.0 (lead playbook; history in revision-record.md): Everyday words above Technical details
+# removed v3.3.0 (lead playbook; history in revision-record.md): Must-see parts stay above Technical details
+# removed v3.3.0 (lead playbook; history in revision-record.md): Check lines
+# removed v3.3.0 (lead playbook; history in revision-record.md): Checked against line
+# removed v3.3.0 (lead playbook; history in revision-record.md): Stages to finish
+# removed v3.3.0 (lead playbook; history in revision-record.md): Ledger rows by plan name only
+# removed v3.3.0 (lead playbook; history in revision-record.md): Queued for approval, never blocked
+# removed v3.3.0 (lead playbook; history in revision-record.md): Build vs Check stages
+# removed v3.3.0 (lead playbook; history in revision-record.md): Check label sent back
+# removed v3.3.0 (lead playbook; history in revision-record.md): Failed check adds a Fix row
+# removed v3.3.0 (lead playbook; history in revision-record.md): Multi-app plans in the first app's record
+# removed v3.3.0 (lead playbook; history in revision-record.md): Revisions: full consolidated plan, no appended amendments
+# removed v3.3.0 (lead playbook; history in revision-record.md): Update approved baseline
+# removed v3.3.0 (lead playbook; history in revision-record.md): No HTML
+# removed v3.3.0 (lead playbook; history in revision-record.md): Rev squares and cycle
 Squares placed by code on changed lines (v3.2.0) | P | puts the square and label in front of each line that is new or changed
-Body marks only the newest showing (v3.2.0) | R | marks each line changed since I last looked
-A Rev is a showing, never an approval (v3.2.0) | R | Rev counts each showing inside a version
-Session on account default; no model or advisor key | R | the stub sets no `model` and no `advisorModel`
-Full plans by the planner helper (v3.1.30; was: Fable suggested on strong signals) | R | A full plan comes from the `planner` helper
-Plan names its model; switch back after Fable plan | R | `/model opus`
-Worker model pins and effort | R | `effort: medium`
-Never loosen the Sonnet ID | R | Never loosen the Sonnet pin
-Confirm worker models; effort configured not verified | R | "configured: medium", never verified
-Safeguard fallback named | R | Name any safeguard fallback to an older model
-Main session dispatches; workers build | R | **The main session dispatches; workers build.**
-Main session edits only planning documents | R | edits only planning documents
-Routing guard refuses main-session source edits | R | The routing guard refuses its source edits
-Hand-over rule 1 helpers | R | the read-only `Explore` and `reviewer` may run
-Hand-over rule 2 Task and Level lines | R | `Task: <stage name from the plan>`
-Hand-over rule 3 routing by level | R | `Escalated from sonnet-worker: <reason>`
-Hand-over rule 4 Sonnet complex words | R | `sonnet-worker` never gets root cause
-Hand-over rule 5 two tries | R | two tries per task per request of mine
-Hand-over rule 6 Sonnet file limits | R | `Escalate to opus-worker: <reason>`
+# removed v3.3.0 (lead playbook; history in revision-record.md): Body marks only the newest showing (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): A Rev is a showing, never an approval (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Session on account default; no model or advisor key
+# removed v3.3.0 (lead playbook; history in revision-record.md): Full plans by the planner helper (v3.1.30; was: Fable suggested on strong signals)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Plan names its model; switch back after Fable plan
+# removed v3.3.0 (lead playbook; history in revision-record.md): Worker model pins and effort
+# removed v3.3.0 (lead playbook; history in revision-record.md): Never loosen the Sonnet ID
+# removed v3.3.0 (lead playbook; history in revision-record.md): Confirm worker models; effort configured not verified
+# removed v3.3.0 (lead playbook; history in revision-record.md): Safeguard fallback named
+# removed v3.3.0 (lead playbook; history in revision-record.md): Main session dispatches; workers build
+# removed v3.3.0 (lead playbook; history in revision-record.md): Main session edits only planning documents
+# removed v3.3.0 (lead playbook; history in revision-record.md): Routing guard refuses main-session source edits
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 1 helpers
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 2 Task and Level lines
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 3 routing by level
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 4 Sonnet complex words
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 5 two tries
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 6 Sonnet file limits
 Workers in the background, end the turn, notice continues (format file) | F | starts your next step. Do not wait, poll or sleep.
-Fallback without Opus | R | Without Opus, Routine work may still go to `sonnet-worker`
-Hand-over content; check evidence | R | A worker's "done" is not completion
-Parallel workers; summarize | R | never forward raw reports
-Worker builds directly, never redelegates | R | never redelegates
+# removed v3.3.0 (lead playbook; history in revision-record.md): Fallback without Opus
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over content; check evidence
+# removed v3.3.0 (lead playbook; history in revision-record.md): Parallel workers; summarize
+# removed v3.3.0 (lead playbook; history in revision-record.md): Worker builds directly, never redelegates
 Small worker memory; step limit 80/100 (worker file) | W | Around step 80 you are told to wrap up.
 Several reads per step (worker file) | W | Read all the files or parts you need in one step
-Rules read refusal; Read allowed | R | A shell read of the central rules is refused
-Scope discipline | R | no unrequested features
-Structural over disciplinary | R | **Structural over disciplinary.**
-Failing test first | R | **Failing test first.**
-Feature manifest and regression table | R | kept / added / intentionally removed / missing
-Template manifest blocks | R | central `seed` folder
-Deliverable ledger states | R | WAITING ON YOU — <action>, QUEUED — after <stage>, BLOCKED — <reason>, SUPERSEDED
-Read the file, not the scrollback | R | Read the file, not the scrollback
-Evidence at the edit | R | COMPLETE without Evidence in the same edit is refused at the edit
-No inflated progress | R | Never change granularity to inflate progress
-Completion line counting | R | **Completion line and auto-fix (Hook).**
-Completion line format | R | `Completion: Build n of m done (p%) · Check c of d — <plan> · Stage k of M`
-Open item listing: Now, Next 3, Later count (v3.2.10) | R | then `Now:`, `Next:` (3 stages) and `Later:` (a count)
-Wrong count is a notice | R | A wrong count alone is not sent back
-Auto-fix one round per prompt | R | one auto-fix round per prompt of mine
-Auto-fix limit text | R | "Auto-fix limit reached"
-Stop here / pause here | R | "stop here"/"pause here"
-One session carries the whole plan | R | **One session carries the whole plan; hand-off for safety (Hook).**
-Long session keeps main lean | R | Keep the main session lean: fresh workers take the stages
-Hand-off contents | R | never keys or passwords
-Restart line | R | `Continue <plan> on branch <branch>; next: <stage>.`
-Never ask for a new session | R | never ask me to open a new session
-Resume from a restart line | R | A session opened with one reads the record and newest plan
-New-session suggestion answer (new) | R | Restart: yes — use the restart line
-Blocker after a different retry | R | Never repeat failed approaches
-Define success first | R | Define success before building
-Report passed, failed, untested | R | Report passed, failed, untested
-Review pass before merge | R | **Review pass before merge.**
-Reopen the final artifact | R | Reopen the final artifact
-Distinguish stages of proof | R | proven over time
-Deploy stamp | R | **Deploy stamp.**
-Complete only with evidence or blocked | R | Complete only when every ledger row is COMPLETE with evidence
-Handoff contents | R | A handoff names the authoritative artifact
+Rules read refusal; Read allowed | W | A shell read of the central rules is refused
+# removed v3.3.0 (lead playbook; history in revision-record.md): Scope discipline
+# removed v3.3.0 (lead playbook; history in revision-record.md): Structural over disciplinary
+Failing test first | W | **Failing test first.**
+Feature manifest and regression table | W | kept / added / intentionally removed / missing
+# removed v3.3.0 (lead playbook; history in revision-record.md): Template manifest blocks
+# removed v3.3.0 (lead playbook; history in revision-record.md): Deliverable ledger states
+# removed v3.3.0 (lead playbook; history in revision-record.md): Read the file, not the scrollback
+# removed v3.3.0 (lead playbook; history in revision-record.md): Evidence at the edit
+# removed v3.3.0 (lead playbook; history in revision-record.md): No inflated progress
+# removed v3.3.0 (lead playbook; history in revision-record.md): Completion line counting
+# removed v3.3.0 (lead playbook; history in revision-record.md): Completion line format
+# removed v3.3.0 (lead playbook; history in revision-record.md): Open item listing: Now, Next 3, Later count (v3.2.10)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Wrong count is a notice
+# removed v3.3.0 (lead playbook; history in revision-record.md): Auto-fix one round per prompt
+# removed v3.3.0 (lead playbook; history in revision-record.md): Auto-fix limit text
+# removed v3.3.0 (lead playbook; history in revision-record.md): Stop here / pause here
+# removed v3.3.0 (lead playbook; history in revision-record.md): One session carries the whole plan
+# removed v3.3.0 (lead playbook; history in revision-record.md): Long session keeps main lean
+# removed v3.3.0 (lead playbook; history in revision-record.md): Hand-off contents
+# removed v3.3.0 (lead playbook; history in revision-record.md): Restart line
+# removed v3.3.0 (lead playbook; history in revision-record.md): Never ask for a new session
+# removed v3.3.0 (lead playbook; history in revision-record.md): Resume from a restart line
+# removed v3.3.0 (lead playbook; history in revision-record.md): New-session suggestion answer (new)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Blocker after a different retry
+# removed v3.3.0 (lead playbook; history in revision-record.md): Define success first
+# removed v3.3.0 (lead playbook; history in revision-record.md): Report passed, failed, untested
+# removed v3.3.0 (lead playbook; history in revision-record.md): Review pass before merge
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reopen the final artifact
+# removed v3.3.0 (lead playbook; history in revision-record.md): Distinguish stages of proof
+# removed v3.3.0 (lead playbook; history in revision-record.md): Deploy stamp
+# removed v3.3.0 (lead playbook; history in revision-record.md): Complete only with evidence or blocked
+# removed v3.3.0 (lead playbook; history in revision-record.md): Handoff contents
 Health check Step F | C | **Health check (Step F).**
 No progress reports; status line | R | `⏳ Working on: <names> · Build <n> of <m> done`
 Few in-between messages | R | Between tool calls say nothing
@@ -163,7 +163,7 @@ Ready for review, never draft | R | Never open a draft (`gh pr create --draft`
 Deploy only when asked | R | Deploy only when I asked for it
 Model guidance sources | D | Prompting Claude Opus 5.5
 Model guidance pointer | R | docs/model-guidance-sources.md
-Session model shown once at the start when not Opus (v3.1.30) | R | on another model the first notice says `/model opus`
+# removed v3.3.0 (lead playbook; history in revision-record.md): Session model shown once at the start when not Opus (v3.1.30)
 Writing for me in ASD-STE100-lite (new, user test 2026-10-05) | R | **Writing for me (ASD-STE100-lite).**
 STE: result first (format file) | F | Start with the result: what I will see, or what changes for me.
 STE: one word for one thing (format file) | F | Use one word for one thing.
@@ -175,113 +175,131 @@ STE: noun clusters (format file) | F | Do not use more than 3 nouns in a row.
 STE: no padding (format file) | F | Do not add an introduction
 STE: accuracy (format file) | F | Accuracy is more important than style.
 Plan summary starts with the goal (v3.2.9: Quick read) | F | Goal: <one line
-Explorer before Complex stages (new) | R | **Explorer first (Hook).**
-Map line in Complex hand-overs (new) | R | `Map: not needed — <reason>`
-Reviewer on call at three moments (new) | R | **Reviewer on call (Hook).**
-Reviewer when stuck (new) | R | `Reviewer advice: …`
-Reviewer before done (new) | R | `Reviewer before done (<plan name>): <verdict>`
+# removed v3.3.0 (lead playbook; history in revision-record.md): Explorer before Complex stages (new)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Map line in Complex hand-overs (new)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reviewer on call at three moments (new)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reviewer when stuck (new)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reviewer before done (new)
 Pull request opens last (v3.1.30) | R | only after every worker and the reviewer finished
 Open ready pull request stays ready while fixed (v3.2.17; was: back to draft) | R | the change goes on it as new commits and it stays ready
 Final report marks the pull request ready (v3.1.30) | R | The final report marks it ready (Hook)
-Reviewer before every pull request (v3.1.30) | R | before every pull request (its check refuses one without it)
-No waiting commands in the main session too | R | no waiting loops or `tail -f`
-Background commands have a 30-minute limit (v3.1.30) | R | A background command starts with `timeout 1800` (Hook)
-Compare with references and Proof line (v3.1.30) | R | follows the compare instructions and reports a `Proof:` line
-By-screen feature list with proof per line (v3.1.30) | R | gives each line a proof, and the Kept row names it (Hook)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reviewer before every pull request (v3.1.30)
+No waiting commands in the main session too | W | no waiting loops or `tail -f`
+Background commands have a 30-minute limit (v3.1.30) | W | A background command starts with `timeout 1800` (Hook)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Compare with references and Proof line (v3.1.30)
+# removed v3.3.0 (lead playbook; history in revision-record.md): By-screen feature list with proof per line (v3.1.30)
 
-Planner fallback on Opus only with Fallback line (v3.1.30) | R | `planner-opus` with `Fallback: <error>`
-Ready-to-merge notice to my account (v3.1.30) | R | send me a notice before the answer (PushNotification, Hook)
-Version counts approvals; Rev counts showings, restarts per version (v3.2.0) | R | Rev counts each showing inside a version and starts at Rev 1 for each version.
-After Approve a change is the next Rev (v3.2.17; was: next version) | R | a change to the same plan (also one agreed in chat) is its next Rev
-No edit of an approved plan file except its title (v3.2.0) | R | Do not edit an approved plan file
-Coloured marks placed by code (v3.2.0) | R | **Coloured changes by code (Hook).**
-Change list: newest showing in full, older ones one line (v3.2.0) | R | older showings as one line each
-Size limit only on a new plan, 7,200 (v3.2.0) | R | A new plan (Plan v1 Rev 1) has at most 7,200 characters there
-Planner writes new plans and big changes only (v3.2.0) | R | The `planner` helper writes a new plan (Plan v1 Rev 1) and big changes
-Why and fix are two jobs (v3.2.0) | R | **"Why" and "fix" are two jobs.**
-Stop for a plan when a problem is big (v3.2.0; v3.2.9: no plan rewrites, a chat question) | R | **No plan rewrites during the work (Hook).**
-Compact only above half the context (v3.2.10) | R | **Compact above half the context (Hook).**
-Ask all open questions at once (v3.2.0) | R | **Ask all open questions at once.**
-Worker limits: steps, time, test runs (v3.2.0) | R | time 45 and 60 minutes (Routine) or 90 and 120 minutes (Complex); test runs 10 and 20
-Formats come from the format file (v3.2.0) | R | The exact formats (writing rules, answer order, closing block, validation line, Completion line) come in the FORMATS part
+# removed v3.3.0 (lead playbook; history in revision-record.md): Planner fallback on Opus only with Fallback line (v3.1.30)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Ready-to-merge notice to my account (v3.1.30)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Version counts approvals; Rev counts showings, restarts per version (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): After Approve a change is the next Rev (v3.2.17; was: next version)
+# removed v3.3.0 (lead playbook; history in revision-record.md): No edit of an approved plan file except its title (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Coloured marks placed by code (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Change list: newest showing in full, older ones one line (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Size limit only on a new plan, 7,200 (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Planner writes new plans and big changes only (v3.2.0)
+Why and fix are two jobs (v3.2.0) | W | **"Why" and "fix" are two jobs.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): Stop for a plan when a problem is big (v3.2.0; v3.2.9: no plan rewrites, a chat question)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Compact only above half the context (v3.2.10)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Ask all open questions at once (v3.2.0)
+Worker limits: steps, time, test runs (v3.2.0) | W | time 45 and 60 minutes (Routine) or 90 and 120 minutes (Complex); test runs 10 and 20
+# removed v3.3.0 (lead playbook; history in revision-record.md): Formats come from the format file (v3.2.0)
 Session summary: tokens and time, session time (v3.2.0) | R | **Token report (Hook, no AI turn).**
 First plan contents and title (format file) | F | <short plan name> — Awaiting approval
-Up to 3 parallel workers, own worktree (v3.2.0) | R | **Parallel workers (Hook).**
-Stage tags: files, after, level, tests, group (v3.2.0) | R | The planner tags each stage with files, after, level, tests and group.
-Night work with stacked pull requests (v3.2.0) | R | **Night work (Hook).**
-Phone notice that names what waits (v3.2.17) | R | **Phone notice when you need me (Hook).**
-Main session notice above 50% of context (v3.2.10) | R | The main session gets a notice above 50% of its context
-Batch reads after 5 single reads (v3.2.0) | R | After 5 single-read steps in a row
-Test map and saved tools (v3.2.0) | R | **Test map and saved tools.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): Up to 3 parallel workers, own worktree (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Stage tags: files, after, level, tests, group (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Night work with stacked pull requests (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Phone notice that names what waits (v3.2.17)
+Main session notice above 50% of context (v3.2.10) | W | The main session gets a notice above 50% of its context
+Batch reads after 5 single reads (v3.2.0) | W | After 5 single-read steps in a row
+Test map and saved tools (v3.2.0) | W | **Test map and saved tools.**
 Away time left out of the shares (v3.2.0) | R | away time (waits over 60 minutes, left out of the shares)
-Night check before good night, evening reminder (v3.2.0) | R | When I type "night check", list every open question at once
-No GitHub wait in the foreground (v3.2.0) | R | no GitHub wait in the foreground
-Fast loop per change, full suite once per stage (v3.2.0) | R | The full suite runs one time per stage, before its pull request.
-Full run 5 minutes or less; split stage when slower (v3.2.0) | R | A full run should take 5 minutes or less.
-Stacked pull requests by default, at most 3 (v3.2.0) | R | **Stacked pull requests.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): Night check before good night, evening reminder (v3.2.0)
+No GitHub wait in the foreground (v3.2.0) | W | no GitHub wait in the foreground
+Fast loop per change, full suite once per stage (v3.2.0) | W | The full suite runs one time per stage, before its pull request.
+Full run 5 minutes or less; split stage when slower (v3.2.0) | W | A full run should take 5 minutes or less.
+Stacked pull requests by default, at most 3 (v3.2.0) | W | **Stacked pull requests.**
 Config cost line in the summary (v3.2.0) | R | "Config cost" shows the time and tokens of the helpers these rules require
-Proof and size per Build stage (v3.2.0) | R | Each Build stage names its `proof:` (what shows it is right) and `size: S|M|L` (Hook).
-COMPLETE evidence shows the planned proof (v3.2.0) | R | COMPLETE needs evidence that shows that proof (Hook).
-Measured stop signals (v3.2.0; v3.2.9: a finding, not a plan rewrite) | R | Measured signals start this too
-Lessons after each plan (v3.2.0; v3.2.9: the end-of-plan report) | R | **Report after each plan (Hook).**
-Recommendation on every decision line (v3.2.0) | R | Each line of the `❓ Decisions` list names your recommendation (Hook).
-References first (v3.2.0) | R | **References first (Hook).**
-Size line in every hand-over (v3.2.0) | R | `Size: S|M|L` from the plan, and a level.
-Reviewer and planner at high effort (v3.2.1) | R | The planner and the reviewer run at `effort: high`
-Background test runs measured; no full local run until split (v3.2.1) | R | Until the suite is split, a full local run is refused
-Questions before the plan (v3.2.1) | R | **Questions before the plan (Hook).**
-Changed words only in the change list (v3.2.1) | R | A line that changed in part shows only its changed words.
-Night: build on the recommendation when reversible (v3.2.1) | R | A new question at night takes your recommendation
+# removed v3.3.0 (lead playbook; history in revision-record.md): Proof and size per Build stage (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): COMPLETE evidence shows the planned proof (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Measured stop signals (v3.2.0; v3.2.9: a finding, not a plan rewrite)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Lessons after each plan (v3.2.0; v3.2.9: the end-of-plan report)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Recommendation on every decision line (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): References first (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Size line in every hand-over (v3.2.0)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Reviewer and planner at high effort (v3.2.1)
+Background test runs measured; no full local run until split (v3.2.1) | W | Until the suite is split, a full local run is refused
+# removed v3.3.0 (lead playbook; history in revision-record.md): Questions before the plan (v3.2.1)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Changed words only in the change list (v3.2.1)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Night: build on the recommendation when reversible (v3.2.1)
 One report per piece of work, after the last helper or background command (new v3.2.2) | R | write the full report when the last one finished
-Slow run: measure setup versus tests first (new v3.2.2) | R | first measures where the time goes
-Stage size counts worked time, not waits (new v3.2.2) | R | Waiting for GitHub runs and background commands does not count as work.
-Small job lane: no reviewer on Stuck, light reviewer before the pull request (new v3.2.7) | R | A plan of up to 3 build stages is a small job
-Never demand a helper missing in this folder (new v3.2.7) | R | A helper that is not in this folder is never demanded
-Record writes at approval, stage end, pull request only (new v3.2.7) | R | Write the record at plan approval, at each stage end and before the pull request
-Slow tests: one change, one run (new v3.2.7) | R | do not run it again after a one-line change
-Merge only on green: read the checks of the last push (new v3.2.8) | R | Before you ask me to merge, read the checks of your last push
-No plan rewrites during the work (new v3.2.9) | R | After approval the plan is not reopened
-Report after each plan (new v3.2.9) | R | write `docs/reports/<plan name>.md`.
-Quick read first (new v3.2.9) | R | Every plan starts with a Quick read
-A pull request opens when it is ready (new v3.2.9) | R | wait for a green run on the branch before you open the pull request
-Lean plans: fewer pull requests, joined checks, retired designs to the archive (new v3.2.9) | R | put work that can be checked together into one pull request
-Time first, tokens second (new v3.2.9) | R | Time and tokens are the two main resources of the work
-What Claude builds stays fast: one-test run under 1 minute (new v3.2.9) | R | A one-test run takes under 1 minute
-Decisions in the reply count the stage as waiting (v3.2.10) | R | counts its open stage as waiting on me
-Stage total change line (v3.2.10) | R | `Plan: 39 → 42 stages`
-Restart line in the reply only at Build 100% (v3.2.10) | R | Show the restart line in the reply only when Build reaches 100%
-Stacked pull request: move the base to main after the merge (v3.2.10) | R | move the next one to main at once
-Notes-only push needs no new wait (v3.2.10) | R | needs no new wait when the code before it is green
-One push after the review (v3.2.10) | R | **One push after the review.**
-Test-speed helpers: limits 20 and 40 (v3.2.10) | R | `Task kind: test speed`
-Wide checks run on GitHub (v3.2.10) | R | **Wide checks run on GitHub.**
-Dynamic workflows: one wide step, role file, own files (v3.2.10) | R | **Dynamic workflows (Hook).**
-References are exact by default (v3.2.10) | R | **References are exact.**
-Checkpoint reports and delivery (v3.2.10) | R | **Checkpoint reports.**
+Slow run: measure setup versus tests first (new v3.2.2) | W | first measures where the time goes
+# removed v3.3.0 (lead playbook; history in revision-record.md): Stage size counts worked time, not waits (new v3.2.2)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Small job lane: no reviewer on Stuck, light reviewer before the pull request (new v3.2.7)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Never demand a helper missing in this folder (new v3.2.7)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Record writes at approval, stage end, pull request only (new v3.2.7)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Slow tests: one change, one run (new v3.2.7)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Merge only on green: read the checks of the last push (new v3.2.8)
+# removed v3.3.0 (lead playbook; history in revision-record.md): No plan rewrites during the work (new v3.2.9)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Report after each plan (new v3.2.9)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Quick read first (new v3.2.9)
+# removed v3.3.0 (lead playbook; history in revision-record.md): A pull request opens when it is ready (new v3.2.9)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Lean plans: fewer pull requests, joined checks, retired designs to the archive (new v3.2.9)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Time first, tokens second (new v3.2.9)
+# removed v3.3.0 (lead playbook; history in revision-record.md): What Claude builds stays fast: one-test run under 1 minute (new v3.2.9)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Decisions in the reply count the stage as waiting (v3.2.10)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Stage total change line (v3.2.10)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Restart line in the reply only at Build 100% (v3.2.10)
+Stacked pull request: move the base to main after the merge (v3.2.10) | W | move the next one to main at once
+# removed v3.3.0 (lead playbook; history in revision-record.md): Notes-only push needs no new wait (v3.2.10)
+# removed v3.3.0 (lead playbook; history in revision-record.md): One push after the review (v3.2.10)
+Test-speed helpers: limits 20 and 40 (v3.2.10) | W | `Task kind: test speed`
+Wide checks run on GitHub (v3.2.10) | W | **Wide checks run on GitHub.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): Dynamic workflows: one wide step, role file, own files (v3.2.10)
+# removed v3.3.0 (lead playbook; history in revision-record.md): References are exact by default (v3.2.10)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Checkpoint reports and delivery (v3.2.10)
 The ⏳ line stands alone (v3.2.10) | R | The ⏳ line always stands alone
 One ⏳ line per round, only for a background command or workflow (v3.2.12, v3.2.14) | R | It is only for a background command or a workflow, once per round
-The pushing worker waits for GitHub (v3.2.12) | R | **The pushing worker waits for GitHub (Hook).**
-Part n and #number (v3.2.12) | R | **Part and #number.**
-Lean main session (v3.2.12) | R | **Lean main session (Hook).**
-Pictures before the first push (v3.2.12) | R | **Pictures before the first push.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): The pushing worker waits for GitHub (v3.2.12)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Part n and #number (v3.2.12)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Lean main session (v3.2.12)
+Pictures before the first push (v3.2.12) | W | **Pictures before the first push.**
 One review per pull request (v3.2.12) | R | One review per pull request
-Restart line: GitHub first, merged branch never named (v3.2.13) | R | a merged branch never goes in the restart line
-Lane worktrees only, clean-up after merge (v3.2.13) | R | A single worker works in the main folder, never in a worktree
+# removed v3.3.0 (lead playbook; history in revision-record.md): Restart line: GitHub first, merged branch never named (v3.2.13)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Lane worktrees only, clean-up after merge (v3.2.13)
 Workers in the foreground, no wake-ups (v3.2.14) | R | Workers run in the foreground (Hook: the call is rewritten)
-Complex needs a reason (v3.2.14) | R | `Complex because: <reason>` (Hook)
-Main session waits for GitHub in the foreground (v3.2.14) | R | it waits in the foreground the same way, never in the background (Hook)
-Restart line: go on at once (v3.2.14) | R | goes on with the next stage at once
-Self-check before the hand-back (v3.2.15) | R | **Self-check before the hand-back.**
-One complete review (v3.2.15) | R | **One complete review.**
-Proof-line template (v3.2.15) | R | **Proof-line template.**
-Format changes: search the tests (v3.2.15) | R | **Format changes.**
-Workers commit; [skip ci] for notes (v3.2.15) | R | **Workers commit.**
-Gaps at the map step (v3.2.15) | R | **Gaps at the map step.**
-Lanes meet before me (v3.2.15) | R | **Lanes meet before me.**
-What changed list (v3.2.15) | R | **What changed.**
-Big plans start with the planner (v3.2.15) | R | **Big plans start with the planner.**
-Failed checks first (v3.2.15) | R | **Failed checks first (Hook).**
-Only necessary stops (v3.2.16) | R | **Only necessary stops.**
-One pull request per stop (v3.2.16) | R | **One pull request per stop.**
-Questions as taps, with what follows (v3.2.17) | R | **Questions as taps, with what follows (Hook).**
-Each option says what follows it (v3.2.17) | R | "Ends here." or "Brings back: <what we must talk about again>"
+# removed v3.3.0 (lead playbook; history in revision-record.md): Complex needs a reason (v3.2.14)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Main session waits for GitHub in the foreground (v3.2.14)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Restart line: go on at once (v3.2.14)
+Self-check before the hand-back (v3.2.15) | W | **Self-check before the hand-back.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): One complete review (v3.2.15)
+Proof-line template (v3.2.15) | W | **Proof-line template.**
+Format changes: search the tests (v3.2.15) | W | **Format changes.**
+Workers commit; [skip ci] for notes (v3.2.15) | W | **Workers commit.**
+# removed v3.3.0 (lead playbook; history in revision-record.md): Gaps at the map step (v3.2.15)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Lanes meet before me (v3.2.15)
+# removed v3.3.0 (lead playbook; history in revision-record.md): What changed list (v3.2.15)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Big plans start with the planner (v3.2.15)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Failed checks first (v3.2.15)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Only necessary stops (v3.2.16)
+# removed v3.3.0 (lead playbook; history in revision-record.md): One pull request per stop (v3.2.16)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Questions as taps, with what follows (v3.2.17)
+# removed v3.3.0 (lead playbook; history in revision-record.md): Each option says what follows it (v3.2.17)
+Rule 0: better than without, else reverse (v3.3.0) | R | **Rule 0.** The setup must make the work better than Claude Code without it.
+Payoff score 60/40 (v3.3.0) | R | Value = 0.6 × time saved + 0.4 × tokens saved
+The lead plans, workers build (v3.3.0) | R | The main session is the lead.
+Understand once: one map (v3.3.0) | R | One map at the start (Explore)
+Byte to byte from my design file (v3.3.0) | R | copy it byte to byte at the start
+Parallel lanes from the start (v3.3.0) | R | parallel lanes from the start
+Few, large stages (v3.3.0) | R | **Few, large stages.**
+Constraints and step budget in the plan (v3.3.0) | R | steps per stage (S 30 · M 60 · L 100)
+One-page plan (v3.3.0) | R | **One-page plan (Hook).**
+Hand-over carries the map (v3.3.0) | R | `Files:` with the files and lines from the map
+Find all, fix all, check once at every level (v3.3.0) | R | **Find all, fix all, check once** at every level
+Workers do not wait for GitHub (v3.3.0) | R | Workers do not wait for GitHub (Hook)
+GitHub run at most 2 jobs (v3.3.0) | R | at most 2 jobs, under 5 minutes
+Send-back ends with Done (v3.3.0) | R | then end with one line `Done: …`
+Feedback loop (v3.3.0) | R | A rule with no measured gain in 2 reports is removed.
+Links use the commit number (v3.3.0) | R | Links to reports and plans use the commit number
+Worker: do not wait for GitHub (v3.3.0) | W | **Do not wait for GitHub.**
+Worker: your hand-over is your map (v3.3.0) | W | **Your hand-over is your map.**
