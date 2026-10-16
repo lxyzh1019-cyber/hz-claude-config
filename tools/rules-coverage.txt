@@ -15,7 +15,7 @@ Single source in hz-claude-config | R | live only in `hz-claude-config` and reac
 Stub files listed | R | `.claude/hz-loader.py`
 Never copy central files or edit the stub | R | Never copy central files in or edit the stub
 Report missing per-repo files; stop without rules | R | Report missing per-repo files first
-Session start injects facts; version line in the notice | R | so replies never write a version line
+Session start injects facts; version at the end of the status line | R | the version the session start gives
 Rules file read first, other tools wait (v3.1.29) | R | read the rules file (other tools wait until it is read
 Setup update: own branch, ready PR, ask to merge, never two | R | Never two setup pull requests at once
 Setup never updated by hand | R | Never update the setup by hand

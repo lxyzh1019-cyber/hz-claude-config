@@ -286,7 +286,13 @@ def _step_type(blocks):
             return "waiting for GitHub"
         if (n == "Bash" and re.search(r"\b(git|gh)\b", c)) or (n.startswith("mcp__") and "pull_request" in n):
             return "git and pull request"
-        return "reading and checking"
+        # v3.3.6 (G8): reading, browser checks and other commands apart, so a token change can be explained and the
+        # read-by-parts rule (O5) is measured on reading steps only
+        if n in ("Read", "Grep", "Glob", "LS", "NotebookRead"):
+            return "reading"
+        if re.search(r"playwright|chromium|puppeteer|screenshot|browser|mcp__.*(browser|preview)", c + " " + n, re.I):
+            return "browser checks"
+        return "other commands"
     return "answers"
 
 
@@ -302,6 +308,7 @@ def summary_data(transcript_path):
             m = r.get("message") or {}
             by_id.setdefault(m.get("id"), []).extend(_blocks(r))
     tok, sec, seen, mine, hsec = {}, {}, set(), 0.0, {}
+    steps, ctxs, reviewed = {}, {}, False   # v3.3.6 (G8): steps and context size per type; work after the review
     ids = {}
     for f in glob.glob(os.path.join(os.path.splitext(tp)[0], "subagents", "*.jsonl")):
         try:
@@ -318,9 +325,14 @@ def summary_data(transcript_path):
         if r.get("type") == "assistant":
             m = r.get("message") or {}
             cur = _step_type(by_id.get(m.get("id")) or [])
+            if reviewed and cur not in ("git and pull request", "waiting for GitHub", "answers", "hand-overs"):
+                cur = "review fixes"
             u = m.get("usage") or {}
             if u and m.get("id") not in seen:
                 seen.add(m.get("id"))
+                steps[cur] = steps.get(cur, 0) + 1
+                ctxs[cur] = ctxs.get(cur, 0) + int(u.get("input_tokens") or 0) + int(u.get("cache_read_input_tokens") or 0) \
+                    + int(u.get("cache_creation_input_tokens") or 0)
                 tok[cur] = tok.get(cur, 0) + sum(int(u.get(x) or 0) for x in (
                     "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"))
         if i + 1 >= len(recs):
@@ -332,6 +344,8 @@ def summary_data(transcript_path):
         kind, hk = cur, None
         if nxt.get("type") == "assistant":
             kind = _step_type(by_id.get((nxt.get("message") or {}).get("id")) or [])   # thinking for that step
+            if reviewed and kind not in ("git and pull request", "waiting for GitHub", "answers", "hand-overs"):
+                kind = "review fixes"
         else:
             c = (nxt.get("message") or {}).get("content")
             if isinstance(c, str):
@@ -339,6 +353,7 @@ def summary_data(transcript_path):
                     kind = "helpers"
                     _hm = re.search(r'agent-message\s+from=\\?"([A-Za-z0-9_-]+)', c)
                     hk = ids.get(_hm.group(1)) if _hm else None
+                    reviewed = reviewed or bool(hk and "review" in hk)
                 elif "<task-notification>" in c:
                     kind = "waiting for GitHub" if cur == "waiting for GitHub" else cur
                 elif _is_mine(c):
@@ -354,6 +369,7 @@ def summary_data(transcript_path):
                         elif name in ("Agent", "Task"):
                             kind = "helpers"
                             hk = str(hin.get("subagent_type") or "helper")
+                            reviewed = reviewed or "review" in hk
                         break
                 if kind is None:
                     continue
@@ -379,7 +395,7 @@ def summary_data(transcript_path):
         for mod, v in _tokens(_load(f))[1].items():
             by_model[mod] = by_model.get(mod, 0) + v
     clock = _ts(recs[-1]) - _ts(recs[0])
-    return {"tok": tok, "sec": sec, "mine": mine, "hsec": hsec, "clock": clock, "helpers": helpers, "by_model": by_model,
+    return {"tok": tok, "sec": sec, "mine": mine, "hsec": hsec, "steps": steps, "ctxs": ctxs, "clock": clock, "helpers": helpers, "by_model": by_model,
             "main_tok": sum(v for k, v in tok.items() if k != "helpers")}
 
 
@@ -415,8 +431,11 @@ def summary_block(transcript_path, pr_url="", rev=None, plan_name="", checks="")
     out.append("- **By role:** " + " · ".join(f"{k} {_p(v, total)} ({v / 1e6:.1f} M)" + (f" {_m(t)}" if t else "")
                                               for k, v, t in roles))
     types = sorted(set(d["tok"]) | set(d["sec"]), key=lambda k: -d["tok"].get(k, 0))
-    out.append("- **By type:** " + " · ".join(f"{k} {_p(d['tok'].get(k, 0), total)} ({d['tok'].get(k, 0) / 1e6:.1f} M) "
-                                              f"{_m(d['sec'].get(k, 0))}" for k in types))
+    def _st(k):   # v3.3.6 (G8): steps and the average context they carried
+        n_ = d["steps"].get(k, 0)
+        return f", {n_} steps × {round(d['ctxs'].get(k, 0) / n_ / 1000)} k" if n_ else ""
+    out.append("- **By type:** " + " · ".join(f"{k} {_p(d['tok'].get(k, 0), total)} ({d['tok'].get(k, 0) / 1e6:.1f} M"
+                                              f"{_st(k)}) {_m(d['sec'].get(k, 0))}" for k in types))
     parts = [f"your answers {_p(d['mine'], clock)} ({_m(d['mine'])})"] + [
         f"{k} {_p(v, clock)} ({_m(v)})" for k, v in sorted(d["sec"].items(), key=lambda kv: -kv[1]) if v >= 1]
     out.append(f"**Session time:** {_m(clock)} on the clock · " + " · ".join(parts))
