@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.3.1
-Built on: 3.3.0
+Version: 3.3.2
+Built on: 3.3.1
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -71,6 +71,7 @@ F60 v3.3.0: hand-overs carry Files lines, Test and Steps; workers do not wait | 
 F61 v3.3.0: plan window shows the marked text you approve; one colour line | Read that file and show the plan again
 F62 v3.3.0: scorecard one session by default, lead rows, rule rows in reports | ## Rule rows (feedback loop)
 F63 v3.3.1: no self wake-ups after a stop | wake-guard.py
+F64 v3.3.2: default first: one session builds; old method only with HZ_FULL_RULES | ## 1. Default first
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
@@ -120,6 +121,7 @@ X38 A merged setup update left an old note, so every later session was sent back
 X39 A greeting question right after my message was refused for a missing notice | fixed in 3.3.1 (notice after 5 minutes) | proof: tools/test_v331_items.py item 2
 X40 Two send-backs in one turn showed the answer three times | fixed in 3.3.1 (one send-back per turn, safety excepted) | proof: tools/test_v331_items.py item 3; replay 892/892
 X41 After a merge request the session scheduled its own re-check, woke twice and wrote two more full answers ("Build 0 of 0", "nothing is left to merge") (HZ_Trout_Map, 13 Oct) | fixed in 3.3.1 (wake-guard; one-line wake; no Build line without a plan) | proof: tools/test_v331_items.py items 4–5; real program wake scenario 1/1; real setup update on a HZ_Trout_Map clone: branch hz-setup-update-3.3.1 with .claude/settings.json only
+X42 The config's fixed method made jobs big: on the fishing app $13 / 49 min / 341 steps against $6 / 35 min without the config (88% of steps from rules); on Weekly-Planner only 4% of 1,146 steps were code edits (13 Oct side-by-side) | fixed in 3.3.2 (default first) | proof: tools/test_v332_items.py 23/23 (3.3.1: 8 of 23); replay of the with-config run's 9 refused steps: 2 remain (both intended); replay 892/892 in full mode; real program 9/9; live retest on the fishing job pending
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
@@ -129,6 +131,7 @@ X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PA
 - 3.2.14, second part: X20–X24 from session c7347d6a.
 - 3.2.15: X25; P01 mitigated (waits for its live proof).
 - 3.2.16: X27.
+- 3.3.2: X42 (owner 13 Oct: "agree", "approve" — default first).
 - 3.3.1: X38–X41 (HZ_Trout_Map session start, 13 Oct).
 - 3.3.0: X34–X37 (owner 13 Oct: pieces 1–2 approved, 1A, 2A, A A).
 - 3.2.17: P01, X29–X33 (owner 12 Oct: 1A, 2B with fallback A after 1 trial, 3A, then A A); P01 fixed (Fixed list); P03 found while testing and fixed in the same version (owner: "A").

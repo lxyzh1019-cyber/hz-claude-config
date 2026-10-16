@@ -12,6 +12,15 @@ data = read_hook_input()
 cfg = load_config()
 inp = data.get("tool_input") or {}
 cmd = str(inp.get("command") or "")
+# v3.3.2 (owner, 13 Oct: "default first"): only the slow full-suite rule stays (it saves 8.3 min per run where the
+# suite is measured slow). Sleep, polling and GitHub-wait rules are off: Claude Code without the config has none.
+if cfg.get("wait_check", "full-suite-only") != "full":
+    try:
+        from _common import is_full_test_run as _ift
+        if not _ift(cmd, cfg):
+            sys.exit(0)
+    except ImportError:
+        sys.exit(0)
 limit = int(cfg.get("background_max_seconds", 1800))
 max_sleep = float(cfg.get("max_sleep_seconds", 30))   # v3.3.0: short sleeps cost less than a refused step
 UNIT = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}

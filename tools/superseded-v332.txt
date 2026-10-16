@@ -1,0 +1,6 @@
+# Earlier item-test checks that v3.3.2 changes on purpose (owner, 13 Oct: "default first", plan approved).
+# With HZ_FULL_RULES=1 the old method and these checks come back; the new behaviour is proven by tools/test_v332_items.py.
+3.3.0 · item 1 · rules: "The main session is the lead", "copy it byte to byte at the start", "Workers do not wait for GitHub" · replaced by "Default first", "My design file first" and the small-job method
+3.3.0 · item 5 · 'sleep 45' is refused · sleeps are not refused (Claude Code without the setup has no such rule)
+3.3.0 · item 7 · a worker's GitHub wait is refused · no required workers; waits are not refused
+3.3.0 / 3.3.1 / 3.2.x · checks of removed rules (lead never edits code, hand-over format, worker limits, records, Completion ledger, hand-off) · off by default; replay-hooks.sh runs them with HZ_FULL_RULES=1 (892/892)

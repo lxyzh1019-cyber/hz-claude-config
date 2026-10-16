@@ -14,7 +14,7 @@ pass=0; fail=0
 export HZ_CHAT_REPLY_MAX_CHARS=0   # v3.1.26: judge short fixtures as work reports
 export HZ_PLANNER_CHECK_OFF=1      # v3.1.30: older plan-shape tests run as if the planner wrote the plan; the v3.1.30 tests switch it on
 export HZ_QUESTIONS_CHECK_OFF=1    # v3.2.1: older plan fixtures may hold questions; the v3.2.1 tests switch it on
-export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1 HZ_SKIP_CI_SOFT=1 HZ_PLAN_MARKS_ROUND=1 HZ_NOTICE_CHECK_OFF=1 HZ_HANDOVER_CHECK_OFF=1 HZ_WORKER_GH_WAIT=1   # v3.2.17/v3.3.0: older fixtures send no notice and no map lines
+export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1 HZ_COMPLEX_REASON_OFF=1 HZ_BACKGROUND_WORKERS=1 HZ_SKIP_CI_SOFT=1 HZ_PLAN_MARKS_ROUND=1 HZ_NOTICE_CHECK_OFF=1 HZ_HANDOVER_CHECK_OFF=1 HZ_WORKER_GH_WAIT=1 HZ_FULL_RULES=1   # v3.2.17/v3.3.0: older fixtures send no notice and no map lines
    # v3.2.15: older fixtures keep the hint and the marks round   # v3.2.14: older fixtures: no reason line, background workers
 export HZ_PR_LIVE_OFF=1 HZ_WORKTREE_CHECK_OFF=1   # v3.2.13: no live GitHub in tests; older fixtures start single workers in worktrees
 export HZ_STAGE_TAGS_OFF=1        # v3.2.0: older fixtures have no proof/size tags and no Size line; the v3.2.0 tests switch them on
@@ -1277,7 +1277,7 @@ check "  ...open points are not required" "clean" "$(echo "$o" | grep -c 'Colour
 o=$(echo '{}' | python3 $H/session-start.py)
 check "session start: pushing the work branch is always fine, merging stays mine" "You can push the work branch (never main) without asking" "$o"
 check "session start: shape first, then one plan version" "Then write one plan with every agreed point" "$o"
-check "v3.3.0: the rules: the lead plans, workers build" "The main session is the lead" "$(cat $H/../rules/CLAUDE-rules.md)"
+check "v3.3.2: the rules: default first" "## 1. Default first" "$(cat $H/../rules/CLAUDE-rules.md)"
 check "the plan shape says Rev counts each showing" "Rev \"
               \"counts each showing" "$(cat $H/formats.py)"
 
@@ -1357,7 +1357,7 @@ check "  ...and the list covers at least 100 rules (v3.3.0: the lead playbook)" 
 echo "MEASURE rules file: $(python3 -c "import sys;print(len(open(sys.argv[1],encoding='utf-8').read()))" "$R") characters (no limit; measured only)"
 # 5 the new rules are in the rules, the worker instructions and the session start
 check "v3.3.0: the rules: find all, fix all, check once" "Find all, fix all, check once" "$(cat $R)"
-check "v3.3.0: the rules: byte to byte from my design file, one comparison at the end" "copy it byte to byte at the start" "$(cat $R)"
+check "v3.3.2: the rules: my design file first, compared once at the end" "is copied exactly at the start" "$(cat $R)"
 check "worker instructions: several files in one step" "Read all the files or parts you need in one step" "$(cat $H/../agents/opus-worker-instructions.md)"
 check "worker instructions: no waiting loops" "No waiting loops" "$(cat $H/../agents/opus-worker-instructions.md)"
 check "worker instructions: step 80 / 100" "Around step 80" "$(cat $H/../agents/opus-worker-instructions.md)"
@@ -2850,7 +2850,7 @@ res("  ...but it is stopped at 40","Test-run limit reached (40)" in o,o)
 o=run("report-timing.py",{"session_id":sid,"tool_name":"Workflow","tool_input":{"script":"x"}},P,HZ_REPORT_TIMING_OFF=None)
 res("v3.2.10: the main session gets the wait line when it starts a workflow","the workflow you are starting" in o and "Working on" in o,o)
 cfg=json.load(open(os.path.join(H,"config.json")))
-res("  ...and the switchboard sends Workflow to the workflow checks (v3.3.0: report-timing retired)",all(x.get("script")!="report-timing.py" for x in cfg["dispatch"]["PreToolUse"]) and any(x.get("script")=="worker-guard.py" and "Workflow" in x["tools"] for x in cfg["dispatch"]["PreToolUse"]),"")
+res("  ...and the switchboard sends Workflow to the workflow checks (v3.3.0: report-timing retired)",all(x.get("script")!="report-timing.py" for x in cfg.get("dispatch_full",cfg["dispatch"])["PreToolUse"]) and any(x.get("script")=="worker-guard.py" and "Workflow" in x["tools"] for x in cfg.get("dispatch_full",cfg["dispatch"])["PreToolUse"]),"")
 for f in ("../../stub/settings.json","../stub-files/settings.json"):
     s=json.load(open(os.path.join(H,f)))
     res("v3.2.10: the app hook list covers Workflow ("+f.split("/")[-2]+")",any("Workflow" in (g.get("matcher") or "") for g in s["hooks"]["PreToolUse"]),"")

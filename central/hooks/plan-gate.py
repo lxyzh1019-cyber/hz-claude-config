@@ -356,6 +356,11 @@ if MEM_TEXT:
     msgs.append(MEM_TEXT)
 if FIX_TEXT:
     msgs.insert(0, FIX_TEXT)
+# v3.3.2 (owner, 13 Oct: "default first"): only the night words, the evening reminder, the wake line and saved fixes
+# reach the session. Plan tiers, planner and reviewer demands, ledger and hand-off texts are off.
+if load_config().get("plan_check", "marks") != "full":
+    msgs = [m for m in msgs if m and m.startswith(("[night", "[evening", "[wake", "[fix", "[saved", "[notice"))
+             or m in (FIX_TEXT, MEM_TEXT)]
 if msgs:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                              "additionalContext": "\n".join(msgs)}}))
