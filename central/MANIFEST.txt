@@ -1,4 +1,4 @@
-version: 3.3.3
+version: 3.3.4
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
@@ -25,6 +25,7 @@ hooks/plan-write-marks.py
 hooks/plan_report.py
 hooks/planmarks.py
 hooks/pr-ready-guard.py
+hooks/pr_report.py
 hooks/qc-guard.py
 hooks/ready-notice-guard.py
 hooks/record-edit-guard.py

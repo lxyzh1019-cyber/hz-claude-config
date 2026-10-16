@@ -9,6 +9,13 @@ prompt = (data.get("prompt") or "")
 low = prompt.lower()
 if is_notice_text(prompt):   # v3.1.30: a notice, not a request (v3.2.5: also a helper's hand-back message)
     sys.exit(0)
+# v3.3.4 (P6): default first: skills only when I name one (16 Oct: hz-reviewer was suggested on the build request and on
+# each helper hand-back, and the session spent a line on why it did not use it)
+import os as _os, re as _re
+if not _os.environ.get("HZ_FULL_RULES") and not _re.search(r"\bhz-[a-z][a-z-]+|\bskill\b|<agent-message|hand-back", low):
+    sys.exit(0)
+if "<agent-message" in low or "subagent hand-back" in low:
+    sys.exit(0)
 try:
     rules = json.load(open(RULES, encoding="utf-8"))
 except (OSError, ValueError):

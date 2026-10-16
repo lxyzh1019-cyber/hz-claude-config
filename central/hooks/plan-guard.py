@@ -355,10 +355,28 @@ if _base is not None:
                 if _sd:
                     _ins.append("🎨 Changes by section (green new, red removed)")
                     _ins.append("```diff")
+                    # v3.3.4 (O2, owner 16 Oct screenshot): short lines, at most 8 in the box. A decided question shows
+                    # only its "✅ Decided" line, not the whole old question in red and again in green.
+                    _box = []
+                    _cut = lambda x, w=110: (lambda y: y if len(y) <= w else y[:w - 1].rstrip() + "…")(
+                        re.sub(r"\s+", " ", re.sub(r"^\s*[-*•]\s+", "", x)).strip())
                     for s, a, r in _sd:
-                        _ins.append(f"@@ {s} @@")
-                        _ins += ["- " + re.sub(r"^\s*[-*•]\s+", "", x) for x in r]
-                        _ins += ["+ " + re.sub(r"^\s*[-*•]\s+", "", x) for x in a]
+                        _box.append(f"@@ {s} @@")
+                        _dec = {m.group(1) for x in a for m in [re.match(r"^\s*(\d+)\.\s*✅", x)] if m}
+                        _box += ["- " + _cut(x) for x in r
+                                 if not (re.match(r"^\s*(\d+)\.", x) and re.match(r"^\s*(\d+)\.", x).group(1) in _dec)]
+                        _box += ["+ " + _cut(x) for x in a]
+                    _body8 = [x for x in _box if not x.startswith("@@")]
+                    if len(_body8) > 8:
+                        _keep, _n8, _out8 = 8, 0, []
+                        for x in _box:
+                            if x.startswith("@@"):
+                                _out8.append(x)
+                            elif _n8 < _keep:
+                                _out8.append(x); _n8 += 1
+                        _box = [x for i, x in enumerate(_out8) if not (x.startswith("@@") and (i + 1 >= len(_out8) or _out8[i + 1].startswith("@@")))]
+                        _box.append(f"+ … {len(_body8) - _keep} more changed lines, marked in the plan")
+                    _ins += _box
                     _ins.append("```")
                 _L[_e:_e] = _ins
             # v3.3.3 (owner, 15 Oct): the plan says that without an objection the recommended options are used. The
@@ -407,7 +425,8 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
                     _store["last"] = _name
                     plan_store_save(_store)
                 deny_tool(f"The plan check added the coloured change marks (Plan v{_ver} · Rev {_rev}) to the plan "
-                          f"file {plan_file}. Read that file and show the plan again with exactly its text. Change nothing.")
+                          f"file {plan_file}. Read that file and show the plan again with exactly its text. Change nothing. "
+                          "Do not write the plan in the chat: the plan window shows it.")
             # v3.2.17 (B): Claude Code reads the plan file for the approval window after this check, so the marks are
             # on screen without another round. Never 'allow' here: in the real program an allow approves the plan
             # without the owner (tools/real-harness/scenario_plan_window.py).

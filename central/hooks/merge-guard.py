@@ -26,6 +26,13 @@ for r in turn:
     for b in c if isinstance(c, list) else []:
         if not isinstance(b, dict):
             continue
+        _nm = str(b.get("name") or "")
+        if b.get("type") == "tool_use" and _nm.startswith("mcp__"):   # v3.3.4 (P11): the GitHub tool in the cloud
+            if re.search(r"create_pull_request|push_files", _nm):
+                checked_before = checked_before or bool(checks)
+                last_push, checks, setup = b.get("id"), [], False
+            elif re.search(r"check|status|workflow_run|job", _nm) and last_push:
+                checks.append(b.get("id"))
         if b.get("type") == "tool_use" and b.get("name") == "Bash":
             cmd = str((b.get("input") or {}).get("command") or "")
             if PUSH.search(cmd):
@@ -112,4 +119,4 @@ if (r[1] if r is not None else not data.get("stop_hook_active")):
     block(("The checks of your last push failed. Fix them first, or say plainly in the reply that they are red and why "
            "I should merge anyway." if checks else
            "Before you ask me to merge, read the checks of your last push: gh pr checks <number> --watch (or gh run "
-           "watch). Then report the result in one line."), kind="work")
+           "watch; in a cloud session, the GitHub tool's check status). Then report the result in one line."), kind="work")

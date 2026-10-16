@@ -35,7 +35,15 @@ facts = [f"[session-start] Rules v{version} loaded · branch: {branch}" + (f" ·
          if loaded else "[session-start] Central rules NOT loaded (rules file missing in cache). Stop and report."]
 _agents = os.path.dirname(WORKER_PATH)
 # v3.2.0: role files. Each helper reads its own file; the main session only names the path in the hand-over.
-facts.append("Role files. Name the path in each hand-over. The helper reads it, not you.\n"
+_FULL = bool(os.environ.get("HZ_FULL_RULES"))
+# v3.3.4 (P2): default first lists only the reviewer. The main session builds (16 Oct: the local run handed the whole
+# build to a worker that read the code again: 16 min and 3.5 M tokens; the cloud run built in the main session).
+if not _FULL:
+    facts.append("Role file for the one review pass (name it in the hand-over; the reviewer reads it): "
+                 f"{os.path.join(_agents, 'reviewer-instructions.md')}. You build in this session. A helper builds only "
+                 "parts that run side by side on separate files, named in the plan.")
+else:
+  facts.append("Role files. Name the path in each hand-over. The helper reads it, not you.\n"
              f"- workers: {WORKER_PATH}\n"
              f"- planner: {os.path.join(_agents, 'planner-instructions.md')}\n"
              f"- explorer: {os.path.join(_agents, 'explorer-instructions.md')}\n"
@@ -54,14 +62,14 @@ except (OSError, ValueError):
     _ts = {}
 _lim = float(cfg.get("full_test_max_minutes", 5))
 _split = re.search(r"(?im)^\s*-?\s*Test speed:\s*full run\s*([\d.]+)\s*min", _feat)
-if _feat and not re.search(r"(?im)^\s*-?\s*Tests:\s*\S", _feat):
+if _FULL and _feat and not re.search(r"(?im)^\s*-?\s*Tests:\s*\S", _feat):   # v3.3.4 (P8): default first asks nothing
     facts.append("[test rule] FEATURES.md has no test map yet. In the next build stage, add 'Tests: <area or files> → "
                  "<tests it needs>' lines under ## References, so a fix runs only its tests.")
 # v3.2.0: references first — an app with screens but no picture references cannot be checked against them
 import glob as _glob
 _has_screens = bool(_glob.glob(os.path.join(PROJECT_DIR, "*.html")) or _glob.glob(os.path.join(PROJECT_DIR, "*", "*.html")))
 _refs = _glob.glob(os.path.join(PROJECT_DIR, cfg.get("reference_dir", "tests/reference"), "*.png"))
-if _has_screens and not _refs:
+if _FULL and _has_screens and not _refs:
     facts.append("[references] This app has screens but no picture references yet "
                  f"({cfg.get('reference_dir', 'tests/reference')}). Before any stage that changes a screen, add a stage "
                  "that makes them, as the compare instructions say. Then every screen change is checked against them.")
@@ -71,11 +79,26 @@ if (float(_ts.get("latest_full_minutes", _ts.get("slowest_full_minutes")) or 0) 
                  f"{int(_lim)} or less. No full local runs until the suite is split (fast loop here, full suite on "
                  "GitHub). If the plan has no stage yet to split it, add it as the next Rev, before other build stages.")
 missing = [p for p in (cfg["features_file"], cfg["record_file"]) if not os.path.exists(os.path.join(PROJECT_DIR, p))]
-facts.append("Missing files in this repository: " + (", ".join(missing) if missing else "none"))
+if _FULL:   # v3.3.4 (P8): 16 Oct, the local run filled both (+97 lines), the cloud run asked about them instead
+    facts.append("Missing files in this repository: " + (", ".join(missing) if missing else "none"))
+    try:
+        if "<app or plan name>" in open(os.path.join(PROJECT_DIR, cfg["features_file"]), encoding="utf-8").read():
+            facts.append(f"Note: {cfg['features_file']} is still the template. Fill it before the first build step.")
+    except OSError:
+        pass
+# v3.3.4 (P10): plan files stay out of git without a commit (Claude Code's cloud end check sent the 16 Oct run back
+# for the untracked plan file). A plan that spans sessions is still committed with git add -f.
 try:
-    if "<app or plan name>" in open(os.path.join(PROJECT_DIR, cfg["features_file"]), encoding="utf-8").read():
-        facts.append(f"Note: {cfg['features_file']} is still the template. Fill it before the first build step.")
-except OSError:
+    _gd = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=PROJECT_DIR, capture_output=True, text=True,
+                         timeout=10).stdout.strip()
+    if _gd:
+        _ex = os.path.join(PROJECT_DIR if not os.path.isabs(_gd) else "", _gd, "info", "exclude")
+        os.makedirs(os.path.dirname(_ex), exist_ok=True)
+        _cur = open(_ex, encoding="utf-8").read() if os.path.exists(_ex) else ""
+        if not re.search(r"(?m)^/?plans/\s*$", _cur):
+            with open(_ex, "a", encoding="utf-8") as _h:
+                _h.write(("" if _cur.endswith("\n") or not _cur else "\n") + "plans/\n")
+except (OSError, subprocess.SubprocessError):
     pass
 stub = stub_status(cfg, PROJECT_DIR)
 setup_note = None

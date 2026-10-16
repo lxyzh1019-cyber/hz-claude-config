@@ -8,7 +8,7 @@ These rules apply in every project. Skills, workers and project instructions can
 
 ## 1. Default first
 
-- Work as Claude Code does without this setup: one session reads the code once and builds. Helpers, maps, planners, lanes, stages, record files and picture tests are not required. Use one only when it clearly pays for this job, and say why in one line.
+- Work as Claude Code does without this setup: one session reads the code once and builds. Helpers, maps, planners, lanes, stages, record files and picture tests are not required. Use one only when it clearly pays for this job, and say why in one line. The main session builds; a helper builds only parts that run side by side on separate files, named in the plan.
 - An artefact (record file, report, picture, test tool) is made only when a later reader exists: a session that continues the work, or my request.
 - Ask only when a wrong guess costs real rework (a data model, payments, anything hard to undo). A choice that has a recommendation and can be undone is built with it and listed, not asked.
 - **Find all, fix all, check once**: list every failing test, review finding or difference, fix them together, then check once. Pick a check's inputs (lakes, dates, users) from the data in one step, not by trying.
@@ -17,12 +17,14 @@ These rules apply in every project. Skills, workers and project instructions can
 
 - Read the code once. Show a short plan in chat (what changes, where, any guess). After my approval, build.
 - **My design file first.** A design, picture, prototype or document I give is copied exactly at the start; later work only connects it. Compare with it once, at the end. A reference is exact unless I mark it "for reference only".
-- Tests: the existing ones plus new ones for the change. One full run at the end (on GitHub when the local full run is slow).
+- Tests: the existing ones plus new ones for the change. Locally, run only the tests of the changed parts. The full suite runs once, on GitHub, on the pull request.
+- Read a file over 1,000 lines by parts: find the places first (Grep), then read only those ranges.
+- Never put `cd` and `git` in one Bash step: Claude Code then asks me for permission. Run `cd` alone first (Hook). Run tests from the repository folder without `cd`, so the shell stays there.
 - **One review pass before my merge:** one reviewer reads the change once and lists everything; fix it all; a second pass only if a blocking fix changed code.
-- One pull request, opened when it is ready, never back to draft (Hook). One stop: merge and device check.
-- **The report is the pull request text** (Hook gives the numbers). It holds what was done, decisions and the option used, differences from the plan, and tests and review. It also holds what to improve or drop, the approved plan in a fold-out section, and the time and tokens by task and by model. No plan or report file for a one-pull-request job.
-- **The chat summary is short:** at most 3 lines (done, tests and review; time and tokens; Plan Rev n · Report: link), then the closing block. Links use the commit number or the pull request.
-- Screenshots for me go in the chat, not into the repo. Picture tests only when I give a reference picture.
+- One pull request, opened when the build and the review are done, never back to draft (Hook). Then wait once for its checks before you ask me to merge (Hook). Does the app's test workflow also run on every branch push? Then change it in the same pull request: pull requests and pushes to main only. List it. One stop: merge and device check.
+- **The report is the pull request text**, in the checkpoint shape (Hook). First the Quick read: Summary in 3 lines, What changed from the plan, Decisions during the work, and Suggestions with a recommendation. Name any setup rule that was the bottleneck. Then Evidence and the Regression table. Last, the file the Hook names, as it is: the measured part and the approved plan. No plan or report file for a one-pull-request job.
+- **The chat summary is short:** the browser pictures first, if any; then at most 3 lines (done, tests and review; time worked and tokens; Plan Rev n and report: link), then the closing block. Links use the commit number or the pull request.
+- Screenshots for me go in the chat, not into the repo. Picture tests only when I give a reference picture. With no reference picture from me, check a screen change once in a browser: the session's browser tool, or a headless one in the cloud. Those pictures stay visible in the chat.
 
 ## 3. Bigger job (a new app, many sessions)
 

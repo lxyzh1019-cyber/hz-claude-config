@@ -62,3 +62,6 @@ Cannot test: the real model's choices, the desktop app screens, phone notices, G
 - `scenario_v333_mark_plan.py <central dir>` (v3.3.3, "C") — Rev 2 of an approved plan, written with Write and shown. Counts
   the extra showings the plan check asks for. Claude Code 2.1.301 on 16 Oct: uploaded 3.3.3 2; 3.3.3 with C 0, with the
   coloured Rev 2 line in the window and the owner still approving.
+- `scenario_v334_real.py <central dir>` (v3.3.4) — edit: Rev 2 of an approved plan changed with Edit (3.3.3: 1 extra showing;
+  3.3.4: 0, marks in the window); cd: after `cd scripts`, `cd <repo> && git status` (3.3.3: Claude Code asks for
+  permission; 3.3.4: refused once, the session moves back alone, no question). Claude Code 2.1.301, 16 Oct: 5/5.

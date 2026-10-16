@@ -1,0 +1,4 @@
+# Earlier checks that v3.3.4 changes on purpose (owner, 16 Oct: "build 3.3.4 A").
+3.3.3 · item 4 · "a ready pull request brings the report and the short summary" and "...with the measured table" · the report notice now asks for the checkpoint shape and the file .claude/state/pr-report.md (measured part and approved plan); tools/test_v334_items.py items 5 and 12
+3.2.9 · git-guard: a pull request waits for a green GitHub run · off in default first (P3); merge-guard reads the checks once before the merge request; HZ_FULL_RULES=1 keeps the old wait
+3.2.0 · session start: all role files, feature-list, test-map, references and record notes · default first names only the reviewer and asks nothing (P2, P8); HZ_FULL_RULES=1 keeps them
