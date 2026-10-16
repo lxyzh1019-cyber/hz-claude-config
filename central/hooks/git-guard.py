@@ -5,7 +5,7 @@ main/master, without prompting, and block opening a pull request as a draft — 
 back to draft is refused from v3.2.17). v3.1.30: a pull request opens last (pr_last_check). PRs open ready for
 review; the user merges on GitHub. Feature-branch commits and pushes pass through untouched. A hook "deny" is
 honoured in auto mode."""
-import os, re, shlex, subprocess, sys
+import json, os, re, shlex, subprocess, sys
 from _common import read_hook_input, deny_tool, PROJECT_DIR, read_transcript, pr_timeline, pr_branch_state
 
 PROTECTED = {"main", "master"}
@@ -104,7 +104,10 @@ def pr_last_check(cmd=""):
     # v3.2.9: a pull request opens only when it is ready: GitHub's tests are green on the branch (owner, 9 Oct: #131 was
     # opened, went red, was switched to draft and back). Only when the app tests work branches on push; never for the
     # setup branch (the session start pushed it; its first reply must not wait for the tests).
-    if "hz-setup-update" not in cmd and _ci_on_branch_push() and not _green_after_last_push(read_transcript(data.get("transcript_path"))):
+    # v3.3.4 (P3): off by default. The pull request opens when the work is done; merge-guard reads the checks once
+    # before the merge request (16 Oct: two waits on the same commit, two refusals, one wake-up in each 3.3.3 run).
+    if os.environ.get("HZ_FULL_RULES") and "hz-setup-update" not in cmd and _ci_on_branch_push() \
+            and not _green_after_last_push(read_transcript(data.get("transcript_path"))):
         deny_tool("git-guard: open the pull request when it is ready: wait for GitHub's tests on this branch first. "
                   "Run: gh run watch $(gh run list --branch <branch> --limit 1 --json databaseId -q '.[0].databaseId') "
                   "--exit-status. If they are green, open the pull request; if red, fix and push, then wait again.")
@@ -134,6 +137,46 @@ if tool.startswith("mcp__"):
         mark("ready")
     sys.exit(0)
 cmd = (tool_input.get("command") or "")
+
+
+def _norm_dir(p, base):
+    """A folder in one form: quotes off, / for \\, no trailing /, relative to base, drive letters case-free."""
+    import posixpath
+    p = p.strip().strip('"').strip("'").replace("\\", "/")
+    b = str(base or "").replace("\\", "/")
+    if not re.match(r"^([A-Za-z]:)?/", p):
+        p = posixpath.join(b, p)
+    p = posixpath.normpath(p).rstrip("/")
+    return p.lower() if re.match(r"^[A-Za-z]:", p) else p
+
+
+# v3.3.4 (P7): a cd and a git command in one Bash call make Claude Code ask me for permission ("This command changes
+# directory before running a version-control command") when the cd goes anywhere but the shell's current folder.
+# 16 Oct: both runs had moved the shell into scripts/ for the tests, so the later "cd <repo> && git ..." asked (a local
+# push and a cloud commit each waited for my click). Tested in the real program: git alone never asks; cd alone never
+# asks; cd to another folder + git asks; git -C asks too. So a cd to the current folder is dropped, and any other cd
+# before git is refused with the two steps to use instead (one refused step instead of a wait for me).
+_m7 = re.match(r'^\s*cd\s+("[^"]+"|\'[^\']+\'|\S+)\s*(?:&&|;)\s*(.*)$', cmd, re.S)
+if _m7 and re.search(r"\bgit\b", _m7.group(2)) and not os.environ.get("HZ_CD_GIT_OFF") \
+        and not os.environ.get("HZ_FULL_RULES"):   # the full method (tests, comparisons) keeps its lane cd steps
+    _here = str(data.get("cwd") or PROJECT_DIR)
+    _rest = _m7.group(2)
+    _risky = re.search(r"--force|\s-f\b|\breset\s+--hard|\bclean\s+-|\bbranch\s+-D|\bgh\s+pr\s+merge|"
+                       r"\bpush\b[^|;&]*\b(main|master)\b|\brm\s+-rf?\b|\bcheckout\s+--\s|\brestore\b", _rest)
+    if _norm_dir(_m7.group(1), _here) == _norm_dir(_here, _here) and not _risky:
+        # the rest goes through this same check first; only a command it lets through is sent without the cd
+        _chk = subprocess.run([sys.executable, os.path.abspath(__file__)], capture_output=True, text=True,
+                              input=json.dumps(dict(data, tool_input=dict(tool_input, command=_rest))),
+                              env=dict(os.environ, HZ_CD_GIT_OFF="1"), timeout=60).stdout
+        if '"deny"' in _chk:
+            print(_chk.strip())
+            sys.exit(0)
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                                                 "permissionDecisionReason": "cd to the current folder dropped",
+                                                 "updatedInput": dict(tool_input, command=_m7.group(2))}}))
+        sys.exit(0)
+    deny_tool("git-guard: a cd and a git command in one step make Claude Code ask me for permission. Run "
+              f"'cd {_m7.group(1)}' as its own step, then the rest without the cd. Run tests from there without cd too.")
 if "git" not in cmd and "gh" not in cmd:
     sys.exit(0)
 

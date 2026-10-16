@@ -3,7 +3,7 @@
 the owner a notice on their account (Claude Code's PushNotification tool, deferred: load it with ToolSearch). It comes
 before the answer, so nothing is sent back and the answer shows once. Claude Code skips the push while the owner is
 watching the session; that is fine. Workers never get it."""
-import json, re, sys
+import json, os, re, sys
 from _common import read_hook_input, load_config, add_context, log
 
 data = read_hook_input()
@@ -56,15 +56,28 @@ except ImportError:
 # v3.3.3 (owner, 15 Oct): the summary report and the time and tokens by task and by model, measured here (a hook may
 # read the session file; the session itself may not in a cloud session). The chat summary stays short, with one link.
 _rep = ""
-try:
-    from _common import session_table
-    _tab = session_table(data.get("transcript_path"))
-    if _tab:
-        _rep = ("\n[report] Put the report into the pull request text (gh pr edit <number> --body-file): what was done; "
-                "decisions and the option used; differences from the plan; tests and review results; what to improve or "
-                "drop; the approved plan in a <details> section; and this measured table:\n" + _tab +
-                "\nYour final answer starts with at most 3 short lines: ✅ Done: <what> · <tests> · <review>; "
-                "Time <n> min · tokens <n> M (by model); Plan Rev <n> · Report: <the pull request link>.")
+try:   # v3.3.4 (P4, P5, P12): the checkpoint shape; the measured part and the approved plan come from code, in a file
+    import pr_report as _pr
+    from _common import PROJECT_DIR as _PD, STATE_DIR as _SD
+    _meas = _pr.measured_part(data.get("transcript_path"), _PD)
+    _plan, _rev = _pr.approved_plan()
+    if _meas:
+        os.makedirs(_SD, exist_ok=True)
+        _f = os.path.join(_SD, "pr-report.md")
+        with open(_f, "w", encoding="utf-8") as _h:
+            _h.write(_meas + "\n")
+            if _plan:
+                _h.write(f"\n<details><summary>Approved plan (Rev {_rev})</summary>\n\n{_plan}\n\n</details>\n")
+        _rep = ("\n[report] 1. Wait once for this pull request's checks (gh pr checks <number> --watch; in a cloud session, "
+                "the GitHub tool). 2. Put the report into the pull request text (gh pr edit <number> --body-file; in a "
+                "cloud session, the GitHub tool), in this order: '## Quick read' (Summary in 3 lines; What changed from "
+                "the plan; Decisions during the work; Suggestions, each with a recommendation, and say plainly when a "
+                "setup rule or step was the bottleneck); '## Evidence' (tests, the GitHub run, review findings and "
+                "fixes, browser pictures); '## Regression table' (kept, added, removed, missing); then the file "
+                + _f.replace("\\", "/") + " as it is (the measured part and the approved plan). 3. Your final answer: "
+                "the browser pictures first, if you took any; then at most 3 lines: ✅ Done: <what> · <tests> · "
+                "<review>; Time <worked> min worked · tokens <n> M; Plan Rev " + str(_rev or "<n>") +
+                " and report: <the pull request link>.")
 except Exception:
     pass
 add_context("PostToolUse", "[notice] A pull request is now ready for review. Right before your final answer, send me "

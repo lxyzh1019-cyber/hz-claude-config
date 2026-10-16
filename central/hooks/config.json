@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.3.3: plans show what changed in words and in green and red per section; decisions you made are marked; a plan says the recommended options are used without an objection. A finished job puts its report and the time and tokens by task and model in the pull request, and the chat summary is 3 lines with one link. Plan marks now go in when the plan is written, so the first showing has them on every surface. Steps that only read (git status, ls) no longer wait for the rules. No setup pull request. claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.4: plan marks also when a plan is edited; the pull request opens without a GitHub wait and is checked once; reports in the checkpoint shape with a real time and token breakdown; browser pictures in the chat for screen changes; no permission question from cd plus git; no feature-list question. No setup pull request. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -40,7 +40,7 @@
       },
       {
         "script": "plan-write-marks.py",
-        "tools": "Write"
+        "tools": "Write|Edit|MultiEdit"
       },
       {
         "script": "wait-guard.py",
@@ -191,7 +191,7 @@
       },
       {
         "script": "plan-write-marks.py",
-        "tools": "Write"
+        "tools": "Write|Edit|MultiEdit"
       },
       {
         "script": "worker-guard.py",
