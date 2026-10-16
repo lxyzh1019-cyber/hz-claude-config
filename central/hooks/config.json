@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.3.4: plan marks also when a plan is edited; the pull request opens without a GitHub wait and is checked once; reports in the checkpoint shape with a real time and token breakdown; browser pictures in the chat for screen changes; no permission question from cd plus git; no feature-list question. No setup pull request. claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.5: the summary at the end of a job has the Weekly-Planner shape: Completion lines, then Tokens and time and Session time, in bold labels and lines, with % for tokens and time, a plan link and a report link. No setup pull request. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

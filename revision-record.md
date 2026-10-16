@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.3.4
-Built on: 3.3.3
+Version: 3.3.5
+Built on: 3.3.4
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -79,6 +79,7 @@ F68 v3.3.4: the report in the checkpoint shape with the measured part and the ap
 F69 v3.3.4: a cd before git never makes Claude Code ask | a cd and a git command in one step
 F70 v3.3.4: plans/ in the local git ignore list | --git-common-dir
 F71 v3.3.4: browser pictures in the chat for screen changes | Those pictures stay visible in the chat.
+F72 v3.3.5: the summary in the Weekly-Planner shape, bold lines, no tables | def summary_block
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
@@ -133,6 +134,7 @@ X43 The 3.3.2 retest (15 Oct): change list "First version" at Rev 2; marks witho
 X44 Fix 6: the first step of a session was refused when it only read (git status, ls), because the rules-first check refused every shell command until the rules were read (1 refused step per session) | fixed in 3.3.3 (read-only shell commands and read-only MCP calls pass; steps that change something still wait) | proof: tools/test_v333_items.py item 7; real program tools/real-harness/scenario_v333_rules_first.sh (3.3.2: git status REFUSED; 3.3.3: RAN; git checkout -b REFUSED in both, RAN after the rules Read); replay 896/896
 X45 Plan marks needed one extra showing on the desktop app, because the desktop shows the text the session sends and the check added the marks only at the showing (12 Oct); in the real program the uploaded 3.3.3 also refused the marked plan a second time (2 extra showings) | fixed in 3.3.3 ("C": marks go in when the plan file is written; the marked text the check made is accepted when shown again) | proof: tools/test_v333_items.py item 8 (uploaded 3.3.3 fails 3 of 14 checks there); real program tools/real-harness/scenario_v333_mark_plan.py: uploaded 3.3.3 2 extra showings, 3.3.3 with C 0, marks in the window, the owner still approves
 X46 3.3.3 runs #13 (local) and #14 (cloud), 16 Oct: a plan changed with Edit was refused once (P1); the local build went to a worker (P2); the pull request was refused for a GitHub wait and the tests were waited for twice (P3); the report time was wrong, 17 and 13 min against 29.6 and about 20 (P4); the plan fold-out was wrong in both (P5); the skill router spoke on a build request (P6); a cd + git step waited for my click in both (P7); the feature-list question got opposite answers (P8); no browser pictures locally (P9); the cloud end check sent the session back for the plan file (P10); gh refused in the cloud (P11); the report lost the checkpoint breakdown (P12); a long change box (O2) | fixed in 3.3.4 | proof: tools/test_v334_items.py 45/45 with session f6165f5e (3.3.3: 5 of 34); real program tools/real-harness/scenario_v334_real.py 5/5 (Edit: 1 extra showing before, 0 after; cd + git after cd scripts: asked before, not asked after); scenario_v333_mark_plan.py 4/4; replay 896/896
+X47 Run #15 (16 Oct): the chat summary lost its Weekly-Planner shape (Completion block and the time and token breakdown with %), and "Plan Rev 2" had no plan link | fixed in 3.3.5 (summary only, owner: "3.3.5 A only changes for the summary section"; bold labels; lines, not tables) | proof: tools/test_v335_items.py 15/15 with session f6165f5e (3.3.4: 0 of 7)
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
@@ -142,6 +144,7 @@ X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PA
 - 3.2.14, second part: X20–X24 from session c7347d6a.
 - 3.2.15: X25; P01 mitigated (waits for its live proof).
 - 3.2.16: X27.
+- 3.3.5: X47 (owner 16 Oct: "3.3.5 A only changes for the summary section"). Not in this version, on his word: G1 git prompts, G4 report timing apart from the summary, G5, G6, G7 (O5 failed its fail line: removal proposed again), G8 steps per type.
 - 3.3.4: X46 (owner 16 Oct: "build 3.3.4 A", ice 1A, first message 2A); O1, O3, O5 are rules measured in run #15; checks changed on purpose in tools/superseded-v334.txt.
 - 3.3.3: X43 (owner 15 Oct: "build 3.3.3"; kept: the rules-first check, because hook text over 10,000 characters is cut). X44 added before install (owner 16 Oct: "build the true fix into 3.3.3"): read-only steps pass, the check stays for changes. X45 added before install (owner 16 Oct: "C"); checks changed on purpose in tools/superseded-v333.txt.
 - 3.3.2: X42 (owner 13 Oct: "agree", "approve" — default first).

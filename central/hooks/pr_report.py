@@ -262,3 +262,162 @@ def approved_plan():
         return t.strip(), int(e.get("rev") or 1)
     except Exception:
         return None, None
+
+
+# ---- v3.3.5 (owner, 16 Oct: "3.3.5 A only changes for the summary section") ----
+# The summary in the Weekly-Planner shape: the Completion block, then "Tokens and time" and "Session time" as bold
+# lines, not tables (tables take too much room). Tokens and time use one set of types, so every type shows both.
+
+def _step_type(blocks):
+    for b in blocks:
+        if not isinstance(b, dict) or b.get("type") != "tool_use":
+            continue
+        n, i = str(b.get("name") or ""), (b.get("input") or {})
+        c = str(i.get("command") or "")
+        if n in ("ExitPlanMode", "AskUserQuestion", "EnterPlanMode"):
+            return "plan"
+        if n in ("Agent", "Task"):
+            return "hand-overs"
+        if n in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+            return "edits"
+        if n == "Bash" and TEST_RE.search(c):
+            return "tests"
+        if (n == "Bash" and re.search(r"\bgh\s+(pr\s+checks|run\s+watch)\b", c)) or re.search(r"mcp__.*(check|status)", n):
+            return "waiting for GitHub"
+        if (n == "Bash" and re.search(r"\b(git|gh)\b", c)) or (n.startswith("mcp__") and "pull_request" in n):
+            return "git and pull request"
+        return "reading and checking"
+    return "answers"
+
+
+def summary_data(transcript_path):
+    tp = str(transcript_path or "")
+    main = _load(tp)
+    recs = [r for r in main if _ts(r) is not None and r.get("type") in ("user", "assistant")]
+    if len(recs) < 2:
+        return None
+    by_id = {}
+    for r in recs:
+        if r.get("type") == "assistant":
+            m = r.get("message") or {}
+            by_id.setdefault(m.get("id"), []).extend(_blocks(r))
+    tok, sec, seen, mine, hsec = {}, {}, set(), 0.0, {}
+    ids = {}
+    for f in glob.glob(os.path.join(os.path.splitext(tp)[0], "subagents", "*.jsonl")):
+        try:
+            ids[os.path.basename(f)[6:-6]] = json.load(open(f[:-6] + ".meta.json", encoding="utf-8")).get("agentType")
+        except (OSError, ValueError):
+            pass
+    cur = "answers"
+    uses = {}
+    for r in recs:
+        for b in _blocks(r):
+            if b.get("type") == "tool_use":
+                uses[b.get("id")] = (str(b.get("name") or ""), (b.get("input") or {}))
+    for i, r in enumerate(recs):
+        if r.get("type") == "assistant":
+            m = r.get("message") or {}
+            cur = _step_type(by_id.get(m.get("id")) or [])
+            u = m.get("usage") or {}
+            if u and m.get("id") not in seen:
+                seen.add(m.get("id"))
+                tok[cur] = tok.get(cur, 0) + sum(int(u.get(x) or 0) for x in (
+                    "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"))
+        if i + 1 >= len(recs):
+            break
+        nxt = recs[i + 1]
+        gap = _ts(nxt) - _ts(r)
+        if gap <= 0:
+            continue
+        kind, hk = cur, None
+        if nxt.get("type") == "assistant":
+            kind = _step_type(by_id.get((nxt.get("message") or {}).get("id")) or [])   # thinking for that step
+        else:
+            c = (nxt.get("message") or {}).get("content")
+            if isinstance(c, str):
+                if "<agent-message" in c or "Subagent hand-back" in c:
+                    kind = "helpers"
+                    _hm = re.search(r'agent-message\s+from=\\?"([A-Za-z0-9_-]+)', c)
+                    hk = ids.get(_hm.group(1)) if _hm else None
+                elif "<task-notification>" in c:
+                    kind = "waiting for GitHub" if cur == "waiting for GitHub" else cur
+                elif _is_mine(c):
+                    mine += gap
+                    continue
+            else:
+                for blk in c or []:
+                    if isinstance(blk, dict) and blk.get("type") == "tool_result":
+                        name, hin = uses.get(blk.get("tool_use_id"), ("", {}))
+                        if name in ("ExitPlanMode", "AskUserQuestion"):
+                            mine += gap
+                            kind = None
+                        elif name in ("Agent", "Task"):
+                            kind = "helpers"
+                            hk = str(hin.get("subagent_type") or "helper")
+                        break
+                if kind is None:
+                    continue
+        if gap > 3600 or (gap > 600 and kind not in ("helpers", "tests", "waiting for GitHub")):
+            mine += gap          # a pause: not work
+            continue
+        sec[kind] = sec.get(kind, 0) + gap
+        if kind == "helpers":
+            hsec[hk or "helper"] = hsec.get(hk or "helper", 0) + gap
+    helpers = {}
+    for f in sorted(glob.glob(os.path.join(os.path.splitext(tp)[0], "subagents", "*.jsonl"))):
+        try:
+            kind = json.load(open(f[:-6] + ".meta.json", encoding="utf-8")).get("agentType") or "helper"
+        except (OSError, ValueError):
+            kind = "helper"
+        k, _ = _tokens(_load(f))
+        n, s = helpers.get(kind, (0, 0))
+        helpers[kind] = (n + 1, s + k)
+    if helpers:
+        tok["helpers"] = tok.get("helpers", 0) + sum(s for _, s in helpers.values())
+    _, by_model = _tokens(main)
+    for f in glob.glob(os.path.join(os.path.splitext(tp)[0], "subagents", "*.jsonl")):
+        for mod, v in _tokens(_load(f))[1].items():
+            by_model[mod] = by_model.get(mod, 0) + v
+    clock = _ts(recs[-1]) - _ts(recs[0])
+    return {"tok": tok, "sec": sec, "mine": mine, "hsec": hsec, "clock": clock, "helpers": helpers, "by_model": by_model,
+            "main_tok": sum(v for k, v in tok.items() if k != "helpers")}
+
+
+def _m(s):
+    m = s / 60
+    return f"{m:.1f} min" if m < 10 else f"{round(m)} min"
+
+
+def _p(v, of):
+    return f"{round(100 * v / of)}%" if of and 100 * v / of >= 0.5 else "<1%"
+
+
+def summary_block(transcript_path, pr_url="", rev=None, plan_name="", checks=""):
+    """The chat summary and the report summary: bold labels, lines, no tables."""
+    d = summary_data(transcript_path)
+    if not d:
+        return None
+    total = sum(d["tok"].values()) or 1
+    worked = sum(d["sec"].values())
+    clock = d["clock"] or 1
+    link = (pr_url or "").rstrip("/")
+    plan_link = f"[Plan v1 Rev {rev}]({link}#approved-plan-rev-{rev})" if link and rev else f"Plan Rev {rev or '?'}"
+    rep_link = f"[#{link.rsplit('/', 1)[-1]}]({link})" if link else "the pull request"
+    out = [f"**Completion:** Build 1 of 1 done (100%) · Check 0 of 1 — {plan_name or 'this job'} · "
+           f"**GitHub checks:** {checks or 'not read yet'}",
+           f"**Waiting on you** (one stop): merge {rep_link}, then the device check",
+           f"**Then, in order:** nothing · **Plan:** {plan_link} · **Report:** {rep_link}", "",
+           f"**Tokens and time:** {total / 1e6:.1f} M tokens · {_m(worked)} worked"]
+    out.append("- **By model:** " + " · ".join(f"{k} {_p(v, total)} ({v / 1e6:.1f} M)"
+                                               for k, v in sorted(d["by_model"].items(), key=lambda kv: -kv[1])))
+    roles = [("main session", d["main_tok"], worked - d["sec"].get("helpers", 0))]
+    roles += [(f"{k} ({n}×)", s, d["hsec"].get(k)) for k, (n, s) in sorted(d["helpers"].items(), key=lambda kv: -kv[1][1])]
+    out.append("- **By role:** " + " · ".join(f"{k} {_p(v, total)} ({v / 1e6:.1f} M)" + (f" {_m(t)}" if t else "")
+                                              for k, v, t in roles))
+    types = sorted(set(d["tok"]) | set(d["sec"]), key=lambda k: -d["tok"].get(k, 0))
+    out.append("- **By type:** " + " · ".join(f"{k} {_p(d['tok'].get(k, 0), total)} ({d['tok'].get(k, 0) / 1e6:.1f} M) "
+                                              f"{_m(d['sec'].get(k, 0))}" for k in types))
+    parts = [f"your answers {_p(d['mine'], clock)} ({_m(d['mine'])})"] + [
+        f"{k} {_p(v, clock)} ({_m(v)})" for k, v in sorted(d["sec"].items(), key=lambda kv: -kv[1]) if v >= 1]
+    out.append(f"**Session time:** {_m(clock)} on the clock · " + " · ".join(parts))
+    return "\n".join(out)
