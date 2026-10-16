@@ -65,3 +65,5 @@ Cannot test: the real model's choices, the desktop app screens, phone notices, G
 - `scenario_v334_real.py <central dir>` (v3.3.4) — edit: Rev 2 of an approved plan changed with Edit (3.3.3: 1 extra showing;
   3.3.4: 0, marks in the window); cd: after `cd scripts`, `cd <repo> && git status` (3.3.3: Claude Code asks for
   permission; 3.3.4: refused once, the session moves back alone, no question). Claude Code 2.1.301, 16 Oct: 5/5.
+- `scenario_v336_git.py <central dir>` (v3.3.6, G1) — on a work branch, "git add && git commit && git push" in the default
+  permission mode. Claude Code 2.1.301, 16 Oct: 3.3.5 asks me; 3.3.6 approves it in git-guard and the branch is pushed.

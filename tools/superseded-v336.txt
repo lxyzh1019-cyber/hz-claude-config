@@ -1,0 +1,4 @@
+# Earlier checks that v3.3.6 changes on purpose (owner, 16 Oct: "build 3.3.6").
+3.1.x rules · "replies never write a version line" · the status line now ends with ' · Rules v<version>' (V1)
+3.3.5 · item 3 · "every type shows tokens and time" (pattern without steps) · each type now also shows its steps and context: "reading 6% (0.6 M, 6 steps × 96 k) 0.8 min" (G8); tools/test_v336_items.py item 8
+3.3.3 · items 4 and 6 · the old report notice and "The chat summary is short" · already superseded by 3.3.4 and 3.3.5 (same result on 3.3.5)

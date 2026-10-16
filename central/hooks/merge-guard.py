@@ -16,6 +16,33 @@ text = last_assistant_text(records) or ""
 m = re.search(r"I need from you:?\**:?(.*)", text)
 if not m or not re.search(r"\bmerge\b", m.group(1), re.I):
     sys.exit(0)
+# v3.3.6 (G2, G3, G4, G6 in one gate, owner 16 Oct: "find the root"). Their shared root: the last step depended on the
+# session obeying a notice (run #15: no summary, and the merge request came before the checks were read). Now code
+# decides: a merge request needs the summary file made after the checks, pasted as it is. One send-back at most.
+try:
+    import os as _o6
+    from _common import STATE_DIR as _SD6
+    _jf, _sf = _o6.path.join(_SD6, "pr-summary.json"), _o6.path.join(_SD6, "pr-summary.md")
+    if _o6.path.exists(_jf) and _o6.path.exists(_sf) and not _o6.environ.get("HZ_FULL_RULES"):
+        _st6 = json.load(open(_jf, encoding="utf-8"))
+        _need6 = None
+        if _st6.get("session") and _st6.get("session") != str(data.get("session_id") or ""):
+            pass                                    # another session's pull request
+        elif not _st6.get("checks"):
+            _need6 = ("Before you ask me to merge, read the pull request's checks once (gh pr checks <number> --watch; in "
+                      "a cloud session, the GitHub tool). The summary file " + _sf.replace("\\", "/") + " is then made "
+                      "again with the result. Paste it as it is, after the browser pictures, above the closing lines.")
+        elif f"**GitHub checks:** {_st6.get('checks')}" not in text:
+            _need6 = ("Paste the summary file " + _sf.replace("\\", "/") + " as it is, after the browser pictures and "
+                      "above the closing lines. Do not write your own summary.")
+        if _need6:
+            _r6 = use_round("merge-summary", data.get("session_id"), 1)
+            if (_r6[1] if _r6 is not None else not data.get("stop_hook_active")):
+                block(_need6, kind="work")
+except SystemExit:
+    raise
+except Exception:
+    pass
 PUSH = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?push\b|\bgh\s+pr\s+create\b")
 CHECKS = re.compile(r"\bgh\s+pr\s+checks\b|\bgh\s+run\s+(?:watch|view)\b")
 last_push, checks, setup = None, [], False

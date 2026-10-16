@@ -4,7 +4,8 @@
   so the lines I act on sit right above where I type. Above the --- line, in this order: the technical detail,
   the Completion lines when required, the validation line, then the "❓ Decisions" list. Result is status only;
   "I need from you" is one short action;
-- the version line is shown to me by the Stop notice (stats.py); replies do not write it;
+- v3.3.6 (V1): the status line ends with ' · Rules v<version>'; a missing or old version is a saved fix, never a
+  send-back;
 - the only interim reply is one status line ("⏳ Working on: …") while a dispatched worker still runs.
 Loop guard: at most auto_fix_max_rounds send-backs per user prompt (counted from the UserPromptSubmit hook's
 prompt number, so another check's block does not make this one step aside). If the prompt number is unknown,
@@ -32,6 +33,16 @@ if _need and re.search(r"\bnew (?:session|chat|window)\b|paste the restart line"
         log("validation-line", {"asked_new_session": True})
     except Exception:
         pass
+# v3.3.6 (V1, owner 16 Oct: "I need to know the rule revision running on the current session ... simple in the status
+# line"): the status line ends with ' · Rules v<this version>'. Missing or wrong: a saved fix for the next reply.
+try:
+    _v1 = re.search(r"(?m)^.*Confidence:\s*(?:High|Medium|Low)\s*·\s*Status:.*$", text)
+    if _v1 and f"Rules v{central_version()}" not in _v1.group(0) and not os.environ.get("HZ_FULL_RULES"):
+        from _common import save_fixes as _sf1, log as _lg1
+        _sf1(data.get("session_id"), [f"End the status line with ' · Rules v{central_version()}' in every reply."])
+        _lg1("validation-line", {"version_missing": True})
+except Exception:
+    pass
 # v3.1.26: a short chat reply in a request that used no tools (a greeting, a quick answer) is not sent back for its
 # closing lines — a send-back re-reads the whole session for a few words. Work reports still are.
 _turn = last_turn(records)

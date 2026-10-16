@@ -95,9 +95,28 @@ try:
         _ex = os.path.join(PROJECT_DIR if not os.path.isabs(_gd) else "", _gd, "info", "exclude")
         os.makedirs(os.path.dirname(_ex), exist_ok=True)
         _cur = open(_ex, encoding="utf-8").read() if os.path.exists(_ex) else ""
-        if not re.search(r"(?m)^/?plans/\s*$", _cur):
+        # v3.3.6 (G5): scratch files of browser checks and their pictures live in .claude/state/checks/; run #15 was
+        # sent back once by Claude Code's cloud end check for files left in the folder
+        _add = [x for x in ("plans/", ".claude/state/") if not re.search(r"(?m)^/?" + re.escape(x) + r"\s*$", _cur)]
+        if _add:
             with open(_ex, "a", encoding="utf-8") as _h:
-                _h.write(("" if _cur.endswith("\n") or not _cur else "\n") + "plans/\n")
+                _h.write(("" if _cur.endswith("\n") or not _cur else "\n") + "\n".join(_add) + "\n")
+        os.makedirs(os.path.join(PROJECT_DIR, ".claude", "state", "checks"), exist_ok=True)
+except (OSError, subprocess.SubprocessError):
+    pass
+# v3.3.6 (B1): an automatic setup update that was stopped can leave a locked worktree record in Temp whose folder is
+# gone (Weekly-Planner, 16 Oct: hz-setup-9f0foxji). Unlock and prune such records; nothing on disk is touched.
+try:
+    _wl = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=PROJECT_DIR, capture_output=True, text=True,
+                         timeout=10).stdout
+    _pr = False
+    for _blk in _wl.split("\n\n"):
+        _wp = re.search(r"(?m)^worktree (.+)$", _blk)
+        if _wp and "hz-setup-" in _wp.group(1) and not os.path.exists(_wp.group(1)):
+            subprocess.run(["git", "worktree", "unlock", _wp.group(1)], cwd=PROJECT_DIR, capture_output=True, timeout=10)
+            _pr = True
+    if _pr:
+        subprocess.run(["git", "worktree", "prune"], cwd=PROJECT_DIR, capture_output=True, timeout=10)
 except (OSError, subprocess.SubprocessError):
     pass
 stub = stub_status(cfg, PROJECT_DIR)
@@ -158,8 +177,8 @@ facts.append("While we shape a design, keep each agreed point in '## Design deci
              "me. Then write one plan with every agreed point.")
 facts.append("Find all, fix all, check once. Run the whole check and list every problem. Fix them together. Then run "
              "everything one time.")
-facts.append("Do not write a 'Rules v…' line: the notice after your reply shows it. If the setup is old, say so in "
-             "the 'I need from you' line.")
+facts.append(f"End the status line of every reply with ' · Rules v{version}' (Confidence: … · Status: … · Rules "
+             f"v{version}). It is where I see the rules version. If the setup is old, say so in the 'I need from you' line.")
 facts.append("A change from what I approved (plan, prototype, design) is a question in the '❓ Decisions' list. Add "
              "a link to a page that shows prototype and build side by side.")
 facts.append("Show every Plan vN in plan mode. Commit the approved plan file only for work that spans sessions; a "

@@ -34,7 +34,8 @@ def _write_report(pr_url, checks=""):
         _h.write("## Summary\n\n" + _sum + "\n\n" + _meas + "\n")
         if _plan:
             _h.write(f"\n## Approved plan (Rev {_rev})\n\n<details><summary>Show the plan</summary>\n\n{_plan}\n\n</details>\n")
-    json.dump({"url": pr_url, "checks": checks}, open(os.path.join(_SD, "pr-summary.json"), "w", encoding="utf-8"))
+    json.dump({"url": pr_url, "checks": checks, "session": str(data.get("session_id") or "")},
+              open(os.path.join(_SD, "pr-summary.json"), "w", encoding="utf-8"))
     return os.path.join(_SD, "pr-summary.md").replace("\\", "/"), os.path.join(_SD, "pr-report.md").replace("\\", "/")
 
 

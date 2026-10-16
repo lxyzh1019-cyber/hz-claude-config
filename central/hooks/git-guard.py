@@ -321,6 +321,57 @@ if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
         raise
     except Exception:
         pass
+# v3.3.6 (G1, owner: "pushing the work branch is always fine without asking"). 16 Oct, run #15: Claude Code asked me
+# twice, for "git add … && git commit … && git push -u origin <work branch>". Every check above has passed by now, so a
+# command made only of add, commit, push to the branch it is on (never main, never force) and read-only git is
+# approved here, and Claude Code does not ask. Anything else is left to Claude Code's own question.
+def _safe_git_only(c, branch):
+    if not branch or branch in ("main", "master", "HEAD"):
+        return False
+    t = re.sub(r'"(?:\\.|[^"\\])*"', '""', c, flags=re.S)
+    t = re.sub(r"'[^']*'", "''", t)
+    if re.search(r"[<>`]|\$\(", t):
+        return False
+    parts = [p.strip() for p in re.split(r"&&|;|\n", t) if p.strip()]
+    if not parts:
+        return False
+    for p in parts:
+        w = p.split()
+        if w[0] != "git":
+            return False
+        sub = w[1] if len(w) > 1 else ""
+        rest = w[2:]
+        if sub in ("status", "log", "diff", "show", "fetch", "rev-parse", "branch") and \
+                not any(x in ("-d", "-D", "-m", "-M", "--delete") for x in rest):
+            continue
+        if sub == "add" and not any(x in ("-f", "--force") for x in rest):
+            continue
+        if sub == "commit" and "--amend" not in rest:
+            continue
+        if sub == "push":
+            if any(x.startswith(("-f", "--force", "--delete", "--mirror", "--all", "--tags")) or x.startswith("+")
+                   or x.startswith(":") for x in rest):
+                return False
+            targets = [x for x in rest if not x.startswith("-")]
+            if len(targets) <= 1 or (len(targets) == 2 and targets[1] in (branch, "HEAD", f"HEAD:{branch}")):
+                continue
+            return False
+        return False
+    return True
+
+
+if tool == "Bash" and not _stack_warn and not _notes_hint and not os.environ.get("HZ_FULL_RULES") \
+        and not os.environ.get("HZ_GIT_ALLOW_OFF"):
+    try:
+        _cwd1 = str(data.get("cwd") or PROJECT_DIR)
+        _b1 = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=_cwd1, capture_output=True, text=True,
+                             timeout=10).stdout.strip()
+        if _safe_git_only(cmd, _b1):
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                                                     "permissionDecisionReason": f"work branch {_b1}: add, commit, push"}}))
+            sys.exit(0)
+    except (OSError, subprocess.SubprocessError):
+        pass
 if _stack_warn or _notes_hint:   # after every other check of this command (add_context ends the hook)
     from _common import add_context as _ac, log as _lg
     _lg("git-guard", {"stacked_base": _stack_warn, "notes_only_commit": bool(_notes_hint)})

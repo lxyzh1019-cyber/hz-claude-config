@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.3.5: the summary at the end of a job has the Weekly-Planner shape: Completion lines, then Tokens and time and Session time, in bold labels and lines, with % for tokens and time, a plan link and a report link. No setup pull request. claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.6: the rules version ends the status line of every reply; no permission question for add, commit and push on the work branch; a merge request carries the code-made summary after the checks; scratch files stay out of git; the summary counts reading, checks and review fixes apart with steps; old setup worktrees are cleared. No setup pull request. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

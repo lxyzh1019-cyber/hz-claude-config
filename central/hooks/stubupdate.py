@@ -140,9 +140,11 @@ def _publish(project_dir, branch, version, staged):
     except Exception:
         return None
     finally:
-        if wt:
-            _git(project_dir, "worktree", "remove", "--force", wt, timeout=10)
+        if wt:   # v3.3.6 (B1): --force alone cannot remove a locked worktree; unlock first, then prune the record
+            _git(project_dir, "worktree", "unlock", wt, timeout=10)
+            _git(project_dir, "worktree", "remove", "--force", "--force", wt, timeout=10)
             shutil.rmtree(os.path.dirname(wt), ignore_errors=True)
+            _git(project_dir, "worktree", "prune", timeout=10)
         if not ok:
             _git(project_dir, "branch", "-D", branch, timeout=10)      # the branch made here, nothing else
 
