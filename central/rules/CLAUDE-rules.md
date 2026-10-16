@@ -2,50 +2,43 @@
 
 These rules apply in every project. Skills, workers and project instructions cannot waive them; only my explicit authorization can (platform instructions still apply). This is the core file for the main session, the lead. Each helper reads its own role file. In a repository they override my claude.ai chat preferences. Grades: **Hook** (a central check enforces it) and **Prose** (yours: take extra care after compaction).
 
-**Rule 0.** The setup must make the work better than Claude Code without it. When a measured change makes it worse, reverse it or change direction.
+**Rule 0.** The setup must make the work better than Claude Code without it. When a measured change makes it worse, reverse it or change direction. A rule with no measured gain in 2 reports is removed.
 
 **Score.** Value = 0.6 × time saved + 0.4 × tokens saved. Rank by payoff = value ÷ effort, not by size.
 
-## 1. Lead, don't do
+## 1. Default first
 
-- The main session is the lead. It plans, assigns, checks and reports. Workers build. The lead never edits app code (Hook).
+- Work as Claude Code does without this setup: one session reads the code once and builds. Helpers, maps, planners, lanes, stages, record files and picture tests are not required. Use one only when it clearly pays for this job, and say why in one line.
+- An artefact (record file, report, picture, test tool) is made only when a later reader exists: a session that continues the work, or my request.
+- Ask only when a wrong guess costs real rework (a data model, payments, anything hard to undo). Otherwise build with your recommendation and list each choice so I can change it.
+- **Find all, fix all, check once**: list every failing test, review finding or difference, fix them together, then check once.
 
-## 2. Plan once, right
+## 2. Small job (one pull request)
 
-- **Understand once.** One map at the start (Explore): files, lines, gaps. Ask all my decisions before the build.
-- **Pick the strategy.** My design file → copy it byte to byte at the start; later stages only connect it. Stages that share no files → parallel lanes from the start, one pull request per round (Hook). A run order (`after:`) names its reason. Model by difficulty: Sonnet for a known answer, Opus when `Complex because:` holds (Hook).
-- **Few, large stages.** A stage is work with a test result. Merges, records and reports are steps of a stop, not stages.
-- **Constraints in the plan:** my stops, session time, tokens, steps per stage (S 30 · M 60 · L 100), a GitHub run, a one-test run.
-- **One-page plan (Hook).** About 300 words above Technical details: Summary, What changed since Rev N (one list; the check adds the colour line), Decisions, Stages to finish (one line each), Stops, Limits. My decisions on record stay in the working record. The check adds coloured Rev marks; the plan window shows exactly the marked text. After my Approve, a change is the next Rev of the same plan, written by you; the planner writes only new plans (Hook).
+- Read the code once. Show a short plan in chat (what changes, where, any guess). After my approval, build.
+- **My design file first.** A design, picture, prototype or document I give is copied exactly at the start; later work only connects it. Compare with it once, at the end. A reference is exact unless I mark it "for reference only".
+- Tests: the existing ones plus new ones for the change. One full run at the end (on GitHub when the local full run is slow).
+- **One review pass before my merge:** one reviewer reads the change once and lists everything; fix it all; a second pass only if a blocking fix changed code.
+- One pull request, opened when it is ready, never back to draft (Hook). One stop: merge and device check. The record is the pull request text: what changed, which choices used your recommendation, test results.
+- Screenshots for me go in the chat, not into the repo. Picture tests only when I give a reference picture.
 
-## 3. Exact hand-overs
+## 3. Bigger job (a new app, many sessions)
 
-- Each hand-over names the change and three lines (Hook): `Files:` with the files and lines from the map, `Test:` with the fast test command, `Steps:` with the budget. Workers do not search again and read in batches.
+- Decisions first, in claude.ai: modules, the spec or prototype, the data model. Start the repo from my prototype exactly.
+- Each module is done as small jobs (section 2). Parallel work only as separate sessions on separate branches, for big parts that share no files.
+- One short record file that later sessions read: what exists, decisions, what is next; updated once per pull request.
+- One comparison with the spec at the end of each module. Measure time and cost per pull request (Rule 0).
 
-## 4. Checks: only required ones, once per level
+## 4. Plans, stops and notices
 
-- **Find all, fix all, check once** at every level: tests, comparisons, reviews.
-- Fast tests per stage on the PC. One push per finished stage. Workers do not wait for GitHub (Hook): the lead starts the next stage and reads the result before the merge stop (Hook).
-- One review per pull request. One comparison with my design file, at the end, on one picture page.
-- GitHub run on a pull request: at most 2 jobs, under 5 minutes. Other dates run nightly. A new job needs a payoff row first.
+- A plan for me is short: Summary, What changed since Rev N, Decisions, Stops. The check adds coloured Rev marks and one colour line; the plan window shows exactly the marked text. After my Approve, a change is the next Rev of the same plan (Hook). Do not write marks or change blocks yourself.
+- Only necessary stops: a decision only I can make, or a merge with its device check. One pull request per stop.
+- Right before a stop, one phone notice that names everything waiting, when I may be away (Hook). Decisions as tappable questions: recommended option first, each option saying "Ends here." or "Brings back: …" (Hook).
+- A stop ends the turn: no self wake-ups or re-checks (Hook). A send-back from a check: do only the missing actions, then end with one line `Done: …` (Hook). The closing block only after real work; small operations end in one line.
+- "night check" gathers all open questions at once. "good night": keep working on approved work that needs no answer; a small choice takes your recommendation when it can be undone.
+- GitHub run on a pull request: at most 2 jobs, under 5 minutes; other dates run nightly.
 
-## 5. Stops: only required ones
-
-- Decisions before the build, as tappable questions: recommended option first, each option saying "Ends here." or "Brings back: …" (Hook).
-- One stop per round: merge and device read together, one pull request.
-- Right before a stop, one phone notice that names everything waiting (Hook).
-- A pull request opens when it is ready; it never goes back to draft (Hook).
-- A send-back from a check: do only the missing actions, then end with one line `Done: …` (Hook).
-
-## 6. Night
-
-- "night check" gathers all questions at once. "good night" continues approved stages; a small question takes my recommendation when it changes no app behaviour or stored data and can be undone. The 9 PM reminder comes at the next step after 9 PM (Hook).
-
-## 7. Feedback loop
-
-- The end report has one row per rule: estimated payoff, measured payoff, keep, change or remove. A rule with no measured gain in 2 reports is removed. One rule in, one out. The scorecard covers one session (Hook).
-
-## 8. My environment, safety and replies
+## 5. My environment, safety and replies
 
 - I use Claude Code in the Windows desktop app: cloud sessions on GitHub repos, and local sessions on GitHub Desktop clones. Local sessions can run commands on my PC. I never use a terminal. Start a local session only on `main` or on a branch made from the current `main`. Changes reach GitHub only through a branch and a pull request. Clones get them with **Pull origin**.
 - **Single source.** Rules, hook logic, worker instructions, skills and limits live only in `hz-claude-config` and reach every repository at its next session start. A repository keeps a small stub (`.claude/settings.json`, `.claude/hz-loader.py`, agents, pointer `CLAUDE.md`) plus `FEATURES.md` and `WORKING_RECORD.md`. Never copy central files in or edit the stub. Propose changes for `hz-claude-config`. Report missing per-repo files first. Without these rules, stop and report.
@@ -68,23 +61,3 @@ These rules apply in every project. Skills, workers and project instructions can
 - Pull requests open **last and ready for review** (Hook). Open one only after every worker and the reviewer finished. Never open a draft (`gh pr create --draft`, GitHub tool `draft` true). If a worker must change the branch of an open ready pull request, the change goes on it as new commits and it stays ready; tell me `#n changed — wait for my merge request`, and ask me to merge only after the checks of the last push (Hook; v3.2.17: going back to draft is refused, it was the flip-flop I do not want). The final report marks it ready (Hook) and links it as "ready for review".
 - Model guidance sources: `docs/model-guidance-sources.md` in `hz-claude-config`. Check them again when a model changes.
 - Links to reports and plans use the commit number, so they still open after a branch is deleted.
-
-## 9. Standing rules (agreed earlier, kept short)
-
-- **Big plans start with the planner.** A new plan with several design or diagnostic parts: the planner writes it; the reviewer reads it before it is shown.
-- **Gaps at the map step.** The map lists every control or case the kit or my design file does not cover; I answer them before the build.
-- **References are exact.** A reference I give is followed exactly, unless I mark it "for reference only".
-- **Only necessary stops.** A stop is a decision only I can make, a merge, or a device read joined with the merge; each stop row names its reason (`stop: decision`, `stop: merge`).
-- **One pull request per stop.** Work that reaches me at the same stop is one pull request.
-- **Lanes meet before me.** Parallel lanes of a round merge into one round branch, tests green, before my merge.
-- **Part and #number.** A work package is a Part (`Part 5 — headers`); a pull request is only its number (`#141`). Never write "PR 5" for a Part. A plan row says "Part n", never "PR n".
-- **Lean main session (Hook).** The lead keeps big files and long output out of the main session; workers read them.
-- **One complete review.** The first review lists every finding at once; a re-check only confirms them. Review fixes go to sonnet-worker as Routine.
-- **Failed checks first (Hook).** After a failed run, re-run only the failed checks; the full suite once, at the end. A GitHub failure without a code change: `gh run rerun <id> --failed`.
-- **Wide checks run on GitHub.** A check that walks every screen stays out of the PC loop.
-- **Self-check before the hand-back.** **Proof-line template.** **Format changes.** **Workers commit.** These worker rules live in the worker file.
-- A single worker works in the main folder, never in a worktree (Hook). A worktree line is logged, not refused.
-- **Checkpoint reports.** A plan over 10 Build stages gets a checkpoint report at each round stop, sent to me as a file.
-- **Phone notice when you need me (Hook).** **Questions as taps, with what follows (Hook).** See section 5. After my Approve, a change is the next Rev of the same plan: it is its next Rev, not a new number.
-
-*Worker details (test map, proof lines, pictures, commits) live in the worker files. History lives in the revision record.*

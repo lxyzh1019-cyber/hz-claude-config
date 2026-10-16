@@ -264,7 +264,7 @@ One ⏳ line per round, only for a background command or workflow (v3.2.12, v3.2
 # removed v3.3.0 (lead playbook; history in revision-record.md): Part n and #number (v3.2.12)
 # removed v3.3.0 (lead playbook; history in revision-record.md): Lean main session (v3.2.12)
 Pictures before the first push (v3.2.12) | W | **Pictures before the first push.**
-One review per pull request (v3.2.12) | R | One review per pull request
+# removed v3.3.2 (default first; history in revision-record.md): One review per pull request (v3.2.12)
 # removed v3.3.0 (lead playbook; history in revision-record.md): Restart line: GitHub first, merged branch never named (v3.2.13)
 # removed v3.3.0 (lead playbook; history in revision-record.md): Lane worktrees only, clean-up after merge (v3.2.13)
 Workers in the foreground, no wake-ups (v3.2.14) | R | Workers run in the foreground (Hook: the call is rewritten)
@@ -287,19 +287,27 @@ Workers commit; [skip ci] for notes (v3.2.15) | W | **Workers commit.**
 # removed v3.3.0 (lead playbook; history in revision-record.md): Each option says what follows it (v3.2.17)
 Rule 0: better than without, else reverse (v3.3.0) | R | **Rule 0.** The setup must make the work better than Claude Code without it.
 Payoff score 60/40 (v3.3.0) | R | Value = 0.6 × time saved + 0.4 × tokens saved
-The lead plans, workers build (v3.3.0) | R | The main session is the lead.
-Understand once: one map (v3.3.0) | R | One map at the start (Explore)
-Byte to byte from my design file (v3.3.0) | R | copy it byte to byte at the start
-Parallel lanes from the start (v3.3.0) | R | parallel lanes from the start
-Few, large stages (v3.3.0) | R | **Few, large stages.**
-Constraints and step budget in the plan (v3.3.0) | R | steps per stage (S 30 · M 60 · L 100)
-One-page plan (v3.3.0) | R | **One-page plan (Hook).**
-Hand-over carries the map (v3.3.0) | R | `Files:` with the files and lines from the map
-Find all, fix all, check once at every level (v3.3.0) | R | **Find all, fix all, check once** at every level
-Workers do not wait for GitHub (v3.3.0) | R | Workers do not wait for GitHub (Hook)
+# removed v3.3.2 (default first; history in revision-record.md): The lead plans, workers build (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Understand once: one map (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Byte to byte from my design file (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Parallel lanes from the start (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Few, large stages (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Constraints and step budget in the plan (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): One-page plan (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Hand-over carries the map (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Find all, fix all, check once at every level (v3.3.0)
+# removed v3.3.2 (default first; history in revision-record.md): Workers do not wait for GitHub (v3.3.0)
 GitHub run at most 2 jobs (v3.3.0) | R | at most 2 jobs, under 5 minutes
 Send-back ends with Done (v3.3.0) | R | then end with one line `Done: …`
-Feedback loop (v3.3.0) | R | A rule with no measured gain in 2 reports is removed.
+# removed v3.3.2 (default first; history in revision-record.md): Feedback loop (v3.3.0)
 Links use the commit number (v3.3.0) | R | Links to reports and plans use the commit number
 Worker: do not wait for GitHub (v3.3.0) | W | **Do not wait for GitHub.**
 Worker: your hand-over is your map (v3.3.0) | W | **Your hand-over is your map.**
+Default first (v3.3.2) | R | ## 1. Default first
+Artefact only with a later reader (v3.3.2) | R | An artefact (record file, report, picture, test tool) is made only when a later reader exists
+Ask only when a wrong guess costs real rework (v3.3.2) | R | Ask only when a wrong guess costs real rework
+Small job method (v3.3.2) | R | ## 2. Small job (one pull request)
+Bigger job method (v3.3.2) | R | ## 3. Bigger job (a new app, many sessions)
+One review pass before the merge (v3.3.2) | R | **One review pass before my merge:**
+My design file first (v3.3.2) | R | **My design file first.**
+Closing block only after real work (v3.3.2) | R | The closing block only after real work

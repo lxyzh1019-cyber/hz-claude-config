@@ -35,6 +35,24 @@ if _need and re.search(r"\bnew (?:session|chat|window)\b|paste the restart line"
 # v3.1.26: a short chat reply in a request that used no tools (a greeting, a quick answer) is not sent back for its
 # closing lines — a send-back re-reads the whole session for a few words. Work reports still are.
 _turn = last_turn(records)
+# v3.3.2 (owner, 13 Oct): the closing block only after real work. A turn that changed no file, made no commit, push or
+# pull request and showed no plan ends in plain words (the log copy in the cloud test got two full closing blocks).
+import re as _re32
+def _real_work(turn):
+    for r in turn:
+        c = (r.get("message") or {}).get("content")
+        for b in (c if isinstance(c, list) else []):
+            if not isinstance(b, dict) or b.get("type") != "tool_use":
+                continue
+            n, i = b.get("name"), (b.get("input") or {})
+            if n in ("Edit", "Write", "MultiEdit", "NotebookEdit", "ExitPlanMode", "Agent", "Task"):
+                return True
+            if n == "Bash" and _re32.search(r"\bgit\s+(commit|push|merge)\b|\bgh\s+pr\s+(create|ready|merge)\b",
+                                            str(i.get("command") or "")):
+                return True
+    return False
+if load_config().get("reply_check", "real-work") != "always" and not _real_work(_turn):
+    sys.exit(0)
 _used_tools = any(isinstance(b, dict) and b.get("type") == "tool_use"
                   for r in _turn if r.get("type") == "assistant"
                   for b in ((r.get("message") or {}).get("content") or []) if isinstance((r.get("message") or {}).get("content"), list))

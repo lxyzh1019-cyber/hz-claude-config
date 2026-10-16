@@ -33,7 +33,7 @@ try:
                         for r in _turn if r.get("type") == "assistant"
                         for b in (((r.get("message") or {}).get("content")) or [])
                         if isinstance(((r.get("message") or {}).get("content")), list))
-        if not _reviewed:
+        if not _reviewed and load_config().get("plan_check") == "full":   # v3.3.2 default first: no reviewer gate
             deny_tool("This is a big or risky plan (" + str(_st.get("why") or "strong signals") + "). Before I see "
                       "it, send the reviewer (subagent 'reviewer', moment: Before a plan) with the draft plan and the "
                       "area's ledger and hotspot rows; fix what it finds, then present the plan again.")
@@ -286,6 +286,13 @@ if (re.search(r"(?m)^#*\s*Plan v\d+", text) and _first_showing   # v3.3.0 (owner
         reasons.append("planner not used")
 # v3.2.0: no send-back for a "What changed" line that still says "First version": the change list made by code
 # already shows what changed, and a send-back costs one main-session step.
+# v3.3.2 (owner, 13 Oct: "default first"): the plan check keeps only what the window needs. Colour code breaks the
+# window; the shape, coverage and planner send-backs are off (45 plan tries for 12 approvals on Weekly-Planner).
+if load_config().get("plan_check", "marks") != "full":
+    if problems or reasons:
+        log("plan-guard", {"not_sent_back (default first)": len(problems)})
+    problems = [p for p in problems if "colour code" in p]
+    reasons = [r for r in reasons if r == "html"]
 if problems:
     _names = reasons + [r for r in ("html", "agreed point missing", "no summary", "no stages", "no count line",
                                     "file names above technical details", "no build/check mark")

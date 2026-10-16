@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.3.1: no false 'Do the setup update first' after a setup update is merged; a question right after your message needs no phone notice; one send-back per turn; a session no longer wakes itself to re-check a pull request, and a wake-up with nothing new is one line. One setup pull request per app (adds the wake-up check). claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.2 'default first': Claude Code works as it does without the setup. One session builds; one review pass before your merge; your design file is copied exactly first and compared once at the end; questions only when a wrong guess costs real rework. Eight checks are off; plans keep their colour marks. No setup pull request. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -17,14 +17,6 @@
       {
         "script": "rules-first-guard.py",
         "tools": ".*"
-      },
-      {
-        "script": "worker-budget.py",
-        "tools": ".*"
-      },
-      {
-        "script": "routing-guard.py",
-        "tools": "Edit|Write|MultiEdit|NotebookEdit"
       },
       {
         "script": "git-guard.py",
@@ -47,14 +39,6 @@
         "tools": "Edit|Write|MultiEdit"
       },
       {
-        "script": "worker-guard.py",
-        "tools": "Agent|Task|Workflow"
-      },
-      {
-        "script": "record-edit-guard.py",
-        "tools": "Edit|Write|MultiEdit"
-      },
-      {
         "script": "wait-guard.py",
         "tools": "Bash"
       },
@@ -69,13 +53,9 @@
     ],
     "Stop": [
       "setup-guard.py",
-      "record-guard.py",
-      "completion-guard.py",
-      "handoff-guard.py",
       "notice-guard.py",
       "validation-line.py",
       "qc-guard.py",
-      "report-early.py",
       "report-delivery.py",
       "merge-guard.py",
       "stats.py"
@@ -165,5 +145,89 @@
   },
   "max_parallel_workers": 0,
   "parallel_notice_above": 5,
-  "worker_handback_tokens": 150000
+  "worker_handback_tokens": 150000,
+  "plan_check": "marks",
+  "dispatch_full": {
+    "UserPromptSubmit": [
+      "plan-gate.py",
+      "skill-router.py"
+    ],
+    "PreToolUse": [
+      {
+        "script": "rules-first-guard.py",
+        "tools": ".*"
+      },
+      {
+        "script": "worker-budget.py",
+        "tools": ".*"
+      },
+      {
+        "script": "routing-guard.py",
+        "tools": "Edit|Write|MultiEdit|NotebookEdit"
+      },
+      {
+        "script": "git-guard.py",
+        "tools": "Bash|mcp__.*pull_request.*"
+      },
+      {
+        "script": "plan-guard.py",
+        "tools": "ExitPlanMode"
+      },
+      {
+        "script": "ask-guard.py",
+        "tools": "AskUserQuestion"
+      },
+      {
+        "script": "wake-guard.py",
+        "tools": "ScheduleWakeup"
+      },
+      {
+        "script": "plan-edit-guard.py",
+        "tools": "Edit|Write|MultiEdit"
+      },
+      {
+        "script": "worker-guard.py",
+        "tools": "Agent|Task|Workflow"
+      },
+      {
+        "script": "record-edit-guard.py",
+        "tools": "Edit|Write|MultiEdit"
+      },
+      {
+        "script": "wait-guard.py",
+        "tools": "Bash"
+      },
+      {
+        "script": "rules-read-guard.py",
+        "tools": "Bash"
+      },
+      {
+        "script": "foreground-workers.py",
+        "tools": "Agent|Task"
+      }
+    ],
+    "Stop": [
+      "setup-guard.py",
+      "record-guard.py",
+      "completion-guard.py",
+      "handoff-guard.py",
+      "notice-guard.py",
+      "validation-line.py",
+      "qc-guard.py",
+      "report-early.py",
+      "report-delivery.py",
+      "merge-guard.py",
+      "stats.py"
+    ],
+    "PostToolUse": [
+      {
+        "script": "notice-reminder.py",
+        "tools": "Bash|mcp__.*pull_request.*"
+      },
+      {
+        "script": "test-speed.py",
+        "tools": "Bash"
+      }
+    ]
+  }
 }

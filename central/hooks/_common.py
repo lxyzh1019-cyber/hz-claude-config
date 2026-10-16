@@ -114,6 +114,12 @@ def load_config():
             cfg.update(json.load(f))
     except (OSError, ValueError):
         pass
+    # v3.3.2: HZ_FULL_RULES=1 switches the old full method back on (all checks, plan shape, wait rules, reply check
+    # on every turn) for tests and side-by-side runs. The default is "default first".
+    if os.environ.get("HZ_FULL_RULES"):
+        if cfg.get("dispatch_full"):
+            cfg["dispatch"] = cfg["dispatch_full"]
+        cfg.update(plan_check="full", wait_check="full", reply_check="always")
     return cfg
 
 
