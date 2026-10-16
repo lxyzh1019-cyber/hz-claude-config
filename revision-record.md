@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.3.2
-Built on: 3.3.1
+Version: 3.3.3
+Built on: 3.3.2
 Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
 
 Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
@@ -72,6 +72,9 @@ F61 v3.3.0: plan window shows the marked text you approve; one colour line | Rea
 F62 v3.3.0: scorecard one session by default, lead rows, rule rows in reports | ## Rule rows (feedback loop)
 F63 v3.3.1: no self wake-ups after a stop | wake-guard.py
 F64 v3.3.2: default first: one session builds; old method only with HZ_FULL_RULES | ## 1. Default first
+F65 v3.3.3: green and red per section, change list in words, report and numbers | def session_table
+F66 v3.3.3: read-only steps never wait for the rules; changes still do | _read_only_bash
+F67 v3.3.3: plan marks added when the plan file is written; no extra showing | plan-write-marks.py
 
 ## Removed (approved, with reason)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
@@ -122,6 +125,9 @@ X39 A greeting question right after my message was refused for a missing notice 
 X40 Two send-backs in one turn showed the answer three times | fixed in 3.3.1 (one send-back per turn, safety excepted) | proof: tools/test_v331_items.py item 3; replay 892/892
 X41 After a merge request the session scheduled its own re-check, woke twice and wrote two more full answers ("Build 0 of 0", "nothing is left to merge") (HZ_Trout_Map, 13 Oct) | fixed in 3.3.1 (wake-guard; one-line wake; no Build line without a plan) | proof: tools/test_v331_items.py items 4–5; real program wake scenario 1/1; real setup update on a HZ_Trout_Map clone: branch hz-setup-update-3.3.1 with .claude/settings.json only
 X42 The config's fixed method made jobs big: on the fishing app $13 / 49 min / 341 steps against $6 / 35 min without the config (88% of steps from rules); on Weekly-Planner only 4% of 1,146 steps were code edits (13 Oct side-by-side) | fixed in 3.3.2 (default first) | proof: tools/test_v332_items.py 23/23 (3.3.1: 8 of 23); replay of the with-config run's 9 refused steps: 2 remain (both intended); replay 892/892 in full mode; real program 9/9; live retest on the fishing job pending
+X43 The 3.3.2 retest (15 Oct): change list "First version" at Rev 2; marks without words; questions answered by rejecting the plan; old stage tags; two failing test rounds and about 20 browser runs; a committed plan file; no numbers without asking | fixed in 3.3.3 | proof: tools/test_v333_items.py 18/18 (3.3.2: 3 of 17); real program: the plan window colours the green and red lines; replay 892/892
+X44 Fix 6: the first step of a session was refused when it only read (git status, ls), because the rules-first check refused every shell command until the rules were read (1 refused step per session) | fixed in 3.3.3 (read-only shell commands and read-only MCP calls pass; steps that change something still wait) | proof: tools/test_v333_items.py item 7; real program tools/real-harness/scenario_v333_rules_first.sh (3.3.2: git status REFUSED; 3.3.3: RAN; git checkout -b REFUSED in both, RAN after the rules Read); replay 896/896
+X45 Plan marks needed one extra showing on the desktop app, because the desktop shows the text the session sends and the check added the marks only at the showing (12 Oct); in the real program the uploaded 3.3.3 also refused the marked plan a second time (2 extra showings) | fixed in 3.3.3 ("C": marks go in when the plan file is written; the marked text the check made is accepted when shown again) | proof: tools/test_v333_items.py item 8 (uploaded 3.3.3 fails 3 of 14 checks there); real program tools/real-harness/scenario_v333_mark_plan.py: uploaded 3.3.3 2 extra showings, 3.3.3 with C 0, marks in the window, the owner still approves
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
 ## Change log
@@ -131,6 +137,7 @@ X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PA
 - 3.2.14, second part: X20–X24 from session c7347d6a.
 - 3.2.15: X25; P01 mitigated (waits for its live proof).
 - 3.2.16: X27.
+- 3.3.3: X43 (owner 15 Oct: "build 3.3.3"; kept: the rules-first check, because hook text over 10,000 characters is cut). X44 added before install (owner 16 Oct: "build the true fix into 3.3.3"): read-only steps pass, the check stays for changes. X45 added before install (owner 16 Oct: "C"); checks changed on purpose in tools/superseded-v333.txt.
 - 3.3.2: X42 (owner 13 Oct: "agree", "approve" — default first).
 - 3.3.1: X38–X41 (HZ_Trout_Map session start, 13 Oct).
 - 3.3.0: X34–X37 (owner 13 Oct: pieces 1–2 approved, 1A, 2A, A A).

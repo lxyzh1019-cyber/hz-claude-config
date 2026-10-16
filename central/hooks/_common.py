@@ -1262,7 +1262,8 @@ def last_plan_approved(records):
 def plan_mark_approved(store, records):
     """Mark the plan shown last as approved when its ExitPlanMode result says so."""
     last = store.get("last")
-    if last and last in store["plans"] and not store["plans"][last].get("approved") and last_plan_approved(records):
+    if last and last in store["plans"] and not store["plans"][last].get("approved") \
+            and not store["plans"][last].get("preview") and last_plan_approved(records):   # v3.3.3: a written plan not yet shown
         store["plans"][last]["approved"] = True
         plan_store_save(store)
     return store
@@ -1969,3 +1970,109 @@ def small_job(cfg):
         return bool(comp.get("plan")) and int(comp.get("total") or 0) <= int(cfg.get("small_job_build_stages", 3))
     except Exception:
         return False
+
+
+def session_table(transcript_path):
+    """v3.3.3 (owner, 15 Oct: "the summary of time and token by task and by model"): time and tokens of this session by
+    task and by model, read from the session's own files (the main file and its helpers). Waits for my answers
+    (gaps before my messages, and any gap over 10 minutes) are left out of time worked."""
+    import glob as _g
+    from datetime import datetime as _dt
+    tp = str(transcript_path or "")
+    if not tp or not os.path.exists(tp):
+        return None
+    files = [tp] + sorted(_g.glob(os.path.join(os.path.splitext(tp)[0], "subagents", "*.jsonl")))
+    task_t, task_k, model_k = {}, {}, {}
+    first = last = None
+
+    def ts(r):
+        try:
+            return _dt.fromisoformat(str(r.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return None
+
+    def task_of(blocks, helper):
+        if helper and "review" in helper:
+            return "review"
+        for b in blocks:
+            if not isinstance(b, dict) or b.get("type") != "tool_use":
+                continue
+            n, i = b.get("name"), (b.get("input") or {})
+            c = str(i.get("command") or "")
+            if n in ("ExitPlanMode", "AskUserQuestion", "EnterPlanMode"):
+                return "plan"
+            if n in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+                return "edit"
+            if n == "Bash" and is_test_run(c):
+                return "tests"
+            if n == "Bash" and re.search(r"\bgit\b|\bgh\b", c):
+                return "git and pull request"
+            if n in ("Read", "Grep", "Glob") or n == "Bash":
+                return "read and check"
+            if n in ("Agent", "Task"):
+                return "hand-over"
+        return "answer"
+    for f in files:
+        helper = None
+        if f != tp:
+            try:
+                helper = json.load(open(f[:-6] + ".meta.json", encoding="utf-8")).get("agentType")
+            except (OSError, ValueError):
+                helper = "helper"
+        recs = []
+        for line in open(f, encoding="utf-8", errors="replace"):
+            try:
+                recs.append(json.loads(line))
+            except ValueError:
+                pass
+        seen, by_id = set(), {}
+        for r in recs:   # one message is split over several records: its task comes from all its blocks
+            if r.get("type") == "assistant":
+                m = r.get("message") or {}
+                by_id.setdefault(m.get("id"), []).extend(m.get("content") if isinstance(m.get("content"), list) else [])
+        for n_, r in enumerate(recs):
+            if r.get("type") != "assistant":
+                continue
+            m = r.get("message") or {}
+            blocks = by_id.get(m.get("id")) or (m.get("content") if isinstance(m.get("content"), list) else [])
+            task = task_of(blocks, helper)
+            mid = m.get("id") or id(r)
+            u = m.get("usage") or {}
+            if mid not in seen and u:   # one message is split over several records: count its usage once
+                seen.add(mid)
+                k = (u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0)
+                     + u.get("cache_creation_input_tokens", 0) + u.get("output_tokens", 0))
+                task_k[task] = task_k.get(task, 0) + k
+                model = re.sub(r"^claude-", "", str(m.get("model") or "?"))
+                model_k[model] = model_k.get(model, 0) + k
+            t0 = ts(r)
+            if t0 is None:
+                continue
+            first = t0 if first is None else min(first, t0)
+            last = t0 if last is None else max(last, t0)
+            if f != tp:
+                continue   # time is the main session's clock; helpers run while it waits
+            nxt = None
+            for r2 in recs[n_ + 1:]:
+                _c2 = (r2.get("message") or {}).get("content")
+                if r2.get("type") == "user" and isinstance(_c2, str) and not is_notice_text(_c2) \
+                        and not _c2.lstrip().startswith(("<", "Stop hook feedback")):
+                    break   # my message: the wait before it is not work (helper hand-backs and notices are)
+                if r2.get("type") in ("assistant", "user") and ts(r2) is not None:
+                    nxt = ts(r2)
+                    break
+            # a helper, a test run or a GitHub wait may run long; a plain step over 10 minutes is a pause
+            if nxt is not None and 0 < nxt - t0 < (3600 if task in ("hand-over", "tests", "git and pull request") else 600):
+                task_t[task] = task_t.get(task, 0) + (nxt - t0)
+    if not task_k:
+        return None
+    worked = sum(task_t.values())
+    total_k = sum(task_k.values())
+    rows = ["| Task | Time | Tokens |", "|---|---|---|"]
+    for task in sorted(task_k, key=lambda x: -task_k[x]):
+        rows.append(f"| {task} | {round(task_t.get(task, 0) / 60, 1)} min | {round(task_k[task] / 1e6, 2)} M |")
+    rows += ["", "| Model | Tokens |", "|---|---|"]
+    for model in sorted(model_k, key=lambda x: -model_k[x]):
+        rows.append(f"| {model} | {round(model_k[model] / 1e6, 2)} M |")
+    head = f"Time worked {round(worked / 60)} min (waits for you left out) · tokens {round(total_k / 1e6, 1)} M"
+    return head + "\n\n" + "\n".join(rows)

@@ -10,8 +10,8 @@ These rules apply in every project. Skills, workers and project instructions can
 
 - Work as Claude Code does without this setup: one session reads the code once and builds. Helpers, maps, planners, lanes, stages, record files and picture tests are not required. Use one only when it clearly pays for this job, and say why in one line.
 - An artefact (record file, report, picture, test tool) is made only when a later reader exists: a session that continues the work, or my request.
-- Ask only when a wrong guess costs real rework (a data model, payments, anything hard to undo). Otherwise build with your recommendation and list each choice so I can change it.
-- **Find all, fix all, check once**: list every failing test, review finding or difference, fix them together, then check once.
+- Ask only when a wrong guess costs real rework (a data model, payments, anything hard to undo). A choice that has a recommendation and can be undone is built with it and listed, not asked.
+- **Find all, fix all, check once**: list every failing test, review finding or difference, fix them together, then check once. Pick a check's inputs (lakes, dates, users) from the data in one step, not by trying.
 
 ## 2. Small job (one pull request)
 
@@ -19,7 +19,9 @@ These rules apply in every project. Skills, workers and project instructions can
 - **My design file first.** A design, picture, prototype or document I give is copied exactly at the start; later work only connects it. Compare with it once, at the end. A reference is exact unless I mark it "for reference only".
 - Tests: the existing ones plus new ones for the change. One full run at the end (on GitHub when the local full run is slow).
 - **One review pass before my merge:** one reviewer reads the change once and lists everything; fix it all; a second pass only if a blocking fix changed code.
-- One pull request, opened when it is ready, never back to draft (Hook). One stop: merge and device check. The record is the pull request text: what changed, which choices used your recommendation, test results.
+- One pull request, opened when it is ready, never back to draft (Hook). One stop: merge and device check.
+- **The report is the pull request text** (Hook gives the numbers). It holds what was done, decisions and the option used, differences from the plan, and tests and review. It also holds what to improve or drop, the approved plan in a fold-out section, and the time and tokens by task and by model. No plan or report file for a one-pull-request job.
+- **The chat summary is short:** at most 3 lines (done, tests and review; time and tokens; Plan Rev n · Report: link), then the closing block. Links use the commit number or the pull request.
 - Screenshots for me go in the chat, not into the repo. Picture tests only when I give a reference picture.
 
 ## 3. Bigger job (a new app, many sessions)
@@ -31,7 +33,8 @@ These rules apply in every project. Skills, workers and project instructions can
 
 ## 4. Plans, stops and notices
 
-- A plan for me is short: Summary, What changed since Rev N, Decisions, Stops. The check adds coloured Rev marks and one colour line; the plan window shows exactly the marked text. After my Approve, a change is the next Rev of the same plan (Hook). Do not write marks or change blocks yourself.
+- A plan for me is short: Summary, What changed since Rev N, Decisions, Stops. The check adds coloured Rev marks, the change list in words, and green (new) and red (removed) lines per section; the plan window shows exactly the marked text. After my Approve, a change is the next Rev of the same plan (Hook). Do not write marks or change blocks yourself. When you write a changed plan file with Write, the check adds the marks to it (Hook); then show it with no change.
+- **Decisions in a plan:** once I answer, each shows "✅ Decided: A — your answer at Rev n". The section says: "If I receive no objection, I use the recommended option for each open decision."
 - Only necessary stops: a decision only I can make, or a merge with its device check. One pull request per stop.
 - Right before a stop, one phone notice that names everything waiting, when I may be away (Hook). Decisions as tappable questions: recommended option first, each option saying "Ends here." or "Brings back: …" (Hook).
 - A stop ends the turn: no self wake-ups or re-checks (Hook). A send-back from a check: do only the missing actions, then end with one line `Done: …` (Hook). The closing block only after real work; small operations end in one line.
@@ -42,7 +45,7 @@ These rules apply in every project. Skills, workers and project instructions can
 
 - I use Claude Code in the Windows desktop app: cloud sessions on GitHub repos, and local sessions on GitHub Desktop clones. Local sessions can run commands on my PC. I never use a terminal. Start a local session only on `main` or on a branch made from the current `main`. Changes reach GitHub only through a branch and a pull request. Clones get them with **Pull origin**.
 - **Single source.** Rules, hook logic, worker instructions, skills and limits live only in `hz-claude-config` and reach every repository at its next session start. A repository keeps a small stub (`.claude/settings.json`, `.claude/hz-loader.py`, agents, pointer `CLAUDE.md`) plus `FEATURES.md` and `WORKING_RECORD.md`. Never copy central files in or edit the stub. Propose changes for `hz-claude-config`. Report missing per-repo files first. Without these rules, stop and report.
-- **Session start (Hook).** The session start gives the branch, missing files, setup state and the rules path. First, read the rules file (other tools wait until it is read). The notice after a reply shows `Rules v<version> · <branch> · setup <state>`, so replies never write a version line. An old setup comes with a `[setup-update]` instruction: do it first; other answers are sent back until its branch exists. Never two setup pull requests at once. Never update the setup by hand.
+- **Session start (Hook).** The session start gives the branch, missing files, setup state and the rules path. First, read the rules file (other tools wait until it is read; steps that only read, such as `git status`, do not wait). The notice after a reply shows `Rules v<version> · <branch> · setup <state>`, so replies never write a version line. An old setup comes with a `[setup-update]` instruction: do it first; other answers are sent back until its branch exists. Never two setup pull requests at once. Never update the setup by hand.
 - **No hooks.** Where repository hooks do not run, the pointer `CLAUDE.md` makes you read these rules as text. Start every reply with "Rules v<version> read by hand — hooks inactive: no automatic checks in this session." Nothing is enforced there.
 - **QC1 Dry-run first.** Do your steps exactly as written on a fresh copy of the real current state. Compare file by file. Write `Dry-run: passed — <what was compared>`. No dry-run, no steps.
 - **QC2 No destructive steps (Hook).** Never tell me to delete, empty, reset, force-push or overwrite anything beyond named files. If a removal is truly needed, put it in its own message: every item, why, and what I should see. Then wait for my separate "yes". The Stop check sends back any other destructive instruction.

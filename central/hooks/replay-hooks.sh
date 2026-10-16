@@ -796,7 +796,7 @@ check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files save
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
 check "the self-update adds the plan folder and the stub is current again" "current (matches v3.3.1)" "$o"
-o=$(echo '{}' | python3 $H/session-start.py); check "session start tells the session the plan file lands in plans/" "The plan file goes into plans/ in this" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "v3.3.3: a one-pull-request job keeps its plan in the pull request text" "keeps its plan in the pull request text" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
 HB="$T/h24"; rm -rf "$HB"; mkdir -p "$HB"; git init -q --bare "$HB/origin.git"; HA="$HB/app"; git init -q "$HA"
@@ -1145,7 +1145,7 @@ PY
 o=$(pg "$T/p_long.md"); check "v3.2.9: a long new plan is not sent back; its size is a note (soft goal)" "Plan size: about" "$o"
 check "  ...and there is no send-back for the size" "clean" "$(echo "$o" | grep -c 'permissionDecision' | sed 's/^0$/clean/')"
 o=$(pg "$T/p_long_ok.md"); check "long detail under Technical details is fine" "Plan size: about" "$o"
-o=$(echo '{}' | python3 $H/session-start.py); check "v3.2.9: the plan shape at session start starts with the Quick read" "Quick read" "$o"
+o=$(echo '{}' | python3 $H/session-start.py); check "v3.3.3: the plan shape at session start is the short one (Summary first)" "Summary" "$o"
 # --- v3.1.26d: fewer re-reads and send-backs
 # 1 rules read by shell -> refused with the Read path; setup allows Read on the rules copy
 o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"v=$(cat ~/.cache/hz-rules/current); cat ~/.cache/hz-rules/$v/skills/hz-change-guard/SKILL.md"}}' | python3 $H/dispatch.py)
@@ -1278,8 +1278,7 @@ o=$(echo '{}' | python3 $H/session-start.py)
 check "session start: pushing the work branch is always fine, merging stays mine" "You can push the work branch (never main) without asking" "$o"
 check "session start: shape first, then one plan version" "Then write one plan with every agreed point" "$o"
 check "v3.3.2: the rules: default first" "## 1. Default first" "$(cat $H/../rules/CLAUDE-rules.md)"
-check "the plan shape says Rev counts each showing" "Rev \"
-              \"counts each showing" "$(cat $H/formats.py)"
+check "the plan shape says Rev counts each showing" "Rev counts each showing" "$(cat $H/formats.py)"
 
 # ---- v3.1.28
 # 1 the step limit counts the worker's own record (the Sunday v15 counter saw 21 of a worker's 320 steps)
@@ -1454,16 +1453,21 @@ check "v3.1.29: session start names the rules file to read first" "FIRST, before
 check "v3.1.29: the closing block format is inside the first 10,000 characters" "I need from you" "$o"
 rg(){ echo "$1" | HZ_RULES_FIRST_OFF= python3 $H/rules-first-guard.py; }
 RP=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import RULES_PATH;print(RULES_PATH)")
-o=$(rg '{"session_id":"rf1","tool_name":"Bash","tool_input":{"command":"git status"}}'); check "v3.1.29: a command before the rules are read is refused with the path" "Read the working rules first" "$o"
+o=$(rg '{"session_id":"rf1","tool_name":"Bash","tool_input":{"command":"git checkout work"}}'); check "v3.1.29: a command before the rules are read is refused with the path" "Read the working rules first" "$o"
 o=$(rg '{"session_id":"rf1","tool_name":"Grep","tool_input":{"pattern":"x"}}'); check "v3.1.29: searching is allowed before the rules are read" "^$" "$o"
 o=$(rg '{"session_id":"rf1","tool_name":"Edit","agent_id":"w1","tool_input":{"file_path":"a.js"}}'); check "v3.1.29: a worker is never stopped by the rules-first check" "^$" "$o"
 o=$(rg "{\"session_id\":\"rf1\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$RP\"}}"); check "v3.1.29: reading the rules file is allowed" "^$" "$o"
-o=$(rg '{"session_id":"rf1","tool_name":"Bash","tool_input":{"command":"git status"}}'); check "v3.1.29: after the rules are read, commands pass" "^$" "$o"
-o=$(rg '{"session_id":"rf2","tool_name":"Bash","tool_input":{"command":"git status"}}'); check "v3.1.29: a new session must read the rules again" "Read the working rules first" "$o"
-o=$(rg '{"session_id":"rf3","tool_name":"Read","tool_input":{"file_path":"C:\\Users\\h\\.cache\\hz-rules\\3.1.29\\rules\\CLAUDE-rules.md"}}'); o=$(rg '{"session_id":"rf3","tool_name":"Bash","tool_input":{"command":"ls"}}'); check "v3.1.29: a Windows path to the rules counts as read" "^$" "$o"
+o=$(rg '{"session_id":"rf1","tool_name":"Bash","tool_input":{"command":"git checkout work"}}'); check "v3.1.29: after the rules are read, commands pass" "^$" "$o"
+o=$(rg '{"session_id":"rf2","tool_name":"Bash","tool_input":{"command":"git checkout work"}}'); check "v3.1.29: a new session must read the rules again" "Read the working rules first" "$o"
+o=$(rg '{"session_id":"rf3","tool_name":"Read","tool_input":{"file_path":"C:\\Users\\h\\.cache\\hz-rules\\3.1.29\\rules\\CLAUDE-rules.md"}}'); o=$(rg '{"session_id":"rf3","tool_name":"Bash","tool_input":{"command":"npm test"}}'); check "v3.1.29: a Windows path to the rules counts as read" "^$" "$o"
 echo '{"session_id":"rf3"}' | python3 $H/session-start.py >/dev/null
-o=$(rg '{"session_id":"rf3","tool_name":"Bash","tool_input":{"command":"ls"}}'); check "v3.1.29: a new session start (or /compact) asks for the rules again" "Read the working rules first" "$o"
-o=$(echo '{"session_id":"rf4","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}' | HZ_RULES_FIRST_OFF= python3 $H/dispatch.py PreToolUse); check "v3.1.29: the switchboard runs the rules-first check" "Read the working rules first" "$o"
+o=$(rg '{"session_id":"rf3","tool_name":"Bash","tool_input":{"command":"npm test"}}'); check "v3.1.29: a new session start (or /compact) asks for the rules again" "Read the working rules first" "$o"
+o=$(echo '{"session_id":"rf4","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' | HZ_RULES_FIRST_OFF= python3 $H/dispatch.py PreToolUse); check "v3.1.29: the switchboard runs the rules-first check" "Read the working rules first" "$o"
+# --- v3.3.3 fix 6: steps that only read never wait for the rules; steps that change something still do
+o=$(rg '{"session_id":"rq1","tool_name":"Bash","tool_input":{"command":"git status && git log --oneline -3"}}'); check "v3.3.3: a read-only command before the rules are read passes" "^$" "$o"
+o=$(rg '{"session_id":"rq1","tool_name":"mcp__github__get_file_contents","tool_input":{}}'); check "v3.3.3: a read-only MCP call before the rules are read passes" "^$" "$o"
+o=$(rg '{"session_id":"rq1","tool_name":"Bash","tool_input":{"command":"git status && git checkout test-333"}}'); check "v3.3.3: a command that changes something still waits for the rules" "Read the working rules first" "$o"
+o=$(rg '{"session_id":"rq1","tool_name":"Bash","tool_input":{"command":"cat a > b"}}'); check "v3.3.3: a read with a write redirection still waits for the rules" "Read the working rules first" "$o"
 rm -f "$PROJ/.claude/state/rules-read.json"
 python3 -c "import json;p='$H/config.json';d=json.load(open(p));d['session_start_max_chars']=1500;json.dump(d,open(p,'w'))"
 o=$(echo '{"session_id":"rf5"}' | python3 $H/session-start.py)
@@ -1971,7 +1975,7 @@ open(sys.argv[1],"w").write("\n".join(json.dumps(r) for r in R)+"\n")
 PYA
 o=$(echo "{\"transcript_path\":\"$T/away.jsonl\",\"session_id\":\"aw\"}" | python3 $H/stats.py | python3 -c "import json,sys;print(json.load(sys.stdin).get('systemMessage',''))")
 check "v3.2.0: an 8-hour wait for me is away time, left out of the shares" "30 min worked · away 8 h 0 min (1, waits over 60 min, left out)" "$o"
-check "v3.2.0: the plan shape tags each stage with files, after, level, tests and group" "group: A" "$(cat $H/formats.py)"
+check "v3.3.3: the plan shape has the no-objection line" "If I receive no objection, I use the recommended option" "$(cat $H/formats.py)"
 check "v3.2.0: the planner tags stages and keeps a group to 3 at most" "run in parallel (at most 3)" "$(cat $H/../agents/planner-instructions.md)"
 check "v3.2.0: the template feature list has a test map and saved tools" "Tools: <saved analysis script in tools/>" "$(cat $H/../seed/FEATURES.md)"
 check "v3.2.0: workers use the test map and saved tools" "Reuse a saved one" "$(cat $H/../agents/opus-worker-instructions.md)"
@@ -2549,10 +2553,10 @@ RP=C.RULES_PATH
 pre=lambda sid,tool,inp: run("rules-first-guard.py",{"session_id":sid,"tool_name":tool,"tool_input":inp},P)
 # 1. two sessions in one folder
 pre("A","Read",{"file_path":RP}); pre("B","Read",{"file_path":RP})
-oa=pre("A","Bash",{"command":"ls"}); ob=pre("B","Bash",{"command":"gh pr create"})
+oa=pre("A","Bash",{"command":"npm test"}); ob=pre("B","Bash",{"command":"gh pr create"})
 res("v3.2.7: two sessions in one folder keep their own 'rules read' mark (A then B read, both may work)","deny" not in oa and "deny" not in ob,(oa[:60],ob[:60]))
 run("session-start.py",{"session_id":"B","hook_event_name":"SessionStart","source":"startup"},P)
-oa=pre("A","Bash",{"command":"ls"}); ob=pre("B","Bash",{"command":"ls"})
+oa=pre("A","Bash",{"command":"npm test"}); ob=pre("B","Bash",{"command":"npm test"})   # v3.3.3: a read-only ls never waits
 res("  ...a new start of B clears only B's mark",("deny" not in oa) and ("deny" in ob),(oa[:60],ob[:60]))
 code="import sys;sys.path.insert(0,sys.argv[1]);import _common as C;print([C.bump_prompt_number(x) for x in 'AABAB'])"
 o=subprocess.run(["python3","-c",code,H],capture_output=True,text=True,env=dict(os.environ,CLAUDE_PROJECT_DIR=P)).stdout.strip()

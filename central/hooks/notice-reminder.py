@@ -53,7 +53,21 @@ try:
 except ImportError:
     pass
 # v3.2.17: the notice names everything that waits (11-12 Oct: "ready to merge" while 10 and 6 questions also waited)
+# v3.3.3 (owner, 15 Oct): the summary report and the time and tokens by task and by model, measured here (a hook may
+# read the session file; the session itself may not in a cloud session). The chat summary stays short, with one link.
+_rep = ""
+try:
+    from _common import session_table
+    _tab = session_table(data.get("transcript_path"))
+    if _tab:
+        _rep = ("\n[report] Put the report into the pull request text (gh pr edit <number> --body-file): what was done; "
+                "decisions and the option used; differences from the plan; tests and review results; what to improve or "
+                "drop; the approved plan in a <details> section; and this measured table:\n" + _tab +
+                "\nYour final answer starts with at most 3 short lines: ✅ Done: <what> · <tests> · <review>; "
+                "Time <n> min · tokens <n> M (by model); Plan Rev <n> · Report: <the pull request link>.")
+except Exception:
+    pass
 add_context("PostToolUse", "[notice] A pull request is now ready for review. Right before your final answer, send me "
             "one notice with the PushNotification tool (load it with ToolSearch) that names everything in your 'I need "
             "from you' line, for example '<app>: 6 questions + merge #<number> waiting' or '<app>: merge #<number> "
-            "waiting'. Do not mention the notice in the answer. If the tool is not in this session, skip it.")
+            "waiting'. Do not mention the notice in the answer. If the tool is not in this session, skip it." + _rep)

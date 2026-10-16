@@ -1,0 +1,5 @@
+# Earlier checks that v3.3.3 changes on purpose (owner, 16 Oct: "C", marks before showing; "build the true fix into 3.3.3").
+# The new behaviour is proven by tools/test_v333_items.py items 7 and 8 and the real-program scenarios named below.
+3.2.17 real program · scenario_v3217.py plan · "the check asks for the marked text (1A) before the window shows the Rev" · with C the marks go in when the plan file is written, so no extra showing is asked (scenario_v333_mark_plan.py: 0 extra showings; uploaded 3.3.3: 2)
+3.2.17 real program · scenario_v3217.py plan · "live proof says the marks were written into the plan file" · the live proof now says "added when written"
+3.1.29 replay · five checks used git status or ls as the refused example · read-only steps no longer wait for the rules; the checks now use a change step (same purpose)

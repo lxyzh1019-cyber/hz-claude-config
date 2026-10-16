@@ -16,7 +16,7 @@ Stub files listed | R | `.claude/hz-loader.py`
 Never copy central files or edit the stub | R | Never copy central files in or edit the stub
 Report missing per-repo files; stop without rules | R | Report missing per-repo files first
 Session start injects facts; version line in the notice | R | so replies never write a version line
-Rules file read first, other tools wait (v3.1.29) | R | read the rules file (other tools wait until it is read)
+Rules file read first, other tools wait (v3.1.29) | R | read the rules file (other tools wait until it is read
 Setup update: own branch, ready PR, ask to merge, never two | R | Never two setup pull requests at once
 Setup never updated by hand | R | Never update the setup by hand
 Sessions without hooks read rules as text | R | read by hand — hooks inactive
