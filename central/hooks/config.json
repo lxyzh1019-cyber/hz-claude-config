@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.3.2 'default first': Claude Code works as it does without the setup. One session builds; one review pass before your merge; your design file is copied exactly first and compared once at the end; questions only when a wrong guess costs real rework. Eight checks are off; plans keep their colour marks. No setup pull request. claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.3: plans show what changed in words and in green and red per section; decisions you made are marked; a plan says the recommended options are used without an objection. A finished job puts its report and the time and tokens by task and model in the pull request, and the chat summary is 3 lines with one link. Plan marks now go in when the plan is written, so the first showing has them on every surface. Steps that only read (git status, ls) no longer wait for the rules. No setup pull request. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",
@@ -37,6 +37,10 @@
       {
         "script": "plan-edit-guard.py",
         "tools": "Edit|Write|MultiEdit"
+      },
+      {
+        "script": "plan-write-marks.py",
+        "tools": "Write"
       },
       {
         "script": "wait-guard.py",
@@ -184,6 +188,10 @@
       {
         "script": "plan-edit-guard.py",
         "tools": "Edit|Write|MultiEdit"
+      },
+      {
+        "script": "plan-write-marks.py",
+        "tools": "Write"
       },
       {
         "script": "worker-guard.py",

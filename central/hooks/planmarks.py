@@ -26,12 +26,72 @@ def square(rev):
     return F.SQUARES[rev % 4]
 
 
+NO_OBJECTION = "If I receive no objection, I use the recommended option for each open decision."
+
+
+def section_diff(base, text, limit=8):
+    """v3.3.3 (owner, 15 Oct): per plan section, the lines added (green) and removed (red) since the last showing.
+    Sections are the bold or # headings above Technical details. Returns [(section, added, removed)]."""
+    import difflib
+
+    def secs(t):
+        t = strip_marks(t)
+        cut = re.search(r"(?mi)^\**\s*technical details", t)
+        t = t[:cut.start()] if cut else t
+        out, cur = {}, "Top"
+        for ln in t.split("\n"):
+            s0 = ln.strip()
+            h = None
+            if re.match(r"^#{2,}\s", s0):
+                h = s0.lstrip("#").strip()
+            else:
+                _hm = re.match(r"^\*\*([^*]+)\*\*\s*(.*)$", s0)
+                if _hm and (_hm.group(1).rstrip().endswith(":") or not _hm.group(2) or _hm.group(2)[:1] in ":(·"):
+                    h = _hm.group(1)
+            if h:
+                cur = h.rstrip(":").strip()[:40] or cur
+                out.setdefault(cur, [])
+                continue
+            if ln.strip() and not re.match(r"^#\s*Plan v\d+", ln.strip()):   # the title's Rev is no change
+                out.setdefault(cur, []).append(ln.rstrip())
+        return out
+    a, b = secs(base or ""), secs(text or "")
+    res = []
+    for s in list(b) + [x for x in a if x not in b]:
+        if re.match(r"(?i)what changed", s):   # the change list itself is not a plan change
+            continue
+        old, new = a.get(s, []), b.get(s, [])
+        if [_key(x) for x in old] == [_key(x) for x in new]:
+            continue
+        sm = difflib.SequenceMatcher(None, [_key(x) for x in old], [_key(x) for x in new])
+        add, rem = [], []
+        for op, i1, i2, j1, j2 in sm.get_opcodes():
+            if op in ("replace", "delete"):
+                rem += old[i1:i2]
+            if op in ("replace", "insert"):
+                add += new[j1:j2]
+        if add or rem:
+            res.append((s, add[:limit], rem[:limit]))
+    return res
+
+
 def strip_marks(text):
     """The plan without any change list and without any Rev marks in front of lines."""
     t = _BLOCK.sub("", (text or "").replace("\r\n", "\n"))   # v3.2.1: plan files on Windows end lines with CRLF
-    out, fence = [], False
+    out, fence, skip_diff = [], False, False
     for line in t.split("\n"):
+        if skip_diff:   # v3.3.3: the check's green and red block per section
+            if line.strip() == "```" and skip_diff == "in":
+                skip_diff = False
+            elif line.strip().startswith("```diff"):
+                skip_diff = "in"
+            continue
+        if line.startswith("- 🎨 "):   # v3.3.3: the change list in words, written by the check
+            continue
         if line.startswith("🎨 "):   # v3.3.0: the colour line under "What changed" is made by the check
+            skip_diff = "next" if line.startswith("🎨 Changes by section") else False
+            continue
+        if line.strip() == NO_OBJECTION:   # v3.3.3: added by the check
             continue
         if line.strip().startswith("```"):
             fence = not fence
@@ -180,7 +240,10 @@ def apply(text, base, version, rev, history, since):
     # v3.2.9: no word-level change list any more. The owner reads "What changed" in the Quick read (written by the
     # planner, plain lines with the result) and the coloured marks below; the old block was hard to read and repeated
     # the marks (owner, 9 Oct, Plan v7).
-    if F.QUICK_READ_GOAL_WORDS and "**Quick read**" in text:
+    import os as _os3
+    _full = bool(_os3.environ.get("HZ_FULL_RULES"))
+    # v3.3.3: in "default first" the check's per-section green and red block replaces the old change block
+    if (F.QUICK_READ_GOAL_WORDS and "**Quick read**" in text) or not _full:
         return quick_read_count("\n".join(lines)), (len(idx), gist(added, removed)[1])
     diff = ([f"+ {sq} Rev {rev} — {changed_words(o_, n_)}" for o_, n_ in changed] +
             [f"+ {sq} Rev {rev} — {_clean(l)}" for l in added] + [f"- {sq} Rev {rev} — {_clean(l)}" for l in removed])

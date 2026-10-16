@@ -55,3 +55,10 @@ Cannot test: the real model's choices, the desktop app screens, phone notices, G
 - `scenario_wakeups.sh <central dir> <label> [app folder]` (v3.2.14) — two lane workers started in one message, as sessions
   do; one stops with a background command still running. Counts the replies the main session shows. Claude Code 2.1.296 on
   a copy of Weekly-Planner: 3.2.13 (background workers) 3 replies; 3.2.14 (foreground workers) 1 reply, the final one.
+
+- `scenario_v333_rules_first.sh <central dir> <label>` (v3.3.3) — the session runs `git status`, then `git checkout -b`, before it reads
+  the rules; then reads them and repeats the change. Prints REFUSED or RAN per step. Claude Code 2.1.301 on 16 Oct:
+  3.3.2 refused both; 3.3.3 ran `git status` and refused only the change until the rules were read.
+- `scenario_v333_mark_plan.py <central dir>` (v3.3.3, "C") — Rev 2 of an approved plan, written with Write and shown. Counts
+  the extra showings the plan check asks for. Claude Code 2.1.301 on 16 Oct: uploaded 3.3.3 2; 3.3.3 with C 0, with the
+  coloured Rev 2 line in the window and the owner still approving.

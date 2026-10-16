@@ -139,8 +139,8 @@ facts.append("Do not write a 'Rules v…' line: the notice after your reply show
              "the 'I need from you' line.")
 facts.append("A change from what I approved (plan, prototype, design) is a question in the '❓ Decisions' list. Add "
              "a link to a page that shows prototype and build side by side.")
-facts.append("Show every Plan vN in plan mode. The plan file goes into plans/ in this repository. Commit the approved "
-             "file with the work. Delete plans that were never approved.")
+facts.append("Show every Plan vN in plan mode. Commit the approved plan file only for work that spans sessions; a "
+             "one-pull-request job keeps its plan in the pull request text (v3.3.3).")
 facts.append("Rules, checks, helper files and skills come from hz-claude-config through .claude/hz-loader.py. Never "
              "copy them into this repository.")
 from formats import session_formats

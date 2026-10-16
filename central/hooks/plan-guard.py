@@ -16,6 +16,10 @@ import json
 from _common import read_hook_input, deny_tool, log, read_transcript, PROJECT_DIR, PLAN_TEMPLATE, load_config, last_turn
 from _common import plan_version_of, plan_rev_of
 cfg_ = load_config()
+# v3.3.3 (owner, 16 Oct: "C", marks before showing): plan-write-marks.py runs this check when the session writes a plan
+# file (HZ_PLAN_PREVIEW). The marks go into the written text, so the text the session sends at the showing already
+# holds them: the desktop app, the terminal and the cloud show them, with no extra showing.
+PREVIEW = bool(os.environ.get("HZ_PLAN_PREVIEW"))
 
 data = read_hook_input()
 inp = data.get("tool_input") or {}
@@ -45,6 +49,8 @@ def plan_text():
     """(text, file). Claude Code fills the tool input from the plan file (planFilePath; the model writes about 31
     tokens to call the tool), so the file is read first: the check can then write the change marks into it."""
     f = str(inp.get("planFilePath") or "")
+    if PREVIEW:                          # the text about to be written, not the file on disk
+        return str(inp.get("plan") or ""), f
     if f and os.path.isfile(f):
         return open(f, encoding="utf-8", errors="replace").read(), f
     for v in inp.values():
@@ -236,9 +242,16 @@ _base, _rev, _since, _hist = None, 1, "", []
 if _name and _ver is not None and _rounds_on and _entry:
     _ev = int(_entry.get("version") or 0)
     import planmarks as _pm0   # v3.3.0: the marks and the colour line are no change (the marked text shown again)
-    _qr = lambda s: re.sub(r"(\*\*Quick read\*\*)\s*·[^\n]*", r"\1", _pm0.strip_marks(s or ""))
+    # v3.3.3: the check's own rewrites (the change-list heading, "First version") are no change either
+    _qr = lambda s: re.sub(r"(?im)^\s*-\s*first version\.?\s*$\n?", "", re.sub(
+        r"(?i)(what changed since)[^\n*]*", r"\1", re.sub(r"(\*\*Quick read\*\*)\s*·[^\n]*", r"\1", _pm0.strip_marks(s or ""))))
     _same = plan_norm(_qr(_entry.get("text"))) == plan_norm(_qr(text))
-    if _ver == _ev and _entry.get("approved") and not _same:
+    if _entry.get("preview") and _ver == _ev:
+        # v3.3.3 "C": marked when written, not shown yet. Every later write and the showing compare with the same base
+        # and keep the same Rev, so two writes before one showing never count as two Revs.
+        _base, _rev, _since, _hist = _entry.get("base"), int(_entry.get("rev") or 1), _entry.get("since") or "", \
+            _entry.get("history") or []
+    elif _ver == _ev and _entry.get("approved") and not _same:
         # v3.2.17 (owner, 10 Oct and 12 Oct, choice 1A): a change to an approved plan is its next Rev, not a new number
         _r0 = int(_entry.get("rev") or 1)
         _base, _rev, _since = _entry.get("text"), _r0 + 1, f"Rev {_r0} (approved)"
@@ -293,6 +306,8 @@ if load_config().get("plan_check", "marks") != "full":
         log("plan-guard", {"not_sent_back (default first)": len(problems)})
     problems = [p for p in problems if "colour code" in p]
     reasons = [r for r in reasons if r == "html"]
+if problems and PREVIEW:              # the write goes ahead; the showing sends it back as before
+    raise SystemExit(0)
 if problems:
     _names = reasons + [r for r in ("html", "agreed point missing", "no summary", "no stages", "no count line",
                                     "file names above technical details", "no build/check mark")
@@ -313,25 +328,63 @@ if _base is not None:
     _final, (_n, _g) = planmarks.apply(text, _base, _ver, _rev, _hist, _since)
     _cur = {"rev": _rev, "n": _n, "gist": _g}
     # v3.3.0 (owner, choice A): one change list. Under "What changed since …" one line from the check names the colours.
+    # v3.3.3 (owner, 15 Oct): plus green and red lines per changed section, and the change list in words when the
+    # session left it at "First version" (Rev 2 on 15 Oct said "What changed since v0 · First version").
     if _n:
         try:
-            _L = _final.split("\n")
-            _L = [l for l in _L if not l.startswith("🎨 ")]
+            _L = [l for l in _final.split("\n") if not l.startswith("🎨 ")]
             _h = next((i for i, l in enumerate(_L) if re.match(r"(?i)^\s*\**\s*what changed since", l)
                        and "Changes in this version" not in l), None)
+            _sd = planmarks.section_diff(_base or "", text) if _base else []
             if _h is not None:
                 _e = _h + 1
-                while _e < len(_L) and (not _L[_e].strip() or _L[_e].lstrip().startswith(("-", "*", "•"))):
+                while _e < len(_L) and (not _L[_e].strip() or _L[_e].lstrip().startswith(("- ", "* ", "• "))):
                     if not _L[_e].strip() and _e > _h + 1 and _L[_e - 1].strip():
                         break
                     _e += 1
+                _body = [l for l in _L[_h + 1:_e] if l.strip()]
+                if _rev >= 2 and _sd and (not _body or all(re.search(r"(?i)first version", l) for l in _body)):
+                    _L[_h] = f"**What changed since Rev {_rev - 1}**"
+                    _words = [f"- 🎨 {s}: {len(a)} new line{'s' if len(a) != 1 else ''}, {len(r)} removed" for s, a, r in _sd]
+                    _L[_h + 1:_e] = _words
+                    _e = _h + 1 + len(_words)
                 _old = [f"{planmarks.square(int(h.get('rev') or 1))} Rev {int(h.get('rev') or 1)}" for h in (_hist or [])[-3:]
                         if isinstance(h, dict) and h.get("rev")]
-                _L.insert(_e, "🎨 " + f"{planmarks.square(_rev)} **Rev {_rev}** marks {_n} changed line{'s' if _n != 1 else ''}"
-                          + "".join(" · " + o for o in reversed(_old)))
-                _final = "\n".join(_L)
+                _ins = ["🎨 " + f"{planmarks.square(_rev)} **Rev {_rev}** marks {_n} changed line{'s' if _n != 1 else ''}"
+                        + "".join(" · " + o for o in reversed(_old))]
+                if _sd:
+                    _ins.append("🎨 Changes by section (green new, red removed)")
+                    _ins.append("```diff")
+                    for s, a, r in _sd:
+                        _ins.append(f"@@ {s} @@")
+                        _ins += ["- " + re.sub(r"^\s*[-*•]\s+", "", x) for x in r]
+                        _ins += ["+ " + re.sub(r"^\s*[-*•]\s+", "", x) for x in a]
+                    _ins.append("```")
+                _L[_e:_e] = _ins
+            # v3.3.3 (owner, 15 Oct): the plan says that without an objection the recommended options are used. The
+            # session writes it (plan shape); the check adds it when it is already changing the plan anyway.
+            if planmarks.NO_OBJECTION not in "\n".join(_L):
+                _dh = next((i for i, l in enumerate(_L) if re.match(r"^\s*(#+\s*|\*\*)\s*(❓\s*)?Decisions", l)), None)
+                if _dh is not None:
+                    _L.insert(_dh + 1, planmarks.NO_OBJECTION)
+            _final = "\n".join(_L)
         except Exception:
             pass
+# v3.3.3: the marked text the check made last time is accepted as it is. Marking is not exact when repeated (the check
+# also rewrites the Quick read count and the change list), so the real program refused the marked plan again (16 Oct).
+_made = (_entry or {}).get("final") if _entry and _ver is not None and int(_entry.get("version") or 0) == _ver else None
+if _made and plan_norm(shown_text) == plan_norm(_made):
+    _final = shown_text
+if PREVIEW:
+    if _base is not None and plan_norm(shown_text) != plan_norm(_final) and _name and _ver is not None and _rounds_on:
+        _store["plans"][_name] = {"version": _ver, "rev": _rev, "text": text, "base": _base, "since": _since,
+                                  "history": _hist, "cur": _cur, "approved": False, "file": plan_file, "preview": True,
+                                  "final": _final}
+        _store["last"] = _name
+        plan_store_save(_store)
+        live_proof("plan-guard", {"marks": "added when written", "version": _ver, "rev": _rev})
+        print(json.dumps({"hz_preview_final": _final}))
+    raise SystemExit(0)
 if _base is not None and plan_norm(shown_text) != plan_norm(_final):
     if plan_file:
         try:
@@ -349,7 +402,8 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
                 _cur["via"] = "round"
                 if _name and _ver is not None and _rounds_on:
                     _store["plans"][_name] = {"version": _ver, "rev": _rev, "text": text, "base": _base, "since": _since,
-                                              "history": _hist, "cur": _cur, "approved": False, "file": plan_file}
+                                              "history": _hist, "cur": _cur, "approved": False, "file": plan_file,
+                                              "final": _final}
                     _store["last"] = _name
                     plan_store_save(_store)
                 deny_tool(f"The plan check added the coloured change marks (Plan v{_ver} · Rev {_rev}) to the plan "
@@ -366,7 +420,7 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
               "marks.\n\n" + _final)
 if _name and _ver is not None and _rounds_on:
     _store["plans"][_name] = {"version": _ver, "rev": _rev, "text": text, "base": _base, "since": _since,
-                              "history": _hist, "cur": _cur, "approved": False, "file": plan_file}
+                              "history": _hist, "cur": _cur, "approved": False, "file": plan_file, "final": _final}
     _store["last"] = _name
     plan_store_save(_store)
 live_proof("plan-guard", {"shown": f"Plan v{_ver} Rev {_rev}", "file": bool(plan_file)})
