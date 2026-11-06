@@ -108,6 +108,16 @@ X54 Rules and skills against the owner's Settings Rev 4 (D7 = B): the central co
 
 X55 Audit backbone (D4 = B): Build 3 changed js/lake-sheet.js, and Escape in the 3D view then also closed the lake panel; no check tied a changed file to the feature it carries | attempt 1 (3.3.7): rules — feature audit before a change (Covered, Overlap, Conflict, Untouched; each touched feature names its check and it passes on the old code first); FEATURES.md map lines end with "— files: <files> — test: <test name>"; central/checks/feature_check.py in the app's GitHub test run (changed files from git diff, the map, the pull request text; never the plan) | proof: HZ_Trout_Map merge d3e3c0d with a sample map (lake panel → js/lake-sheet.js, no test): red ✗ naming the lake panel; no map: a notice and a pass (tools/test_v337_items.py) | Open until an app's next real job adds the map and the step
 
+X56 Scorecard (D8 = B): no code judged a version on the owner's own jobs | attempt 1 (3.3.7): central/hooks/scorecard.py (tools/scorecard.py runs it by hand) reads only the session file and its subagents folder; 5 checks (git prompts on a work branch, plan re-showings, phone notices, summary vs session file, config waste) plus the review pass and watch lines; the hook writes the lines into the pull request text between <!-- hz-scorecard --> markers when the pull request opens and at the merge stop, also in a cloud session | proof on the 3.3.6 sessions: check 1 FAIL (Build 2: 3, Build 3: 5, Build 4: 2); check 2 FAIL on Build 3, PASS on Build 4; check 3 FAIL on Build 3 and Build 4 (1 each), PASS on Build 2; check 4 FAIL on Build 3; check 5: Build 2 22%, Build 3 16%, Build 4 5% of time; simulated cloud session: the lines reach the pull request text | Open until the first real job's pull request carries it
+
+## How a version is judged (owner D8 = B, 5 Nov)
+- The scorecard in the first real job's pull request decides.
+- All 5 checks pass: the version is accepted and 3.3.x is frozen; new ideas go to a queue.
+- One check fails: find its cause from that job, then one fix for that item only, proven first on that job's data (it fails on the current version and passes on the fix).
+- The same item fails twice: rewrite or remove that part.
+- Check 5 fails in 2 jobs: keep only the Rev marks and git-guard.
+- No more paired no-config runs.
+
 ## Fixed (moved from Open; proof required)
 X01 Known-answer rebuilds went to Opus as "Complex" (26.5 M tokens, 10 Oct) | fixed in 3.2.11 | proof: tools/test_v3211_items.py item 1; session 7574e882: 5 Sonnet hand-overs, 1 correct escalation
 X02 Parallel workers capped at 3, with no file rule | fixed in 3.2.11 | proof: tools/test_v3211_items.py item 4

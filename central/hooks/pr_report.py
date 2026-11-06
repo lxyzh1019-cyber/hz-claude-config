@@ -169,6 +169,12 @@ def measure(transcript_path):
         if sec > 3600 or (sec > 600 and kind == "model thinking"):
             kind = "pauses (over 10 min, not counted as work)"
         add(kind, sec)
+    try:   # v3.3.7: a helper's time is its own file's span (a background helper shows 0.0 otherwise)
+        for _hk, _hs in _sf.helper_secs(tp).items():
+            if kinds.get("helper: " + _hk, 0) < _hs:
+                kinds["helper: " + _hk] = _hs
+    except Exception:
+        pass
     tok_main, by_model = _tokens(main)
     tok_help = {}
     for _, (kind, hr) in helpers.items():
