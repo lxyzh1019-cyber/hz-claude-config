@@ -1,10 +1,11 @@
-version: 3.3.6
+version: 3.3.7
 agents/compare-instructions.md
 agents/conversion-instructions.md
 agents/explorer-instructions.md
 agents/opus-worker-instructions.md
 agents/planner-instructions.md
 agents/reviewer-instructions.md
+checks/feature_check.py
 hooks/_common.py
 hooks/ask-guard.py
 hooks/change_list.py
@@ -25,7 +26,9 @@ hooks/plan-write-marks.py
 hooks/plan_report.py
 hooks/planmarks.py
 hooks/pr-ready-guard.py
+hooks/pr_checks.py
 hooks/pr_report.py
+hooks/pr_text.py
 hooks/qc-guard.py
 hooks/ready-notice-guard.py
 hooks/record-edit-guard.py
@@ -37,7 +40,9 @@ hooks/report-timing.py
 hooks/routing-guard.py
 hooks/rules-first-guard.py
 hooks/rules-read-guard.py
+hooks/scorecard.py
 hooks/session-start.py
+hooks/session_facts.py
 hooks/setup-guard.py
 hooks/skill-router.json
 hooks/skill-router.py
@@ -53,12 +58,6 @@ hooks/worker-guard.py
 rules/CLAUDE-rules.md
 seed/FEATURES.md
 seed/WORKING_RECORD.md
-skills/hz-change-guard/SKILL.md
-skills/hz-change-guard/references/content-ledger.md
-skills/hz-change-guard/references/manifest-formats.md
-skills/hz-change-guard/references/revision-record.md
-skills/hz-change-guard/scripts/coverage_gate.py
-skills/hz-change-guard/scripts/revision_gate.py
 stub-files/CLAUDE-pointer.md
 stub-files/explore.md
 stub-files/hz-loader.py
@@ -66,6 +65,7 @@ stub-files/merge_settings.py
 stub-files/opus-worker.md
 stub-files/planner-opus.md
 stub-files/planner.md
+stub-files/retired-permissions.json
 stub-files/reviewer-light.md
 stub-files/reviewer.md
 stub-files/settings.json

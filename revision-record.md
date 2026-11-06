@@ -1,7 +1,7 @@
 # Revision record — hz-claude-config
 
-Version: 3.3.6
-Built on: 3.3.5
+Version: 3.3.7
+Built on: 3.3.6
 Owner: the newest "Claude Code Plan Work Strategy" chat: the owner chat writes the paste block; Claude Code builds and tests (owner D2, 28 Oct). Other chats send P-lines here.
 
 Run before every pull request: `revision_gate.py <new-folder> <fresh clone of GitHub main>` from the account skill `anthropic-skills:hz-change-guard`. Any FAIL stops the pull request.
@@ -84,11 +84,24 @@ F69 v3.3.4: a cd before git never makes Claude Code ask | a cd and a git command
 F70 v3.3.4: plans/ in the local git ignore list | --git-common-dir
 F71 v3.3.4: browser pictures in the chat for screen changes | Those pictures stay visible in the chat.
 F72 v3.3.5: the summary in the Weekly-Planner shape, bold lines, no tables | def summary_block
-F73 v3.3.6: the rules version at the end of the status line | Rules v<version>
 F74 v3.3.6: safe git steps on the work branch are approved | def _safe_git_only
-F75 v3.3.6: a merge request needs the code-made summary after the checks | merge-summary
+F76 v3.3.7: the settings merge removes the retired ask rules (deploy asks kept) | RETIRED_ASK
+F77 v3.3.7: git-guard approves the real git step shapes on the work branch | _GIT_ENV
+F78 v3.3.7: a plan is known by its file; the title is no revision | "identity": "plan file"
+F79 v3.3.7: a reason line when no earlier showing exists | NO_BASE_LINE
+F80 v3.3.7: merge state from git or GitHub REST | def merged_on_main
+F81 v3.3.7: permission waits, send-backs and helper time from the session file | def permission_waits
+F82 v3.3.7: the check writes the report into the pull request text | <!-- hz-report -->
+F83 v3.3.7: checks read with GitHub REST | def state(repo, sha)
+F84 v3.3.7: test speed per script | def test_script_key
+F85 v3.3.7: the feature check in the app's GitHub test run | feature_check.py
+F86 v3.3.7: the scorecard in the pull request text | <!-- hz-scorecard -->
+F87 v3.3.7: the clear-context option at plan approval | showClearContextOnPlanAccept
 
 ## Removed (approved, with reason)
+- F73 v3.3.6: the rules version at the end of the status line | reason: its fix-first fired 4 times in 3 sessions; the Stop notice already shows the version | approved: owner, 5 Nov paste block (piece 5)
+- F75 v3.3.6: a merge request needs the code-made summary after the checks (the paste send-back) | reason: Build 4 was sent back twice and the summary landed after the closing lines; the check now delivers the summary and the report itself | approved: owner, 5 Nov paste block (piece 4)
+- The central copy of hz-change-guard (central/skills/hz-change-guard) | reason: D7 = B, the account skill anthropic-skills:hz-change-guard loads in local and cloud sessions | approved: owner, 5 Nov paste block (piece 7)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
 
 ## Open problems (stay until fixed with proof or he drops them)
@@ -169,7 +182,14 @@ X47 Run #15 (16 Oct): the chat summary lost its Weekly-Planner shape (Completion
 X48 After run #15 and the Weekly-Planner clean-up (16 Oct): the rules version could not be found (V1); 2 permission questions for git add, commit and push (G1); the summary, plan link, report timing and checks-before-merge depended on the session obeying a notice (G2, G3, G4, G6); a send-back for uncommitted scratch files (G5); token changes could not be explained (G8); a locked setup worktree left in Temp (B1) | fixed in 3.3.6 | proof: tools/test_v336_items.py 27/27 (3.3.5: 9 of 27); real program tools/real-harness/scenario_v336_git.py 2/2 (3.3.5 asks, 3.3.6 pushes with no question); real git: a locked hz-setup worktree with no folder is cleared · G1 reopened in 3.3.7 (P04)
 X10 No revision record | fixed in 3.2.12 | proof: this file; revision_gate.py PASS
 
+## Cloud sessions (official facts, code.claude.com cloud-environments page; recorded 5 Nov)
+- With one repository, the repository's .claude/settings.json hooks and permission rules load. With several repositories, no repository hooks load.
+- The user's ~/.claude settings do not exist there. Account skills load.
+- The GitHub proxy rejects GraphQL: `gh pr` and `gh issue` answer 403. `gh api` REST calls for attached repositories work. Pushes to any branch pass.
+- Rule: "Use one repository per cloud session: with several, the setup's hooks do not load."
+
 ## Change log
+- 3.3.7: X49–X56 and P04 (owner 5 Nov: "Build hz-claude-config 3.3.7 in this session, from this block"; D2 Claude Code builds and tests, D4 = B, D5, D7 = B, D8 = B); X48 G1 reopened as P04; the owner rule "the plan title is not part of the revision"; the proof rule and the fix-round limit; the cloud facts; checks changed on purpose in tools/superseded-v337.txt; tests: tools/test_v337_items.py 46/46 on real files (3.3.6 fails every 3.3.6-vs-3.3.7 item), replay-hooks.sh v3.3.7 block 19/19, the real program tools/real-harness/scenario_v337_git.py 7/7.
 - 3.2.12: record started; second part added items X11–X15; features listed from FEATURES.md; shipped 3.2.11 items recorded as X-lines; the 150 k hand-back under Removed.
 - 3.2.13: items X16–X19; features listed again from FEATURES.md.
 - 3.2.14 (built on 3.2.12 main; it also carries 3.2.13, which was never installed): X06 reopened and fixed with foreground workers; P02 added; the live scorecard.
