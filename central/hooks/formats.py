@@ -17,7 +17,7 @@ RESULT_STARTS = ["Ready to merge", "Waiting on your decision", "Still being work
 # ---- validation line ----
 CONFIDENCE_VALUES = ["High", "Medium", "Low"]
 STATUS_VALUES = ["Proposed", "Checked", "Validated", "Uncertain"]
-VALIDATION_SHAPE = "Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain · Rules v<version>"
+VALIDATION_SHAPE = "Confidence: High|Medium|Low · Status: Proposed|Checked|Validated|Uncertain"
 # v3.3.6 (V1, owner 16 Oct): the rules version ends the status line of every reply, where I can find it
 # a short note may follow any status ("Checked — PR checked"); group 2 is the status word alone
 VALIDATION_PATTERN = (r"(?m)Confidence:\s*(High|Medium|Low)\s*·\s*Status:\s*(Proposed|Checked|Validated|Uncertain)"

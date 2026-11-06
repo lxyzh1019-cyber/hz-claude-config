@@ -2,7 +2,7 @@
 """Stop, v3.2.8: ask me to merge a pull request only after GitHub tested its last change.
 Weekly-Planner 8 Oct: the tests on GitHub had failed since PR 1 (a hint cut off by about 3 pixels), and I was still asked
 to merge. When the reply asks me to merge and the session pushed or opened a pull request this turn, it must have read
-the checks after its last push (gh pr checks, gh run watch or gh run view). If it did not, or they failed and the reply
+the checks after its last push (v3.3.7: read with GitHub REST, pr_checks.py, gh run watch or gh run view). If it did not, or they failed and the reply
 does not say so, one reminder. A setup pull request (hz-setup-update-*) is left out. No reminder after a refusal by the
 safety check."""
 import json, re, sys

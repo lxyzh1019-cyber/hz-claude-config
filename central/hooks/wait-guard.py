@@ -88,8 +88,8 @@ if not inp.get("run_in_background") and _gh_wait and not _is_worker and not _fg_
               "runs, start the watch in the background (run_in_background, 'timeout 1800 ') and go on.")
 # v3.2.1: while the full suite is known to be too slow and is not split yet, no full local run
 try:
-    from _common import is_full_test_run, slow_suite_blocks, test_speed_load
-    if is_full_test_run(cmd, cfg) and slow_suite_blocks(cfg) and _is_worker:
+    from _common import is_full_test_run, slow_suite_blocks, test_speed_load, test_script_key
+    if is_full_test_run(cmd, cfg) and slow_suite_blocks(cfg, cmd) and _is_worker:
         # v3.3.0: the worker's hand-over names its fast test ('Test:'); the full run becomes that command in place.
         # 12 Oct: 18 refused full runs, each one a wasted step; GitHub runs the full suite.
         try:
@@ -114,8 +114,9 @@ try:
             raise
         except Exception:
             pass
-    if is_full_test_run(cmd, cfg) and slow_suite_blocks(cfg):
+    if is_full_test_run(cmd, cfg) and slow_suite_blocks(cfg, cmd):
         _st = test_speed_load()
+        _st = dict(_st, **((_st.get("by_script") or {}).get(test_script_key(cmd)) or {}))
         log("wait-guard", {"refused": "full local test run, suite too slow"})
         deny_tool(f"The full test suite here is too slow ({_st.get('slowest_full_minutes')} min"
                   + (", stopped by the time limit" if _st.get("stopped_by_limit") else "") + "). Do not run it locally "

@@ -33,7 +33,14 @@ dec = re.search(r"❓\s*\**\s*Decisions\**\s*\n(.*?)(?:\n\s*---\s*\n|\Z)", text,
 n_q = len([l for l in (dec.group(1).splitlines() if dec else []) if re.match(r"^\s*(\d+[.)]|[-*•])\s+\S", l)])
 asks_answers = bool(n_q) or bool(re.search(r"(?i)\b(answer|decide|choose|pick)\b|\bquestions?\b", need))
 QWORDS = re.compile(r"(?i)\b(question|decision|answer|choose|choice)s?\b")
-if pushes and (not asks_answers or any(QWORDS.search(p) for p in pushes)):
+# v3.3.7 (piece 5): a notice that names the number of waiting decisions ("4 waiting", "four answers") names them too
+# (Build 3 11:38 AM and Build 4 1:25 PM were sent back although the notice said how many waited).
+_NUMW = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+def _names(p):
+    if QWORDS.search(p):
+        return True
+    return bool(n_q) and bool(re.search(r"(?<![#\d])\b%d\b|\b%s\b" % (n_q, _NUMW.get(n_q, "@@")), p, re.I))
+if pushes and (not asks_answers or any(_names(p) for p in pushes)):
     sys.exit(0)
 r = use_round("notice-guard", data.get("session_id"), 1)
 if (r[1] if r is not None else not data.get("stop_hook_active")) is False:

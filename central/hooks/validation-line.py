@@ -33,16 +33,8 @@ if _need and re.search(r"\bnew (?:session|chat|window)\b|paste the restart line"
         log("validation-line", {"asked_new_session": True})
     except Exception:
         pass
-# v3.3.6 (V1, owner 16 Oct: "I need to know the rule revision running on the current session ... simple in the status
-# line"): the status line ends with ' · Rules v<this version>'. Missing or wrong: a saved fix for the next reply.
-try:
-    _v1 = re.search(r"(?m)^.*Confidence:\s*(?:High|Medium|Low)\s*·\s*Status:.*$", text)
-    if _v1 and f"Rules v{central_version()}" not in _v1.group(0) and not os.environ.get("HZ_FULL_RULES"):
-        from _common import save_fixes as _sf1, log as _lg1
-        _sf1(data.get("session_id"), [f"End the status line with ' · Rules v{central_version()}' in every reply."])
-        _lg1("validation-line", {"version_missing": True})
-except Exception:
-    pass
+# v3.3.7 (piece 5): the status line no longer ends with ' · Rules v<version>'; the Stop notice already shows the
+# version (its fix-first fired 4 times in 3 sessions). v3.3.6 V1 is retired.
 # v3.1.26: a short chat reply in a request that used no tools (a greeting, a quick answer) is not sent back for its
 # closing lines — a send-back re-reads the whole session for a few words. Work reports still are.
 _turn = last_turn(records)
@@ -94,6 +86,14 @@ RESEND_LINE = ("Send only the validation line. The closing block above was right
 
 
 def send_back(problems, resend=RESEND_DEFAULT):
+    # v3.3.7 (piece 5): no send-back by default; the problems are saved fixes for the next step
+    if not os.environ.get("HZ_FULL_RULES"):
+        try:
+            from _common import save_fixes as _sf7
+            _sf7(sid, problems)
+        except Exception:
+            pass
+        sys.exit(0)
     r = use_round("format", sid, int(cfg["auto_fix_max_rounds"]))
     if r is None and data.get("stop_hook_active"):
         sys.exit(0)            # no prompt number here: never loop

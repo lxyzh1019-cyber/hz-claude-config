@@ -1211,7 +1211,7 @@ def handoff_text(cfg, comp, after_build=False, lessons=False):
         branch = "main"   # v3.2.13: after the merge the next stage starts from main
     rec = cfg["record_file"]
     return ("do the hand-off yourself in this reply. I must not have to ask for it. First check GitHub "
-            "(gh pr view): a merged branch is never in the restart line; after a merge it names main.\n"
+            "(git fetch origin, then the merge commits on origin/main): a merged branch is never in the restart line; after a merge it names main.\n"
             f"1) Update '## Where we are' in {rec}. Write the plan name as in the ledger, the newest Plan vN and its "
             "plan file, the next stage, and the restart line. Point to plan files, commits and pull requests; do not "
             f"copy them. Write no keys or passwords. Then commit and push {rec} to {branch}.\n"
@@ -1476,6 +1476,9 @@ def test_speed_note(cfg, minutes, cmd, stopped=False):
     # v3.3.0: the latest full run decides; a suite made fast switches the refusal off by itself
     st["latest_full_minutes"] = round(minutes, 1)
     st["stopped_by_limit"] = bool(stopped)
+    _k = test_script_key(cmd)   # v3.3.7: each script keeps its own time
+    if _k:
+        st.setdefault("by_script", {})[_k] = {"latest": round(minutes, 1), "stopped": bool(stopped)}
     msg = ""
     if (minutes > limit or stopped) and not st.get("told") and not test_split_done(cfg):
         st["told"] = True
@@ -1581,9 +1584,34 @@ def background_test_note(cfg, records):
     return msg
 
 
-def slow_suite_blocks(cfg):
-    """True while the full suite is known to be too slow and is not split yet."""
+def test_script_key(cmd):
+    """v3.3.7: the test script a command runs ('npm run check', 'npm test', 'bash replay-hooks.sh'), so each script has
+    its own measured speed. 6 false refusals: a slow 'npm test' refused 'npm run check'."""
+    for part in re.split(r"&&|\|\||;|\||\n", str(cmd or "")):
+        p = part.strip().lstrip("( ")
+        for _ in range(3):
+            p = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|\S+)\s+)+", "", p)
+            p = re.sub(r"^(time\s+|timeout\s+\d+[smh]?\s+)", "", p)
+        if is_test_run(p):
+            w = [re.split(r"[\\/]", x)[-1] if re.search(r"\.(sh|py|js|mjs|cjs|ts)$", x) else x for x in p.split()]
+            return " ".join(w[:3]).lower()
+    return ""
+
+
+def slow_suite_blocks(cfg, cmd=None):
+    """True while the full suite is known to be too slow and is not split yet. v3.3.7: per script — with a command,
+    only that script's own measured time counts; a script never measured is not refused."""
     st = test_speed_load()
+    if cmd is not None:
+        key = test_script_key(cmd)
+        e = (st.get("by_script") or {}).get(key)
+        if e is None:
+            if st.get("by_script") or test_script_key(st.get("command") or "") != key:
+                return False
+            e = {"latest": st.get("latest_full_minutes", st.get("slowest_full_minutes")),
+                 "stopped": st.get("stopped_by_limit")}
+        slow = float(e.get("latest") or 0) > float(cfg.get("full_test_max_minutes", 5)) or e.get("stopped")
+        return bool(slow) and not test_split_done(cfg)
     _m = st.get("latest_full_minutes", st.get("slowest_full_minutes"))   # v3.3.0: the latest run, not the slowest ever
     slow = float(_m or 0) > float(cfg.get("full_test_max_minutes", 5)) or st.get("stopped_by_limit")
     return bool(slow) and not test_split_done(cfg)

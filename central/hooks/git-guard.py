@@ -88,6 +88,11 @@ def pr_last_check(cmd=""):
     following the last build worker (it checks the tests, the picture comparison and the plan). In the Weekly-Planner
     PR 118 session the pull request opened before the picture comparison, which then found gaps, so a ready pull
     request sat on GitHub while a worker was still fixing it."""
+    # v3.3.7 (piece 5): the 'worker running' and 'reviewer first' refusals read the session's steps and refused real
+    # pull requests (2 in Builds 2-4). By default the merge request is gated instead, on the pull request's own checks
+    # read with GitHub REST (merge-guard). The old method (HZ_FULL_RULES) keeps both refusals.
+    if not os.environ.get("HZ_FULL_RULES"):
+        return
     events, running = pr_timeline(read_transcript(data.get("transcript_path")))
     if running:
         deny_tool("git-guard: a worker or the reviewer is still running. Open the pull request last: after it "
@@ -218,6 +223,9 @@ def is_draft_pr(segment):
         toks = segment.split()
     while toks and re.match(r"^\w+=", toks[0]):
         toks = toks[1:]
+    if toks[:2] == ["gh", "api"] and "POST" in toks and any(re.search(r"/pulls$", t) for t in toks) \
+            and any(re.fullmatch(r"draft=true", t, re.I) for t in toks):   # v3.3.7: the REST way
+        return True
     return toks[:3] == ["gh", "pr", "create"] and any(t in ("--draft", "-d") or t.startswith("--draft=") for t in toks[3:])
 
 
@@ -237,8 +245,9 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
     if _gc:
         where, branch = os.path.join(PROJECT_DIR, _wp8(_gc.group(1))), None
     if is_draft_pr(segment.strip()):
-        deny_tool("git-guard: pull requests open ready for review, not as drafts. Run the same gh pr create without "
-                  "--draft/-d. If a draft PR already exists, mark it ready with gh pr ready <number>.")
+        deny_tool("git-guard: pull requests open ready for review, not as drafts. Open it again without the draft "
+                  "setting. If a draft already exists, mark it ready with the GitHub tool (update_pull_request, draft "
+                  "false), or ask me to click 'Ready for review'.")
     # v3.2.10: a pull request on a work branch, not main. Weekly-Planner 9 Oct: PR 4 sat on the PR 3 branch; GitHub
     # closed it when that branch was deleted after the merge, and the work had to open again as #137. A warning, not a
     # refusal: night work stacks on purpose.
@@ -286,7 +295,20 @@ if _adds and re.search(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b", cmd) and "[skip ci]"
         _notes = ("WORKING_RECORD.md", "FEATURES.md", "docs/", "plans/")
     _files = [f.strip("'\"").replace("\\", "/") for a in _adds for f in shlex.split(a.replace("\\", "/"), posix=False)
               if f not in ("-A", "-u", "--all", ".")]
-    if _files and len(_files) == sum(len(shlex.split(a.replace("\\", "/"), posix=False)) for a in _adds) and all(
+    _all = len(_files) != sum(len(shlex.split(a.replace("\\", "/"), posix=False)) for a in _adds)
+    # v3.3.7 (piece 5): what the commit holds comes from git: the files already staged, plus the ones this step adds
+    # ("git add -A" or "." adds every changed file). 3.3.6 read only the file names in the command.
+    try:
+        from _common import run_text as _rt5
+        _files += [f for f in _rt5(["git", "diff", "--cached", "--name-only"], timeout=10).stdout.splitlines() if f.strip()]
+        if _all:
+            _files += [l[3:].strip().strip('"') for l in _rt5(["git", "status", "--porcelain"], timeout=10).stdout.splitlines()
+                       if len(l) > 3]
+    except Exception:
+        if _all:
+            _files = []
+    _files = sorted(set(f for f in _files if f))
+    if _files and all(
             any(f == n or f.startswith(n) or ("/" + n) in f or f.endswith("/" + n) for n in _notes) for f in _files):
         _notes_hint = True
 # v3.3.0: add [skip ci] to the commit message itself instead of refusing the commit (a refused step costs a whole turn)
@@ -301,7 +323,8 @@ if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
                          "updatedInput": dict(tool_input, command=_new),
                          "additionalContext": "[git-guard] Notes only: [skip ci] was added to the commit message."}}))
         sys.exit(0)
-if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
+if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT") and os.environ.get("HZ_FULL_RULES"):
+    # v3.3.7: only in the old method; by default a commit whose message cannot take '[skip ci]' goes ahead
     # v3.2.15: refused once per prompt (the hint alone was ignored: 11 Oct, notes pushes started second GitHub runs)
     try:
         import json as _j2
@@ -383,6 +406,37 @@ def _safe_git_only(c, branch):
     return True
 
 
+def _safe_gh_rest(c):
+    """v3.3.7: the setup's own GitHub REST steps for this repository's pull requests (open, change the text or base,
+    read state and checks) and the check wait (pr_checks.py from the central hooks). Nothing else: no DELETE, no other
+    endpoint, no other repository, no shell tricks."""
+    try:
+        from _common import gh_repo as _gr
+        repo = _gr()
+    except Exception:
+        repo = None
+    t = c.strip()
+    if re.search(r"[;&|<>`]|\$\(", re.sub(r'"[^"]*"', '""', t)):
+        return False
+    hooks = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
+    if re.fullmatch(r'(timeout\s+\d+\s+)?python3?\s+"?' + re.escape(hooks) + r'/pr_checks\.py"?(\s+\d+)?(\s+--timeout\s+\d+)?', t):
+        return True
+    if not repo:
+        return False
+    m = re.fullmatch(r"gh\s+api\s+(?:-X\s+(GET|POST|PATCH)\s+)?repos/" + re.escape(repo) +
+                     r"/(pulls(?:/\d+)?|pulls\?\S*|commits/[0-9a-f]{7,40}/check-runs\S*)(\s+.*)?", t, re.S)
+    if not m:
+        return False
+    rest = m.group(3) or ""
+    if (m.group(1) == "POST" and not re.fullmatch(r"pulls", m.group(2))) or re.search(r"draft=true", rest, re.I):
+        return False
+    return all(re.fullmatch(r"-[fF]|--input|[A-Za-z_]+=.*|@?\S+", x) for x in rest.split()) if rest.strip() else True
+
+
+if tool == "Bash" and not os.environ.get("HZ_FULL_RULES") and _safe_gh_rest(cmd):
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                                             "permissionDecisionReason": "the setup's own GitHub REST step"}}))
+    sys.exit(0)
 if tool == "Bash" and not _stack_warn and not _notes_hint and not os.environ.get("HZ_FULL_RULES") \
         and not os.environ.get("HZ_GIT_ALLOW_OFF"):
     try:
@@ -399,8 +453,9 @@ if _stack_warn or _notes_hint:   # after every other check of this command (add_
     from _common import add_context as _ac, log as _lg
     _lg("git-guard", {"stacked_base": _stack_warn, "notes_only_commit": bool(_notes_hint)})
     _ac("PreToolUse", ((f"[git-guard] This pull request's base is {_stack_warn}, not main. Do this only when the plan or "
-        "night work stacks it. When the base pull request merges, change this base to main at once (gh pr edit "
-        "<number> --base main), before the base branch is deleted: GitHub closes a pull request whose base branch is "
+        "night work stacks it. When the base pull request merges, change this base to main at once (gh api -X PATCH "
+        "repos/<owner>/<repo>/pulls/<number> -f base=main; in a cloud session, the GitHub tool), before the base "
+        "branch is deleted: GitHub closes a pull request whose base branch is "
         "gone. ") if _stack_warn else "") + ("[git-guard] This commit has notes only. Put [skip ci] in its message, so "
         "GitHub starts no run and does not cancel the run of your code." if _notes_hint else ""))
 sys.exit(0)

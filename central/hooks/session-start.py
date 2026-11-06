@@ -133,12 +133,13 @@ facts.append("[stub] " + stub)
 if setup_note:
     facts.append(setup_note)
     import re as _re8
-    _m8 = _re8.search(r"gh pr (?:create --base main --head|edit) (hz-setup-update-[\w.-]+)", setup_note)
+    _m8 = _re8.search(r"(?:head[= ]|--head )(hz-setup-update-[\w.-]+)", setup_note)   # v3.3.7: REST or the GitHub tool
     if _m8:   # v3.2.8: the end-of-reply check sees that the session opened or linked the setup pull request
         try:
             import json as _j8
             os.makedirs(os.path.join(PROJECT_DIR, ".claude", "state"), exist_ok=True)
-            _j8.dump({"branch": _m8.group(1), "session": str(data.get("session_id") or "")},
+            _j8.dump({"branch": _m8.group(1), "session": str(data.get("session_id") or ""),
+                      "version": str((cfg.get("stub_expect") or {}).get("version", "latest"))},
                      open(os.path.join(PROJECT_DIR, ".claude", "state", "setup-pr.json"), "w", encoding="utf-8"))
         except OSError:
             pass
@@ -180,8 +181,7 @@ facts.append("While we shape a design, keep each agreed point in '## Design deci
              "me. Then write one plan with every agreed point.")
 facts.append("Find all, fix all, check once. Run the whole check and list every problem. Fix them together. Then run "
              "everything one time.")
-facts.append(f"End the status line of every reply with ' · Rules v{version}' (Confidence: … · Status: … · Rules "
-             f"v{version}). It is where I see the rules version. If the setup is old, say so in the 'I need from you' line.")
+facts.append("If the setup is old, say so in the 'I need from you' line.")   # v3.3.7: no version in the status line
 facts.append("A change from what I approved (plan, prototype, design) is a question in the '❓ Decisions' list. Add "
              "a link to a page that shows prototype and build side by side.")
 facts.append("Show every Plan vN in plan mode. Commit the approved plan file only for work that spans sessions; a "

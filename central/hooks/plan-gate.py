@@ -325,7 +325,7 @@ elif any(ph in low for ph in NIGHT):
     msgs.append("[night] I am away now. Use my answers. Keep working on every approved stage that needs no other answer "
                 "from me. Stack pull requests as usual: branch from the earlier unmerged branch, with that branch as "
                 "the base, at most 3 unmerged. I merge them in order in the morning; after each merge, move the next base to main "
-                "(gh pr edit <n> --base main). "
+                "(gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f base=main; in a cloud session, the GitHub tool). "
                 "Never merge. When a new question comes up, take your own recommendation if it changes no app behaviour and "
                 "no stored data and can be undone: build it on its branch and note 'built on my recommendation — "
                 "undone if you say no'. Show no plan at night; in the morning, show the next Rev with these decisions "

@@ -149,6 +149,31 @@ def _publish(project_dir, branch, version, staged):
             _git(project_dir, "branch", "-D", branch, timeout=10)      # the branch made here, nothing else
 
 
+def _pr_link(project_dir, branch):
+    try:
+        from _common import gh_repo
+        repo = gh_repo()
+    except Exception:
+        repo = None
+    return f"https://github.com/{repo}/pulls?q=head%3A{branch}" if repo else f"the pull request of branch {branch}"
+
+
+def _setup_pr_step(project_dir, branch, version):
+    """v3.3.7: the setup pull request, never with `gh pr` (403 in a cloud session). In a cloud session (CLAUDE_CODE_REMOTE
+    =true) the GitHub tool; locally one GitHub REST call."""
+    title, body = f"Setup update (automatic, v{version})", "Automatic setup update from hz-claude-config."
+    try:
+        from _common import is_cloud, gh_repo
+        cloud, repo = is_cloud(), gh_repo()
+    except Exception:
+        cloud, repo = False, None
+    if cloud:
+        return (f"open its pull request with the GitHub tool: create_pull_request with head {branch}, base main, title "
+                f"\"{title}\", body \"{body}\", draft false. If GitHub says it already exists, use that one.")
+    return (f"open its pull request with exactly: gh api -X POST repos/{repo or '<owner>/<repo>'}/pulls -f head={branch} "
+            f"-f base=main -f title=\"{title}\" -f body=\"{body}\" — if GitHub says it already exists, use that one.")
+
+
 def update(cfg, project_dir):
     """Returns (stub_line, instruction or None). Called only when the stub is outdated."""
     if os.path.exists(os.path.join(project_dir, "tools", "build_manifest.py")):
@@ -171,9 +196,8 @@ def update(cfg, project_dir):
     if kind == "waiting":
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
-                f"Do not make another one. As your first step run once: gh pr edit {branch} --title \"Setup update (automatic, "
-                f"v{version})\" — it changes nothing on GitHub, and Claude Code then shows the pull request card. In your "
-                "first reply's 'I need from you' line, ask me to merge it.")
+                f"Do not make another one. In your first reply's 'I need from you' line, ask me to merge it, with its "
+                f"link ({_pr_link(project_dir, branch)}).")
 
     changed, skipped, staged = [], [], {}    # v3.2.6: staged = new file texts by path; written to disk only as a fallback
     _git(project_dir, "fetch", "-q", "origin", "main", timeout=15)   # v3.2.7: decide on fresh GitHub facts
@@ -258,11 +282,9 @@ def update(cfg, project_dir):
     if done:
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] The session start made this repository's setup update itself: branch {branch} (from origin/main) "
-                f"holds the commit 'Setup update (automatic, v{version})' and is pushed. As your first step, open its pull "
-                f"request with exactly: gh pr create --base main --head {branch} --title \"Setup update (automatic, v{version})\" "
-                f"--body \"Automatic setup update from hz-claude-config.\" — if gh says it already exists, run instead: gh pr "
-                f"edit {branch} --title \"Setup update (automatic, v{version})\". Claude Code then shows the pull request card. "
-                "Make no commit and switch no branch for this." + note + " In your first reply's 'I need from you' line, ask "
+                f"holds the commit 'Setup update (automatic, v{version})' and is pushed. As your first step, "
+                + _setup_pr_step(project_dir, branch, version) +
+                " Make no commit and switch no branch for this." + note + " In your first reply's 'I need from you' line, ask "
                 "me to merge that pull request; the new setup takes effect in the next session after the merge. Then continue "
                 "with my request.")
     for rel, text in staged.items():

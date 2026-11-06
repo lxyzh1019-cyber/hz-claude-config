@@ -54,6 +54,17 @@ if no_rec:
                     "ends here. Missing in: " + "; ".join(no_rec[:4]) + ".")
 if not problems:
     sys.exit(0)
+# v3.3.7 (piece 5): no send-back by default. The question reaches me; the shape problem is a saved fix for the next
+# step (the rules text keeps the shape). The old method (HZ_FULL_RULES) still sends it back once.
+import os as _o7
+if not _o7.environ.get("HZ_FULL_RULES"):
+    try:
+        from _common import save_fixes as _sf7
+        _sf7(data.get("session_id"), ["Questions: " + " ".join(problems)])
+    except Exception:
+        pass
+    log("ask-guard", {"saved_fix": len(problems)})
+    sys.exit(0)
 r = use_round("ask-guard", data.get("session_id"), 1)
 if r is not None and not r[1]:
     log("ask-guard", {"passed_after_one_try": len(problems)})
