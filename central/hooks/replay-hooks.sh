@@ -2165,7 +2165,7 @@ import json,_common as C
 recs=[json.loads(l) for l in open('$T/wk2.jsonl')]
 print(len(C.open_workers(recs,['opus-worker'],None,exclude_id='toolu_4')))")
 check "  ...without finish notices, workers older than 150 minutes still count as running only until then" "^3$" "$o"
-check "v3.2.1: the summary counts background-worker waits from every record kind" "queue-operation" "$(cat $H/stats.py)"
+check "v3.2.1: the summary counts background-worker waits from every record kind" "queue-operation" "$(cat $H/stats.py $H/session_facts.py)"   # v3.3.7: session_time moved to session_facts.py
 o=$(cd $H && python3 -c "
 import stubcheck,_common as C
 print(stubcheck.stub_status(C.load_config(), '$PROJ')[:40])")
