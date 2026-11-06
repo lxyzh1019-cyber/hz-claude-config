@@ -20,7 +20,7 @@ jobs:
           git config --global user.email ci@example.com
           git config --global user.name ci
           git config --global init.defaultBranch main
-          bash central/hooks/replay-hooks.sh > replay.log 2>&1; rc=$?
+          rc=0; bash central/hooks/replay-hooks.sh > replay.log 2>&1 || rc=$?   # GitHub runs this with bash -e: keep going to show the FAIL lines
           grep '^FAIL' replay.log | head -60 || true
           tail -1 replay.log
           exit $rc
