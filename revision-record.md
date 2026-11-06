@@ -99,8 +99,8 @@ F86 v3.3.7: the scorecard in the pull request text | <!-- hz-scorecard -->
 F87 v3.3.7: the clear-context option at plan approval | showClearContextOnPlanAccept
 
 ## Removed (approved, with reason)
-- F73 v3.3.6: the rules version at the end of the status line | reason: its fix-first fired 4 times in 3 sessions; the Stop notice already shows the version | approved: owner, 5 Nov paste block (piece 5)
-- F75 v3.3.6: a merge request needs the code-made summary after the checks (the paste send-back) | reason: Build 4 was sent back twice and the summary landed after the closing lines; the check now delivers the summary and the report itself | approved: owner, 5 Nov paste block (piece 4)
+F73 v3.3.6: the rules version at the end of the status line | reason: its fix-first fired 4 times in 3 sessions; the Stop notice already shows the version | approved: owner, 5 Nov paste block (piece 5)
+F75 v3.3.6: a merge request needs the code-made summary after the checks (the paste send-back) | reason: Build 4 was sent back twice and the summary landed after the closing lines; the check now delivers the summary and the report itself | approved: owner, 5 Nov paste block (piece 4)
 - The central copy of hz-change-guard (central/skills/hz-change-guard) | reason: D7 = B, the account skill anthropic-skills:hz-change-guard loads in local and cloud sessions | approved: owner, 5 Nov paste block (piece 7)
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
 
