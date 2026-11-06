@@ -45,7 +45,6 @@ CLOSING_WORDS = ("Write the three closing lines in everyday words. Use no file n
 
 # ---- writing (ASD-STE100-lite) ----
 STE_RULES = [
-    "Start with the result: what I will see, or what changes for me. Do not explain how it works unless I ask.",
     "Use common words. Use one word for one thing. Do not change words for variety.",
     "Use these verbs: check, make sure, start, stop, use, show, find, change, remove, need.",
     "If you must use a technical word, explain it one time in plain words.",
@@ -58,10 +57,11 @@ STE_RULES = [
 STE_MAX_WORDS = 25
 
 # ---- workers and helpers ----
-WORKER_RUN = ("Run workers in the background. Start all workers that can run now in one step (at most 3; the "
-              "plan's group tells which), then end your turn with one line: \"" + WORKING_LINE + "\". A second or "
-              "third worker gets its own worktree ('Worktree:' and 'Group:' lines). The notice from each worker "
-              "starts your next step. Do not wait, poll or sleep.")
+# v3.3.7 (piece 7): the rules say workers run in the foreground (Hook: the call is rewritten); FORMATS said
+# "background … end your turn with ⏳". One text now, and a replay test that FORMATS and the rules agree.
+WORKER_RUN = ("Workers run in the foreground (the check rewrites the call). Start all workers that can run now in one "
+              "step (at most 3; the plan's group tells which); they still run at the same time. A second or third "
+              "worker gets its own worktree ('Worktree:' and 'Group:' lines). Do not wait, poll or sleep.")
 REVIEWER_MOMENTS = ["before a big or risky plan", "when a worker reports \"Stuck:\"", "before every pull request",
                     "before you call the work done"]
 

@@ -27,8 +27,10 @@ res(1, "README Step E: stop when GitHub Desktop lists more files than the chat s
 res(3, "rules: 'Part n' for work packages, '#number' for pull requests", "**Part and #number.**" in RULES and 'Never write "PR 5" for a Part' in RULES, "")
 res(3, "planner: never 'PR n' for a Part", "Never \"PR n\" for a Part" in read(C, "agents", "planner-instructions.md"), "")
 # 4
-res(4, "repo copy of hz-change-guard has the revision gate", os.path.exists(os.path.join(C, "skills", "hz-change-guard", "scripts", "revision_gate.py")), "")
-res(4, "  ...and the revision-record format", os.path.exists(os.path.join(C, "skills", "hz-change-guard", "references", "revision-record.md")), "")
+# v3.3.7 (D7 = B): the repo copy is removed; the account skill anthropic-skills:hz-change-guard has the gate
+# (tools/superseded-v337.txt)
+res(4, "v3.3.7: no repo copy of hz-change-guard; the router names the account skill",
+    not os.path.exists(os.path.join(C, "skills", "hz-change-guard")) and "anthropic-skills:hz-change-guard" in read(C, "hooks", "skill-router.json"), "")
 # 5
 rec = read(R, "revision-record.md")
 res(5, "revision-record.md: version, base, owner, features, open problems, fixes",

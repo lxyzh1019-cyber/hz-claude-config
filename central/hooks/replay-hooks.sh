@@ -4,6 +4,12 @@
 set -u
 H="$(cd "$(dirname "$0")" && pwd)"
 PROJ=$(mktemp -d); T=$(mktemp -d); FAKEHOME=$(mktemp -d)
+# v3.3.7 (owner D2: Claude Code builds and tests on Windows): under Git Bash, Windows Python cannot open /tmp/... paths
+# written into hook inputs, so every folder is used in its C:/... form, and Python speaks UTF-8.
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
+  H=$(cygpath -m "$H"); PROJ=$(cygpath -m "$PROJ"); T=$(cygpath -m "$T"); FAKEHOME=$(cygpath -m "$FAKEHOME")
+  export PYTHONUTF8=1 PYTHONIOENCODING=utf-8;;
+esac
 export CLAUDE_PROJECT_DIR="$PROJ" HOME="$FAKEHOME" PYTHONDONTWRITEBYTECODE=1
 unset CLAUDE_PLUGIN_ROOT
 cp "$H/config.json" "$T/config.bak"
@@ -122,7 +128,7 @@ mv FEATURES.md F.bak
 o=$(echo '{}' | python3 $H/session-start.py); check "missing per-repo file reported" "Missing files in this repository: FEATURES.md" "$o"
 o=$(echo "{\"transcript_path\":\"$T/ok.jsonl\",\"stop_hook_active\":false}" | { rm -f "$PROJ/.claude/state/record-rounds.json"; python3 $H/record-guard.py; }); check "record-guard points to seed templates" "seed" "$o"
 mv F.bak FEATURES.md
-o=$(echo '{"prompt":"update the plan to v3"}' | python3 $H/skill-router.py); check "router points to central skill file" "hz-change-guard.*read .*skills/hz-change-guard/SKILL.md" "$o"
+o=$(echo '{"prompt":"update the plan to v3"}' | python3 $H/skill-router.py); check "router points to the account skill (v3.3.7: the central copy is removed)" "anthropic-skills:hz-change-guard" "$o"
 o=$(echo '{"prompt":"review my index.html, is this working?"}' | python3 $H/skill-router.py); check "router prefixes account skill" "anthropic-skills:hz-reviewer" "$o"
 # --- Loader (only in the hz-claude-config checkout)
 L="$CENTRAL/../stub/hz-loader.py"
@@ -2209,11 +2215,10 @@ o=$(re_in '| 53 | R8 2026-09-26 | run the installer | done | note |' | python3 $
 check "  ...rows of other tables are not checked" "clean" "$(echo "$o" | grep -c 'Start the State cell' | sed 's/^0$/clean/')"
 check "v3.2.2: the ⏳ line shows the Build count" "Build <n> of <m> done" "$(cd $H && python3 -c 'import formats;print(formats.WORKING_LINE)')"
 check "  ...and the rules say the same" "Build <n> of <m> done" "$(cat $H/../rules/CLAUDE-rules.md)"
-G=$H/../skills/hz-change-guard
-check "v3.2.2: the workers' regression guard carries the content ledger" "Content ledger: {present}/{total}" "$(cat $G/SKILL.md)"
-printf 'Refund window is 30 days.\n' > "$T/art.txt"; printf 'L01 Refund | 30 days\nL02 Contact | Email us\n' > "$T/led.md"
-o=$(python3 $G/scripts/coverage_gate.py "$T/art.txt" "$T/led.md"; echo "rc=$?")
-check "  ...and its coverage gate names a missing phrase and fails" "MISSING L02.*rc=1" "$(echo $o)"
+# v3.3.7 (piece 7, D7 = B): the central copy of hz-change-guard is removed; the account skill
+# anthropic-skills:hz-change-guard carries the content ledger and the coverage gate (tools/superseded-v337.txt)
+check "v3.3.7: no central copy of hz-change-guard" "gone" "$([ -e $H/../skills/hz-change-guard ] && echo here || echo gone)"
+check "  ...and the workers get the feature list in the hand-over" "puts the feature list for your area into the hand-over" "$(cat $H/../agents/opus-worker-instructions.md)"
 # v3.2.2: one report per piece of work (real harness: scenario_early_report.sh)
 rt(){ python3 -c "import json,sys;print(json.dumps({'session_id':'s','tool_name':sys.argv[1],'tool_input':json.loads(sys.argv[2]),**json.loads(sys.argv[3])}))" "$1" "$2" "${3:-{\}}" | HZ_REPORT_TIMING_OFF= python3 $H/report-timing.py; }
 check "v3.2.2: starting a helper tells the main session to wait with the one line (v3.2.14: only with background workers)" "Still running in the background: the helper" "$(HZ_BACKGROUND_WORKERS=1 rt Agent '{"subagent_type":"opus-worker"}')"

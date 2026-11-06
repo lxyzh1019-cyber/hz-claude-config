@@ -50,7 +50,12 @@ else:
              f"- reviewer: {os.path.join(_agents, 'reviewer-instructions.md')}\n"
              f"- compare (when screens or figures change): {os.path.join(_agents, 'compare-instructions.md')}\n"
              f"- feature list conversion (once per app, when I ask): {os.path.join(_agents, 'conversion-instructions.md')}")
-facts.append(f"Skills: {SKILLS_DIR}. When a skill is named, read its SKILL.md there.")
+# v3.3.7 (piece 7, D7 = B): the skills are account skills; Claude Code loads them in local and cloud sessions
+if os.path.isdir(SKILLS_DIR) and any(os.path.isfile(os.path.join(SKILLS_DIR, d, "SKILL.md")) for d in os.listdir(SKILLS_DIR)):
+    facts.append(f"Skills: {SKILLS_DIR}. When a skill is named, read its SKILL.md there.")
+else:
+    facts.append("Skills are account skills (anthropic-skills:<name>, for example anthropic-skills:hz-change-guard). Load a "
+                 "named skill with the Skill tool. Helpers cannot load skills: put what they need into the hand-over.")
 # v3.2.0: the test rule of this repository — a test map, and a full run of 5 minutes or less
 try:
     _feat = open(os.path.join(PROJECT_DIR, cfg["features_file"]), encoding="utf-8").read()
