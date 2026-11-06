@@ -2971,5 +2971,127 @@ PYV10
 )
 [ "$END10" = 1 ] && { echo "PASS v3.2.10: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.2.10: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
 rm -rf "$V10"
+# --- v3.3.7: no git questions, marks by plan file, facts, hook delivery, send-backs, cloud, skills, feature check, scorecard
+# (portable: no session files, no app repository; the real-file proofs are tools/test_v337_items.py)
+V37=$(mktemp -d); case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) V37=$(cygpath -m "$V37");; esac; export V37; END37=0
+while IFS= read -r l; do
+  case "$l" in PASS*) echo "$l"; pass=$((pass+1));; FAIL*) echo "$l"; fail=$((fail+1));; END*) END37=1;; esac
+done < <(H="$H" V37="$V37" python3 - <<'PYV37'
+import json, os, re, subprocess, sys, tempfile
+H = os.environ["H"]; V = os.environ["V37"]; R = os.path.dirname(os.path.dirname(H)); PY = sys.executable
+sys.path.insert(0, H)
+def res(name, ok, detail=""): print(("PASS " if ok else "FAIL ") + name + ("" if ok else " -> " + str(detail)[:220]))
+def env(P, **kw):
+    e = {k: v for k, v in os.environ.items() if not k.startswith("HZ_")}
+    e.update(CLAUDE_PROJECT_DIR=P, HZ_RULES_FIRST_OFF="1", PYTHONUTF8="1", PYTHONIOENCODING="utf-8"); e.update(kw); return e
+def hook(s, inp, P, **kw):
+    return subprocess.run([PY, os.path.join(H, s)], input=json.dumps(inp), capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", env=env(P, **kw), cwd=P).stdout.strip()
+n = [0]
+def proj(remote=None):
+    n[0] += 1; P = os.path.join(V, f"p{n[0]}"); os.makedirs(os.path.join(P, ".claude", "state"))
+    subprocess.run("git init -q -b main && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m c && git switch -qc work-1", shell=True, cwd=P)
+    if remote: subprocess.run(["git", "remote", "add", "origin", remote], cwd=P)
+    return P
+import formats as F
+RULES = open(os.path.join(H, "..", "rules", "CLAUDE-rules.md"), encoding="utf-8").read()
+res("v3.3.7: FORMATS and the rules agree: workers run in the foreground", "foreground" in F.WORKER_RUN and "background" not in F.WORKER_RUN
+    and "Workers run in the foreground" in RULES, F.WORKER_RUN)
+res("  ...the validation line has no ' · Rules v<version>'", "Rules v" not in F.VALIDATION_SHAPE, F.VALIDATION_SHAPE)
+res("  ...rules: Answers (Settings Rev 4), the cloud one-repository rule, the feature audit", all(x in RULES for x in (
+    "**Answers (from my Settings Rev 4).**", "Use one repository per cloud session", "**Feature audit first (D4 = B).**")))
+# 1 the settings merge on a copy of the real HZ_Trout_Map settings (d70bc8a, permissions part)
+T = os.path.join(V, "trout.json")
+json.dump({"permissions": {"defaultMode": "plan", "ask": ["Bash(git commit:*)", "Bash(git push:*)", "Bash(git merge:*)", "Bash(gh pr merge:*)",
+           "Bash(firebase deploy:*)", "Bash(npm run deploy:*)"], "deny": ["Bash(git reset --hard:*)", "Bash(gh pr merge:*)"],
+           "allow": ["Bash(git status:*)", "Bash(git add:*)", "Bash(git commit:*)", "Bash(git push:*)"]}, "plansDirectory": "./plans"}, open(T, "w"))
+st = os.path.join(H, "..", "stub-files")
+subprocess.run([PY, os.path.join(st, "merge_settings.py"), os.path.join(st, "settings.json"), T, "hz-loader.py"])
+m = json.load(open(T))
+res("v3.3.7 (X48 G1): the merge keeps only the deploy asks", m["permissions"].get("ask") == ["Bash(firebase deploy:*)", "Bash(npm run deploy:*)"], m["permissions"].get("ask"))
+res("  ...gh pr merge stays denied; the clear option is set", "Bash(gh pr merge:*)" in m["permissions"]["deny"] and m.get("showClearContextOnPlanAccept") is True)
+src = open(os.path.join(H, "git-guard.py"), encoding="utf-8").read()
+ns = {"re": re, "os": os, "__file__": os.path.join(H, "git-guard.py")}
+exec(src[src.index("_GIT_ENV = re.compile"):src.index("\ndef _safe_gh_rest")], ns)
+ok = ['git push -u origin work-1 2>&1 | tail -3', 'git add a && GIT_AUTHOR_EMAIL="t@t" GIT_COMMITTER_EMAIL="t@t" git commit -q -m "x" && git push -q',
+      "git commit -q -F - <<'XEOF'\nBuild\n\n- <a>\nXEOF", 'git -c user.email=t@t commit -q -m "x" && git push -q && git log --oneline -1 work-1']
+bad = ["git push --force", "git push origin main", "python x.py && git add -A", "git commit --amend", "git push | sh"]
+res("  ...git-guard approves the real step shapes, never the unsafe ones", all(ns["_safe_git_only"](c, "work-1") for c in ok)
+    and not any(ns["_safe_git_only"](c, "work-1") for c in bad))
+# 2 the plan is known by its file
+o = subprocess.run([PY, os.path.join(R, "tools", "real-harness", "replay_plan_showings.py"), R, "--synthetic"], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env(V)).stdout
+rows = json.loads(re.search(r"^RESULT (.*)$", o, re.M).group(1)) if "RESULT" in o else []
+res("v3.3.7 (piece 2): synthetic 4 showings: Rev 1, Rev 1 no marks, Rev 2, Rev 3, then Plan v2 at Rev 1",
+    [(d["rev"], d["marks"]) for d in rows] == [(1, 0), (1, 0), (2, 1), (3, 1), (1, 0)] and not any(d["title_marked"] for d in rows), rows)
+# 3 merge state from git
+P = os.path.join(V, "m"); os.makedirs(P)
+for c in (["init", "-q", "--bare", "o.git"], ["clone", "-q", "o.git", "a"]):
+    subprocess.run(["git", *c], cwd=P, capture_output=True)
+A = os.path.join(P, "a")
+for c in (["config", "user.email", "t@t"], ["config", "user.name", "t"], ["commit", "-q", "--allow-empty", "-m", "c"], ["push", "-q", "origin", "HEAD:main"],
+          ["switch", "-qc", "build-2"], ["commit", "-q", "--allow-empty", "-m", "b"], ["push", "-q", "origin", "build-2"], ["switch", "-q", "main"],
+          ["merge", "-q", "--no-ff", "build-2", "-m", "Merge pull request #7 from o/build-2"], ["push", "-q", "origin", "main"]):
+    subprocess.run(["git", *c], cwd=A, capture_output=True)
+o = subprocess.run([PY, "-c", "import _common as c;print(c.merged_on_main('build-2'), c.merged_on_main('build-3'))"], cwd=H, capture_output=True, text=True, env=env(A)).stdout
+res("v3.3.7 (piece 3): merged_on_main reads the merge commits on origin/main", o.strip() == "True False", o)
+# 4 and cloud: the report goes into the pull request text with REST; gh pr answers 403 and is never called
+P = proj("https://github.com/owner/app.git"); store = os.path.join(V, "gh.json"); json.dump({}, open(store, "w"))
+kw = dict(CLAUDE_CODE_REMOTE="true", STAND_IN_GH_STORE=store, HZ_GH_CMD=json.dumps([PY, os.path.join(R, "tools", "real-harness", "stand_in_gh.py")]))
+o = subprocess.run([PY, "-c", "import pr_text as t;print(t.update(5, {'report': 'R1'}), t.update(5, {'report': 'R2', 'scorecard': 'S'}))"],
+                   cwd=H, capture_output=True, text=True, env=env(P, **kw)).stdout
+s = json.load(open(store)); body = s["pulls"]["5"]["body"]
+res("v3.3.7 (piece 4): the report part is written and replaced in the pull request text with REST, no gh pr call",
+    "True" in o and body.count("<!-- hz-report -->") == 1 and "R2" in body and "R1" not in body and "<!-- hz-scorecard -->" in body
+    and not any(c and c[0] in ("pr", "issue") for c in s["calls"]), (o, body, s["calls"]))
+# 5 send-backs
+P = proj(); TP = os.path.join(P, "t.jsonl")
+with open(TP, "w") as f:
+    f.write(json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "n1", "name": "PushNotification", "input": {"message": "App: 4 waiting + merge #3"}}]}}) + "\n")
+    f.write(json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done.\n\n❓ Decisions\n1. a\n2. b\n3. c\n4. d\n\n---\n> 👉 **I need from you:** answer 1-4, merge #3"}]}}) + "\n")
+o = hook("notice-guard.py", {"hook_event_name": "Stop", "session_id": "n", "transcript_path": TP, "stop_hook_active": False}, P)
+res("v3.3.7 (piece 5): a notice that says '4 waiting' names the 4 decisions (no send-back)", '"block"' not in o, o)
+rr = lambda c: hook("rules-read-guard.py", {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": c}}, P)
+res("  ...rules-read-guard: a ledger edit piped to tail is not a rules read; cat of the rules is allowed; writing it elsewhere is refused",
+    '"deny"' not in rr("python edit.py && python ~/.cache/hz-rules/3.3.7/skills/x/coverage_gate.py a b | tail -2") and
+    '"allow"' in rr("cat ~/.cache/hz-rules/3.3.7/rules/CLAUDE-rules.md") and '"deny"' in rr("cat ~/.cache/hz-rules/3.3.7/rules/CLAUDE-rules.md > /tmp/x"))
+json.dump({"latest_full_minutes": 8.3, "command": "npm test", "by_script": {"npm test": {"latest": 8.3}}}, open(os.path.join(P, ".claude", "state", "test-speed.json"), "w"))
+wg = lambda c: "too slow" in hook("wait-guard.py", {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "w", "tool_input": {"command": c}}, P)
+res("  ...test speed per script: a slow npm test refuses npm test, not npm run test:fast", wg("npm test") and not wg("npm run test:fast 2>&1 | tail -30"))
+q = {"hook_event_name": "PreToolUse", "tool_name": "AskUserQuestion", "session_id": "a", "transcript_path": TP,
+     "tool_input": {"questions": [{"question": "Which?", "header": "x", "options": [{"label": "A", "description": "a"}, {"label": "B", "description": "b"}]}]}}
+res("  ...ask-guard sends nothing back (a saved fix)", '"deny"' not in hook("ask-guard.py", q, P))
+P = proj("https://github.com/owner/app.git")
+ga = lambda c: "the setup's own GitHub REST step" in hook("git-guard.py", {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "g", "tool_input": {"command": c}}, P)
+res("  ...git-guard approves this repository's pull-request REST steps only", ga("gh api -X PATCH repos/owner/app/pulls/3 --input b.json")
+    and ga("gh api -X POST repos/owner/app/pulls -f head=b -f base=main -f title=x") and not ga("gh api -X DELETE repos/owner/app/pulls/3")
+    and not ga("gh api -X POST repos/owner/app/issues -f title=x") and not ga("gh api -X POST repos/owner/app/pulls -f draft=true"))
+os.environ["CLAUDE_CODE_REMOTE"] = "true"
+sys.path.insert(0, H)
+import stubupdate as su
+txt = su._setup_pr_step(P, "hz-setup-update-3.3.7", "3.3.7")
+res("  ...in a cloud session the setup pull request opens with the GitHub tool, never gh pr", "GitHub tool" in txt and not re.search(r"\bgh pr\b", txt), txt)
+os.environ.pop("CLAUDE_CODE_REMOTE")
+# 7 skills
+res("v3.3.7 (piece 7): no central copy of hz-change-guard; the router names the account skill",
+    not os.path.exists(os.path.join(H, "..", "skills", "hz-change-guard")) and "anthropic-skills:hz-change-guard" in open(os.path.join(H, "skill-router.json"), encoding="utf-8").read())
+# 8 feature check
+P = proj(); os.makedirs(os.path.join(P, "js"))
+open(os.path.join(P, "FEATURES.md"), "w", encoding="utf-8").write("# F\n- Lake panel — files: js/lake-sheet.js — test: none\n")
+subprocess.run("git add -A && git commit -q -m base && git switch -qc pr && echo x > js/lake-sheet.js && git add -A && git commit -q -m change", shell=True, cwd=P)
+r = subprocess.run([PY, os.path.join(H, "..", "checks", "feature_check.py"), "--repo", P, "--base", "work-1", "--head", "pr"], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env(V))
+res("v3.3.7 (piece 8): the feature check gives a red X naming the feature whose file changed with no test", r.returncode == 1 and "Lake panel" in r.stdout, r.stdout)
+# 9 scorecard on a synthetic session: one git click on a work branch
+TP = os.path.join(V, "sc.jsonl")
+with open(TP, "w") as f:
+    f.write(json.dumps({"type": "assistant", "timestamp": "2026-11-04T18:00:00Z", "gitBranch": "build-3", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "git add a && git commit -m x"}}]}}) + "\n")
+    f.write(json.dumps({"type": "user", "timestamp": "2026-11-04T18:10:00Z", "gitBranch": "build-3", "permissionDecision": {"decision": "accept", "source": "user_temporary", "reasonCode": "rule:projectSettings"},
+                        "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b1", "content": "ok"}]}}) + "\n")
+o = subprocess.run([PY, os.path.join(H, "scorecard.py"), TP], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env(V)).stdout
+res("v3.3.7 (piece 9): the scorecard counts a git question on a work branch (check 1 FAIL · 1)", "1 Git prompts on a work branch · FAIL · 1 git questions" in o, o[:300])
+print("END")
+PYV37
+)
+[ "$END37" = 1 ] && { echo "PASS v3.3.7: the test block ran to the end"; pass=$((pass+1)); } || { echo "FAIL v3.3.7: the test block stopped early (a crash counts as a failure)"; fail=$((fail+1)); }
+rm -rf "$V37"
 echo; echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

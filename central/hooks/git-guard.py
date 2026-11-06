@@ -34,7 +34,7 @@ def _ci_on_branch_push():
 
 
 def _green_after_last_push(records):
-    """v3.2.9: the session read a green GitHub run after its last push (gh run watch / view / list, gh pr checks)."""
+    """v3.2.9: the session read a green GitHub run after its last push (gh run watch / view / list, or the old checks command)."""
     import json as _j9
     uses, last_push, ok = {}, None, False
     for r in records:
@@ -182,7 +182,7 @@ if _m7 and re.search(r"\bgit\b", _m7.group(2)) and not os.environ.get("HZ_CD_GIT
         sys.exit(0)
     deny_tool("git-guard: a cd and a git command in one step make Claude Code ask me for permission. Run "
               f"'cd {_m7.group(1)}' as its own step, then the rest without the cd. Run tests from there without cd too.")
-if "git" not in cmd and "gh" not in cmd:
+if "git" not in cmd and "gh" not in cmd and "pr_checks.py" not in cmd:   # v3.3.7: the REST check wait
     sys.exit(0)
 
 
