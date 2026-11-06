@@ -96,7 +96,7 @@ except OSError:
 if features_is_template:
     send_back(f"{cfg['features_file']} is missing or still the unfilled template, so no regression check is possible. "
           f"Before you finish: if it is missing, make it and {cfg['record_file']} from the templates in {SEED_DIR}. "
-          "Then put the app's current locked features into it (hz-change-guard). Make the regression "
+          "Then put the app's current locked features into it (anthropic-skills:hz-change-guard). Make the regression "
           f"table and update {cfg['record_file']}.")
 # v3.2.7: the record is written at plan approval, at a stage end and before the pull request, not at every event
 # (Figure-Skate 8 Oct: 24 main steps, 4.5 min on record, feature list and plan bookkeeping in a 53-minute session)

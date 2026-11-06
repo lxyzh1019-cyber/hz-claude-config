@@ -16,7 +16,10 @@ if _pr and str(_pr.get("session") or "") == str(data.get("session_id") or ""):
     _b = re.escape(str(_pr.get("branch") or ""))
     _recs = read_transcript(data.get("transcript_path"))
     _done = any(isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "Bash"
-                and re.search(r"\bgh\s+pr\s+(create|edit)\b[^\n]*" + _b, str((b.get("input") or {}).get("command") or ""))
+                and re.search(r"\bgh\s+pr\s+(create|edit)\b[^\n]*" + _b + r"|\bgh\s+api\b[^\n]*/pulls\b[^\n]*head=" + _b,
+                              str((b.get("input") or {}).get("command") or ""))
+                or isinstance(b, dict) and b.get("type") == "tool_use" and re.search(r"create_pull_request$", str(b.get("name") or ""))
+                and str((b.get("input") or {}).get("head") or "") == str(_pr.get("branch") or "")
                 for r in _recs if r.get("type") == "assistant" and not r.get("isSidechain")
                 for b in (((r.get("message") or {}).get("content")) or []) if isinstance(((r.get("message") or {}).get("content")), list))
     from _common import refused_by_safety_check as _rsc8, last_turn as _lt8
@@ -26,6 +29,11 @@ if _pr and str(_pr.get("session") or "") == str(data.get("session_id") or ""):
         except OSError:
             pass
     elif ((lambda r: r[1] if r is not None else not data.get("stop_hook_active"))(use_round("setup-pr", data.get("session_id"), 1))):
+        from _common import is_cloud as _icl
+        if _icl():   # v3.3.7: gh pr answers 403 in a cloud session
+            from stubupdate import _setup_pr_step as _sps
+            block(f"Open the setup pull request now: {_sps(PROJECT_DIR, _pr.get('branch'), _pr.get('version') or 'latest')} "
+                  "Then answer again, with 'merge it' in the 'I need from you' line.", kind="work")
         block(f"Open the setup pull request now with the gh command from the session start (gh pr create … --head "
               f"{_pr.get('branch')} …, or gh pr edit {_pr.get('branch')} … if it exists). Claude Code then shows its card. "
               "Then answer again, with 'merge it' in the 'I need from you' line.", kind="work")

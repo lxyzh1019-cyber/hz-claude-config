@@ -1,0 +1,26 @@
+# v3.3.7 (owner D2: Claude Code builds and tests this repository): the full replay suite runs once, on GitHub, on each
+# pull request to main (rules: the full suite runs on GitHub; locally only the changed parts). One job.
+name: replay
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Replay suite
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          git config --global init.defaultBranch main
+          rc=0; bash central/hooks/replay-hooks.sh > replay.log 2>&1 || rc=$?   # GitHub runs this with bash -e: keep going to show the FAIL lines
+          grep '^FAIL' replay.log | head -60 || true
+          tail -1 replay.log
+          exit $rc

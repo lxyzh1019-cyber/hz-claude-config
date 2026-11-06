@@ -26,9 +26,10 @@ def _live_draft(branch):
     try:
         from _common import run_text
         import json as _j
-        out = run_text(["gh", "pr", "view", branch, "--json", "state,isDraft"], timeout=15).stdout
-        d = _j.loads(out or "{}")
-        return d.get("state") == "OPEN" and bool(d.get("isDraft"))
+        from _common import gh_repo, gh_rest   # v3.3.7: GitHub REST, never `gh pr view` (403 in a cloud session)
+        repo = gh_repo()
+        prs = gh_rest(f"repos/{repo}/pulls?head={repo.split('/')[0]}:{branch}&state=open") if repo else None
+        return isinstance(prs, list) and any(p.get("draft") for p in prs if isinstance(p, dict))
     except Exception:
         return False
 if not os.environ.get("HZ_PR_LIVE_OFF"):
@@ -39,5 +40,7 @@ r = use_round("pr-ready", data.get("session_id"), 1)
 if (r is None and data.get("stop_hook_active")) or (r is not None and not r[1]):
     sys.exit(0)
 block(f"The pull request on {', '.join(drafts)} is still a draft, so I cannot merge it. Mark it ready for review: "
-      "gh pr ready <number>, or the GitHub tool's update_pull_request with draft false. Then send only one line: "
+      + __import__("_common").pr_step("gh pr ready <number>, or the GitHub tool's update_pull_request with draft false",
+                                      "the GitHub tool's update_pull_request with draft false, or ask me to click "
+                                      "'Ready for review'") + ". Then send only one line: "
       "'#<number> is ready for review.' Do not repeat the report.", kind="work")

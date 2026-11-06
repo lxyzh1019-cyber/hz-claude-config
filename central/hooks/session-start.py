@@ -50,7 +50,12 @@ else:
              f"- reviewer: {os.path.join(_agents, 'reviewer-instructions.md')}\n"
              f"- compare (when screens or figures change): {os.path.join(_agents, 'compare-instructions.md')}\n"
              f"- feature list conversion (once per app, when I ask): {os.path.join(_agents, 'conversion-instructions.md')}")
-facts.append(f"Skills: {SKILLS_DIR}. When a skill is named, read its SKILL.md there.")
+# v3.3.7 (piece 7, D7 = B): the skills are account skills; Claude Code loads them in local and cloud sessions
+if os.path.isdir(SKILLS_DIR) and any(os.path.isfile(os.path.join(SKILLS_DIR, d, "SKILL.md")) for d in os.listdir(SKILLS_DIR)):
+    facts.append(f"Skills: {SKILLS_DIR}. When a skill is named, read its SKILL.md there.")
+else:
+    facts.append("Skills are account skills (anthropic-skills:<name>, for example anthropic-skills:hz-change-guard). Load a "
+                 "named skill with the Skill tool. Helpers cannot load skills: put what they need into the hand-over.")
 # v3.2.0: the test rule of this repository — a test map, and a full run of 5 minutes or less
 try:
     _feat = open(os.path.join(PROJECT_DIR, cfg["features_file"]), encoding="utf-8").read()
@@ -133,12 +138,13 @@ facts.append("[stub] " + stub)
 if setup_note:
     facts.append(setup_note)
     import re as _re8
-    _m8 = _re8.search(r"gh pr (?:create --base main --head|edit) (hz-setup-update-[\w.-]+)", setup_note)
+    _m8 = _re8.search(r"(?:head[= ]|--head |gh pr edit )(hz-setup-update-[\w.-]+)", setup_note)   # v3.3.7: also the GitHub tool
     if _m8:   # v3.2.8: the end-of-reply check sees that the session opened or linked the setup pull request
         try:
             import json as _j8
             os.makedirs(os.path.join(PROJECT_DIR, ".claude", "state"), exist_ok=True)
-            _j8.dump({"branch": _m8.group(1), "session": str(data.get("session_id") or "")},
+            _j8.dump({"branch": _m8.group(1), "session": str(data.get("session_id") or ""),
+                      "version": str((cfg.get("stub_expect") or {}).get("version", "latest"))},
                      open(os.path.join(PROJECT_DIR, ".claude", "state", "setup-pr.json"), "w", encoding="utf-8"))
         except OSError:
             pass
@@ -157,10 +163,13 @@ if os.path.exists(os.path.join(PROJECT_DIR, "tools", "build_manifest.py")) and c
     facts.append("[update] " + cfg["update_notice"] + " Say this in one sentence in your first reply. Put it in the 'I need from you' line only if it asks me to do something.")
 facts.append(f"Note: routing guard mode: {cfg.get('routing_guard_mode', 'observe')}")
 facts += [f"[hotspot] {a}" for a in hotspot_alerts(cfg)]
-comp = completion_summary(cfg)
+comp = completion_summary(cfg, live=True)   # v3.3.7: merge state from git (origin/main) or gh api REST
 if comp["total"] and comp["open"]:
     facts.append("[completion] " + comp["display"] + "\nThese are the rows of this branch. Read the deliverable ledger "
                  "before you say anything is done. Show these lines in your first reply.")
+elif comp["total"] and comp.get("merged"):
+    facts.append(f"[completion] {comp['line']} · {len(comp['merged'])} of {comp['total']} merged on GitHub main "
+                 f"({', '.join(comp['merged'])}). Nothing of this branch is open.")
 try:
     from _common import edmonton_time
     facts.append(f"Times for me are in Edmonton time. It is now {edmonton_time()}. Change any UTC time: MDT is UTC-6 "
@@ -177,8 +186,7 @@ facts.append("While we shape a design, keep each agreed point in '## Design deci
              "me. Then write one plan with every agreed point.")
 facts.append("Find all, fix all, check once. Run the whole check and list every problem. Fix them together. Then run "
              "everything one time.")
-facts.append(f"End the status line of every reply with ' · Rules v{version}' (Confidence: … · Status: … · Rules "
-             f"v{version}). It is where I see the rules version. If the setup is old, say so in the 'I need from you' line.")
+facts.append("If the setup is old, say so in the 'I need from you' line.")   # v3.3.7: no version in the status line
 facts.append("A change from what I approved (plan, prototype, design) is a question in the '❓ Decisions' list. Add "
              "a link to a page that shows prototype and build side by side.")
 facts.append("Show every Plan vN in plan mode. Commit the approved plan file only for work that spans sessions; a "

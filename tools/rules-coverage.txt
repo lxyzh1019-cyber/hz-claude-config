@@ -15,7 +15,8 @@ Single source in hz-claude-config | R | live only in `hz-claude-config` and reac
 Stub files listed | R | `.claude/hz-loader.py`
 Never copy central files or edit the stub | R | Never copy central files in or edit the stub
 Report missing per-repo files; stop without rules | R | Report missing per-repo files first
-Session start injects facts; version at the end of the status line | R | the version the session start gives
+Session start injects facts | R | The session start gives the branch, missing files, setup state and the rules path
+# removed v3.3.7 (owner paste block, piece 5: the rules version is no longer at the end of the status line; the session start still gives it): version at the end of the status line
 Rules file read first, other tools wait (v3.1.29) | R | read the rules file (other tools wait until it is read
 Setup update: own branch, ready PR, ask to merge, never two | R | Never two setup pull requests at once
 Setup never updated by hand | R | Never update the setup by hand
@@ -100,7 +101,8 @@ Squares placed by code on changed lines (v3.2.0) | P | puts the square and label
 # removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 4 Sonnet complex words
 # removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 5 two tries
 # removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over rule 6 Sonnet file limits
-Workers in the background, end the turn, notice continues (format file) | F | starts your next step. Do not wait, poll or sleep.
+Workers in the foreground, started in one step (format file, v3.3.7) | F | Workers run in the foreground (the check rewrites the call).
+# removed v3.3.7 (piece 7, WORKER_RUN fix: workers run in the foreground, so no worker notice starts the next step): Workers in the background, end the turn, notice continues (format file)
 # removed v3.3.0 (lead playbook; history in revision-record.md): Fallback without Opus
 # removed v3.3.0 (lead playbook; history in revision-record.md): Hand-over content; check evidence
 # removed v3.3.0 (lead playbook; history in revision-record.md): Parallel workers; summarize
@@ -111,7 +113,8 @@ Rules read refusal; Read allowed | W | A shell read of the central rules is refu
 # removed v3.3.0 (lead playbook; history in revision-record.md): Scope discipline
 # removed v3.3.0 (lead playbook; history in revision-record.md): Structural over disciplinary
 Failing test first | W | **Failing test first.**
-Feature manifest and regression table | W | kept / added / intentionally removed / missing
+Feature list from the hand-over; kept / changed / removed at the end (v3.3.7) | W | list kept / changed / removed at the end
+# removed v3.3.7 (piece 7, the worker hand-over line given by the owner replaced it): Feature manifest and regression table
 # removed v3.3.0 (lead playbook; history in revision-record.md): Template manifest blocks
 # removed v3.3.0 (lead playbook; history in revision-record.md): Deliverable ledger states
 # removed v3.3.0 (lead playbook; history in revision-record.md): Read the file, not the scrollback
@@ -165,7 +168,7 @@ Model guidance sources | D | Prompting Claude Opus 5.5
 Model guidance pointer | R | docs/model-guidance-sources.md
 # removed v3.3.0 (lead playbook; history in revision-record.md): Session model shown once at the start when not Opus (v3.1.30)
 Writing for me in ASD-STE100-lite (new, user test 2026-10-05) | R | **Writing for me (ASD-STE100-lite).**
-STE: result first (format file) | F | Start with the result: what I will see, or what changes for me.
+# removed v3.3.7 (piece 7: the owner removed the STE first rule 'Start with the result'; 8 writing rules now): STE: result first (format file)
 STE: one word for one thing (format file) | F | Use one word for one thing.
 STE: fixed verbs (format file) | F | check, make sure, start, stop, use, show, find, change, remove, need
 STE: technical words explained once (format file) | F | explain it one time in plain words
@@ -311,3 +314,14 @@ Bigger job method (v3.3.2) | R | ## 3. Bigger job (a new app, many sessions)
 One review pass before the merge (v3.3.2) | R | **One review pass before my merge:**
 My design file first (v3.3.2) | R | **My design file first.**
 Closing block only after real work (v3.3.2) | R | The closing block only after real work
+Plans from the chat are drafts: check each step against the repository (v3.3.7, D9 = A) | R | check each step of a pasted plan against the repository
+  ...merge steps, show before → after with its reason (v3.3.7) | R | Show each change as before → after, with its reason, in your plan.
+  ...decided items and my rules stay; ask once (v3.3.7) | R | Items marked decided, and my rules, stay. If one looks wrong, ask once in your plan.
+Missing data does not stop the job: own fetch step, save after each item (v3.3.7, D9 = A) | R | Fetch outside data in its own step, and save after each item.
+  ...at most 3 retries in 10 minutes, then record the gap (v3.3.7) | R | retry at most 3 times within 10 minutes
+  ...Gaps list in the pull request text (v3.3.7) | R | Record each gap in a "Gaps" list in the pull request text.
+  ...say when the missing items share one trait (v3.3.7) | R | If they do, say so: results may be skewed.
+  ...the app shows 'data not loaded yet' (v3.3.7) | R | "data not loaded yet", never as broken or empty
+  ...'Open (gap)' and status Partial (v3.3.7) | R | The pull request status is then Partial, not Validated.
+  ...stop only before an action that cannot be undone, or over half the must-pass checks blocked (v3.3.7) | R | or when over half the must-pass checks cannot run
+  ...gaps and test bugs in one follow-up pull request (v3.3.7) | R | Filling the gaps and fixing bugs found in testing go in one follow-up pull request.

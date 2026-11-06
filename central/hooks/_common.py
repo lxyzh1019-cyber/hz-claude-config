@@ -64,13 +64,19 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.3.1",
+        "version": "3.3.7",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
                   ".claude/agents/reviewer.md": "reviewer on call (v3.1.28)",
                   ".claude/agents/explore.md": "explorer on Sonnet (v3.1.28)"},
-        "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"]},
+        "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"],
+                     "showClearContextOnPlanAccept": [True, "clear-context option at plan approval (v3.3.7)"]},
+        # v3.3.7: ask rules that make Claude Code ask for git steps even when an allow rule matches
+        "ask_absent": {"Bash(git commit:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)",
+                       "Bash(git push:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)",
+                       "Bash(git merge:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)",
+                       "Bash(gh pr merge:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)"},
         # keys the stub must NOT set, so the account's own default applies
         "settings_absent": {"model": "account default model (the stub must not set a session model)",
                             "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},
@@ -687,7 +693,7 @@ def deliverable_ledger(cfg, text=None):
     return out
 
 
-def completion_summary(cfg):
+def completion_summary(cfg, live=False):
     """{total, complete, blocked, open, waiting, queued, no_evidence, pct, line, display, scoped, plan}.
 
     Counted by PLAN when the ledger has plan stage rows ("<plan name> · Stage k of M — …"): every stage of the
@@ -714,6 +720,22 @@ def completion_summary(cfg):
     else:
         items = changed
     items = [i for i in items if not i.get("superseded")]   # v3.1.24: dropped by an approval, so not counted
+    # v3.3.7 (piece 3): merge state from facts. A row is done when its row on GitHub main is done, or when GitHub main
+    # has the merge commit of its branch. live=True (session start) fetches origin first.
+    merged = []
+    if live and not os.environ.get("HZ_PR_LIVE_OFF"):
+        fetch_origin()
+        base = base_record_text(cfg) or base
+        _base_done = {i["name"] for i in deliverable_ledger(cfg, base) if i["complete"]} if base else set()
+        _t0 = time.time()
+        for i in items:
+            if time.time() - _t0 > 15:   # review item 7: the session start keeps its time
+                break
+            if not i["complete"] and (i["name"] in _base_done or
+                                      merged_on_main(row_branch(i["name"]), fetch=False, since=row_since(cfg, i["name"]))):
+                i["complete"], i["blocked"], i["waiting"], i["queued"] = True, False, False, False
+                i["evidence"] = i["evidence"] or "merged on GitHub main"
+                merged.append(i["name"])
     checks = [i for i in items if i.get("check")]
     if plan and checks:   # v3.1.24: Build (the work) and Check (confirming it) are counted apart
         build = [i for i in items if not i.get("check")]
@@ -752,7 +774,8 @@ def completion_summary(cfg):
         if not open_ and not blocked and not waiting and not queued and check_open:
             display += ("\nBuild is done; the rest is checking. If a check finds a problem, tell this session. It "
                         "becomes a new Build row.")
-    return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
+    return {"merged": merged,
+            "total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
             "waiting": waiting, "queued": queued, "pct": pct, "line": line, "plan": plan, "display": display,
             "scoped": scoped, "check_open": check_open, "check_total": len(checks),
             "build_done": total > 0 and len(done) == total,
@@ -1068,16 +1091,152 @@ def restart_line(comp, branch=None):
     return f"Continue {plan} on branch {branch or current_branch()}; next: {next_stage(comp)}."
 
 
-def branch_merged_on_github(branch):
-    """v3.2.13: True when GitHub shows a merged pull request from this branch. Weekly-Planner 10 Oct: a restart line
-    named claude/consistency-5 after the owner had merged it at 6:52 PM. False when gh is not reachable."""
+# ---- GitHub facts without `gh pr` (v3.3.7) -------------------------------------------------------------------------
+# Cloud sessions: the GitHub proxy rejects GraphQL, so `gh pr …` and `gh issue …` answer 403 there, while `gh api` REST
+# calls for attached repositories work (code.claude.com cloud-environments page). Facts come from git first
+# (git fetch origin, merge commits on origin/main), then from `gh api repos/{owner}/{repo}/…`.
+_FETCHED = {}
+
+
+def fetch_origin(timeout=20):
+    """git fetch origin once per process; True when it worked."""
+    if "ok" not in _FETCHED:
+        try:   # review item 7: never a credential window; a short limit (the session start has 60 s in all)
+            _e = dict(os.environ, GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never", GIT_ASKPASS="")
+            _FETCHED["ok"] = subprocess.run(["git", "fetch", "-q", "origin"], cwd=work_dir(), capture_output=True,
+                                            text=True, timeout=min(timeout, 12), env=_e).returncode == 0
+        except Exception:
+            _FETCHED["ok"] = False
+    return _FETCHED["ok"]
+
+
+def gh_repo():
+    """'owner/repo' of origin on GitHub, or None."""
+    try:
+        url = run_text(["git", "remote", "get-url", "origin"], timeout=5).stdout.strip()
+    except Exception:
+        return None
+    m = re.search(r"github\.com[:/]+([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url)
+    if not m:
+        m = re.search(r"/git/([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url)   # the cloud proxy's remote form
+    return f"{m.group(1)}/{m.group(2)}" if m else None
+
+
+def gh_cmd():
+    """The gh program as a list. HZ_GH_CMD (a JSON list) is a stand-in for tests, e.g. a cloud gh that answers 403."""
+    try:
+        v = json.loads(os.environ.get("HZ_GH_CMD") or "null")
+        if isinstance(v, list) and v:
+            return [str(x) for x in v]
+    except ValueError:
+        pass
+    return ["gh"]
+
+
+def gh_rest(path, method="GET", fields=None, timeout=15, input_json=None):
+    """`gh api` REST call (never GraphQL). Returns the parsed JSON, or None on any error (403 included).
+    input_json: a dict sent as the request body (gh api --input), for long texts such as a pull request body."""
+    cmd = gh_cmd() + ["api", "-X", method, path]
+    for k, v in (fields or {}).items():
+        cmd += ["-f", f"{k}={v}"]
+    tmp = None
+    try:
+        if input_json is not None:
+            import tempfile as _tf
+            fd, tmp = _tf.mkstemp(suffix=".json")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(input_json, f)
+            cmd += ["--input", tmp]
+        r = run_text(cmd, timeout=timeout)
+        return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else None
+    except Exception:
+        return None
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def is_cloud():
+    """A Claude Code cloud session (CLAUDE_CODE_REMOTE=true)."""
+    return str(os.environ.get("CLAUDE_CODE_REMOTE") or "").lower() in ("1", "true", "yes")
+
+
+def pr_open_text(branch, title, body_hint="the pull request text"):
+    """How the session opens a pull request: locally gh pr create (Claude Code shows the pull request card); in a cloud
+    session, where gh pr answers 403, the GitHub tool (v3.3.7)."""
+    if is_cloud():
+        return (f"Open the pull request with the GitHub tool (create_pull_request: head {branch}, base main, title "
+                f"\"{title}\", draft false), with {body_hint}.")
+    return f"Open the pull request with: gh pr create --base main --head {branch} --title \"{title}\" --body-file <file with {body_hint}>."
+
+
+def pr_step(local, cloud):
+    """v3.3.7 (owner, 6 Nov): an instruction to the session names gh pr in a local session and the GitHub tool or gh api
+    REST only in a cloud session (CLAUDE_CODE_REMOTE=true). The hooks' own reads never use gh pr."""
+    return cloud if is_cloud() else local
+
+
+def merged_on_main(branch, fetch=True, since=None):
+    """v3.3.7: True when the branch is merged into GitHub main: a merge commit of it on origin/main (after git fetch
+    origin), else a merged pull request from it read with `gh api` REST. Build 4 (4 Nov): the session start said
+    '0 of 2 done — Build 2, Build 3' after #19 and #20 had merged."""
     if not branch or branch in ("main", "master") or os.environ.get("HZ_PR_LIVE_OFF"):
         return False
-    try:
-        out = run_text(["gh", "pr", "list", "--head", branch, "--state", "merged", "--json", "number"], timeout=15).stdout
-        return bool(json.loads(out or "[]"))
-    except Exception:
+    if fetch:
+        fetch_origin()
+    if "merges" not in _FETCHED:   # one read for all rows
+        try:
+            _FETCHED["merges"] = run_text(["git", "log", "origin/main", "--merges", "--format=%ct%x09%s", "-500"],
+                                          timeout=10).stdout
+        except Exception:
+            _FETCHED["merges"] = ""
+    b = re.escape(branch)
+    for ln in _FETCHED["merges"].splitlines():
+        ct, _, subj = ln.partition("\t")
+        if re.fullmatch(rf"Merge (pull request #\d+ from [^\s/]+/{b}|branch '{b}'|remote-tracking branch 'origin/{b}')\s*", subj) \
+                and (since is None or int(ct or 0) >= since):
+            return True
+    if _FETCHED.get("ok") is False and not is_cloud():   # review item 7: no network -> no REST wait either
         return False
+    if "prs" not in _FETCHED:   # one cached REST read of the closed pull requests
+        repo = gh_repo()
+        _FETCHED["prs"] = (gh_rest(f"repos/{repo}/pulls?state=closed&per_page=100") or []) if repo else []
+    from datetime import datetime as _dt7
+    for p in _FETCHED["prs"] if isinstance(_FETCHED["prs"], list) else []:
+        if isinstance(p, dict) and p.get("merged_at") and ((p.get("head") or {}).get("ref") == branch):
+            try:
+                at = _dt7.fromisoformat(str(p["merged_at"]).replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                at = 0
+            if since is None or at >= since:
+                return True
+    return False
+
+
+def row_since(cfg, name):
+    """v3.3.7 (review item 7): when the row first appeared in the record (commit time), so a merge of an older plan's
+    branch with the same name ('build-2') does not mark this plan's row done."""
+    try:
+        out = run_text(["git", "log", "--format=%ct", "--reverse", "-S", f"| {name} |", "--", cfg["record_file"]],
+                       timeout=8).stdout.split()
+        return int(out[0]) if out else None
+    except Exception:
+        return None
+
+
+def row_branch(name):
+    """The branch name a ledger row usually has: 'Build 2' -> 'build-2'."""
+    return re.sub(r"[^a-z0-9]+", "-", str(name or "").lower()).strip("-")
+
+
+def branch_merged_on_github(branch):
+    """v3.2.13: True when GitHub shows a merged pull request from this branch. Weekly-Planner 10 Oct: a restart line
+    named claude/consistency-5 after the owner had merged it at 6:52 PM. v3.3.7: read with git and REST, never
+    `gh pr list` (403 in a cloud session)."""
+    return merged_on_main(branch)
 
 
 def handoff_text(cfg, comp, after_build=False, lessons=False):
@@ -1087,7 +1246,7 @@ def handoff_text(cfg, comp, after_build=False, lessons=False):
         branch = "main"   # v3.2.13: after the merge the next stage starts from main
     rec = cfg["record_file"]
     return ("do the hand-off yourself in this reply. I must not have to ask for it. First check GitHub "
-            "(gh pr view): a merged branch is never in the restart line; after a merge it names main.\n"
+            "(git fetch origin, then the merge commits on origin/main): a merged branch is never in the restart line; after a merge it names main.\n"
             f"1) Update '## Where we are' in {rec}. Write the plan name as in the ledger, the newest Plan vN and its "
             "plan file, the next stage, and the restart line. Point to plan files, commits and pull requests; do not "
             f"copy them. Write no keys or passwords. Then commit and push {rec} to {branch}.\n"
@@ -1352,6 +1511,9 @@ def test_speed_note(cfg, minutes, cmd, stopped=False):
     # v3.3.0: the latest full run decides; a suite made fast switches the refusal off by itself
     st["latest_full_minutes"] = round(minutes, 1)
     st["stopped_by_limit"] = bool(stopped)
+    _k = test_script_key(cmd)   # v3.3.7: each script keeps its own time
+    if _k:
+        st.setdefault("by_script", {})[_k] = {"latest": round(minutes, 1), "stopped": bool(stopped)}
     msg = ""
     if (minutes > limit or stopped) and not st.get("told") and not test_split_done(cfg):
         st["told"] = True
@@ -1457,9 +1619,35 @@ def background_test_note(cfg, records):
     return msg
 
 
-def slow_suite_blocks(cfg):
-    """True while the full suite is known to be too slow and is not split yet."""
+def test_script_key(cmd):
+    """v3.3.7: the test script a command runs ('npm run check', 'npm test', 'bash replay-hooks.sh'), so each script has
+    its own measured speed. 6 false refusals: a slow 'npm test' refused 'npm run check'."""
+    for part in re.split(r"&&|\|\||;|\||\n", str(cmd or "")):
+        p = part.strip().lstrip("( ")
+        for _ in range(3):
+            p = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|\S+)\s+)+", "", p)
+            p = re.sub(r"^(time\s+|timeout\s+\d+[smh]?\s+)", "", p)
+        if is_test_run(p):
+            p = re.split(r"\s+\d?[<>]", " " + p)[0]   # an output file is not part of the script ('npm test > log')
+            w = [re.split(r"[\\/]", x)[-1] if re.search(r"\.(sh|py|js|mjs|cjs|ts)$", x) else x for x in p.split()]
+            return " ".join(w[:3]).lower()
+    return ""
+
+
+def slow_suite_blocks(cfg, cmd=None):
+    """True while the full suite is known to be too slow and is not split yet. v3.3.7: per script — with a command,
+    only that script's own measured time counts; a script never measured is not refused."""
     st = test_speed_load()
+    if cmd is not None:
+        key = test_script_key(cmd)
+        e = (st.get("by_script") or {}).get(key)
+        if e is None:
+            if st.get("by_script") or test_script_key(st.get("command") or "") != key:
+                return False
+            e = {"latest": st.get("latest_full_minutes", st.get("slowest_full_minutes")),
+                 "stopped": st.get("stopped_by_limit")}
+        slow = float(e.get("latest") or 0) > float(cfg.get("full_test_max_minutes", 5)) or e.get("stopped")
+        return bool(slow) and not test_split_done(cfg)
     _m = st.get("latest_full_minutes", st.get("slowest_full_minutes"))   # v3.3.0: the latest run, not the slowest ever
     slow = float(_m or 0) > float(cfg.get("full_test_max_minutes", 5)) or st.get("stopped_by_limit")
     return bool(slow) and not test_split_done(cfg)

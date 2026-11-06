@@ -149,6 +149,32 @@ def _publish(project_dir, branch, version, staged):
             _git(project_dir, "branch", "-D", branch, timeout=10)      # the branch made here, nothing else
 
 
+def _pr_link(project_dir, branch):
+    try:
+        from _common import gh_repo
+        repo = gh_repo()
+    except Exception:
+        repo = None
+    return f"https://github.com/{repo}/pulls?q=head%3A{branch}" if repo else f"the pull request of branch {branch}"
+
+
+def _setup_pr_step(project_dir, branch, version):
+    """The setup pull request. Locally gh pr create, so Claude Code shows the pull request card (owner, 6 Nov). Only in a
+    cloud session (CLAUDE_CODE_REMOTE=true, where gh pr answers 403) the GitHub tool (v3.3.7)."""
+    title, body = f"Setup update (automatic, v{version})", "Automatic setup update from hz-claude-config."
+    try:
+        from _common import is_cloud
+        cloud = is_cloud()
+    except Exception:
+        cloud = False
+    if cloud:
+        return (f"open its pull request with the GitHub tool: create_pull_request with head {branch}, base main, title "
+                f"\"{title}\", body \"{body}\", draft false. If GitHub says it already exists, use that one.")
+    return (f"open its pull request with exactly: gh pr create --base main --head {branch} --title \"{title}\" "
+            f"--body \"{body}\" — if gh says it already exists, run instead: gh pr edit {branch} --title \"{title}\". "
+            "Claude Code then shows the pull request card.")
+
+
 def update(cfg, project_dir):
     """Returns (stub_line, instruction or None). Called only when the stub is outdated."""
     if os.path.exists(os.path.join(project_dir, "tools", "build_manifest.py")):
@@ -169,6 +195,16 @@ def update(cfg, project_dir):
                 "open a pull request ready for review, then switch back to the branch you started on. If the switch is "
                 "refused, stop and tell me. In your first reply's 'I need from you' line, ask me to merge that pull request.")
     if kind == "waiting":
+        try:
+            from _common import is_cloud
+            _cloud = is_cloud()
+        except Exception:
+            _cloud = False
+        if _cloud:   # v3.3.7: gh pr answers 403 in a cloud session
+            return ("waiting for you to merge the setup update (branch " + branch + ")",
+                    f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
+                    f"Do not make another one. In your first reply's 'I need from you' line, ask me to merge it, with its "
+                    f"link ({_pr_link(project_dir, branch)}).")
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
                 f"Do not make another one. As your first step run once: gh pr edit {branch} --title \"Setup update (automatic, "
@@ -258,11 +294,9 @@ def update(cfg, project_dir):
     if done:
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] The session start made this repository's setup update itself: branch {branch} (from origin/main) "
-                f"holds the commit 'Setup update (automatic, v{version})' and is pushed. As your first step, open its pull "
-                f"request with exactly: gh pr create --base main --head {branch} --title \"Setup update (automatic, v{version})\" "
-                f"--body \"Automatic setup update from hz-claude-config.\" — if gh says it already exists, run instead: gh pr "
-                f"edit {branch} --title \"Setup update (automatic, v{version})\". Claude Code then shows the pull request card. "
-                "Make no commit and switch no branch for this." + note + " In your first reply's 'I need from you' line, ask "
+                f"holds the commit 'Setup update (automatic, v{version})' and is pushed. As your first step, "
+                + _setup_pr_step(project_dir, branch, version) +
+                " Make no commit and switch no branch for this." + note + " In your first reply's 'I need from you' line, ask "
                 "me to merge that pull request; the new setup takes effect in the next session after the merge. Then continue "
                 "with my request.")
     for rel, text in staged.items():

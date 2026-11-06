@@ -31,7 +31,7 @@ if _add:
     print(f"known helper-file versions added: {len(_add)}")
 for n in ("settings.json", "opus-worker.md", "sonnet-worker.md", "reviewer.md", "reviewer-light.md", "explore.md", "planner.md", "planner-opus.md", "hz-loader.py",
           "CLAUDE-pointer.md",
-          "merge_settings.py", "v2-known-files.txt"):
+          "merge_settings.py", "retired-permissions.json", "v2-known-files.txt"):   # v3.3.7: the retired asks
     shutil.copyfile(os.path.join(stub_src, n), os.path.join(stub_dst, n))
 version = sys.argv[1] if len(sys.argv) > 1 else sys.exit("usage: build_manifest.py <version>")
 files = []

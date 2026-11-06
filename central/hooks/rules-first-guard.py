@@ -41,7 +41,7 @@ if tool.startswith("mcp__") and _re.match(r"(get|list|search|read|fetch|view|fin
 
 
 def _read_only_bash(cmd):
-    """True when every part of a shell command only reads (git status/log/diff, ls, cat, gh pr view...)."""
+    """True when every part of a shell command only reads (git status/log/diff, ls, cat, read-only gh calls...)."""
     c = _re.sub(r"\d?>\s*/dev/null|2>&1", "", cmd)
     if _re.search(r">|`|\$\(|\btee\b|<<", c):
         return False

@@ -433,63 +433,18 @@ def _owner_prompt(r):
 AWAY_SECONDS = int(cfg.get("away_minutes", 60)) * 60
 
 
+try:   # v3.3.7 (piece 3): permission waits and send-backs from the session file
+    import session_facts as _sf
+    _PW = _sf.wait_secs_by_id(main)
+    _SBC = _sf.sendback_count(main)
+except Exception:
+    _PW, _SBC = {}, None
+
+
 def session_time(recs):
-    tl = [r for r in recs if _ts(r) is not None]
-    if len(tl) < 2:
-        return None
-    wall = _ts(tl[-1]) - _ts(tl[0])
-    limit, stops, you, workers, gh, tests, away, away_n = 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0
-    last_a, in_stop = None, None
-    uses = {}
-    for r in tl:
-        t_ = _ts(r)
-        m = r.get("message") or {}
-        c = m.get("content")
-        if r.get("type") == "assistant":
-            if "hit your session limit" in json.dumps(c or "", ensure_ascii=False):
-                in_stop, stops = t_, stops + 1
-            last_a = t_
-            for b in c if isinstance(c, list) else []:
-                if isinstance(b, dict) and b.get("type") == "tool_use":
-                    uses[b.get("id")] = (t_, b)
-        _cs = (r.get("message") or {}).get("content")
-        _raw = json.dumps(r, ensure_ascii=False) if r.get("type") in ("user", "attachment", "queue-operation") else ""
-        if "<task-notification>" in _raw and r.get("operation") != "remove" \
-                and last_a is not None and in_stop is None:
-            workers += max(t_ - last_a, 0)     # v3.2.0: the main session idles until a background worker reports
-            last_a = t_
-        if _owner_prompt(r):
-            if in_stop is not None:
-                limit += t_ - in_stop
-                in_stop = None
-            elif last_a is not None:
-                if t_ - last_a > AWAY_SECONDS:     # v3.2.0: sleep or out — shown apart, left out of the shares
-                    away += t_ - last_a
-                    away_n += 1
-                else:
-                    you += t_ - last_a
-        for b in c if isinstance(c, list) else []:
-            if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in uses:
-                t0, u = uses[b["tool_use_id"]]
-                d = max(t_ - t0, 0)
-                n, cmd = u.get("name"), str((u.get("input") or {}).get("command") or "")
-                if n in ("AskUserQuestion", "ExitPlanMode"):
-                    if d > AWAY_SECONDS:
-                        away += d
-                        away_n += 1
-                    else:
-                        you += d
-                elif n in ("Agent", "Task"):
-                    workers += d
-                elif n == "Bash" and re.search(r"\bgh\s+run\b", cmd):
-                    gh += d
-                elif n == "Bash" and is_test_run(cmd):
-                    tests += d
-    active = max(wall - limit - away, 1)
-    other = max(active - you - workers - gh - tests, 0)
-    return {"wall": wall, "limit": limit, "stops": stops, "active": active, "away": away, "away_n": away_n,
-            "parts": [("short waits for you", you), ("workers", workers), ("GitHub waits", gh),
-                      ("main session test runs", tests), ("main session other", other)]}
+    # v3.3.7: one definition of worked time for the summary and the scorecard (session_facts.session_time)
+    import session_facts as _sf_t
+    return _sf_t.session_time(recs, AWAY_SECONDS, _PW, is_test_run)
 
 
 ROLE_NAME = {"opus-worker": "Opus worker", "sonnet-worker": "Sonnet worker", "Explore": "explorer", "explore": "explorer"}
@@ -512,6 +467,7 @@ for r in _tl:
                 _d = str(_i.get("description") or (_m.group(1) if _m else "") or "")[:40]
                 slowest.append((d, f"{ROLE_NAME.get(k, k)}" + (f" \"{_d}\"" if _d else "")))
             elif u.get("name") == "Bash":
+                d = max(d - _PW.get(b["tool_use_id"], 0), 0)   # v3.3.7: my permission click is not the step's time
                 slowest.append((d, "main: " + str((u.get("input") or {}).get("description") or
                                                   (u.get("input") or {}).get("command") or "")[:40]))
 slowest.sort(key=lambda x: -x[0])
@@ -715,6 +671,11 @@ ho = " · ".join(f"{names.get(k, k)} {v}" for k, v in sorted(handovers.items()))
 st = read_stats(sid)
 sb = (" (" + " · ".join(f"{NAMES.get(k[9:], k[9:])} {v}" for k, v in sorted(st.items()) if k.startswith("sendback:") and v) + ")"
       if any(k.startswith("sendback:") and v for k, v in st.items()) else "")
+if _SBC is not None:   # v3.3.7: send-backs counted from the session file (hook refusals + Stop blocks)
+    st = dict(st, sendbacks=_SBC["total"])
+    _nm = lambda k: NAMES.get(k, k)
+    sb = (" (" + " · ".join(f"{_nm(k)} {v}" for k, v in sorted((_SBC.get("by_check") or {}).items(), key=lambda kv: _nm(kv[0])))
+          + ")") if _SBC["total"] else ""
 lines.append(f"Counts: hand-overs {ho}" + (f" (escalated {escalated})" if escalated else "")
              + f" · test runs {test_runs[0]} · in-between messages {between}"
              + (f" · worker steps {helper_steps['tool']} (one tool per step {round(100 * helper_steps['one'] / helper_steps['tool'])}%)"

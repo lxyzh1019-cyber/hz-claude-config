@@ -23,6 +23,7 @@
     ]
   },
   "plansDirectory": "./plans",
+  "showClearContextOnPlanAccept": true,
   "hooks": {
     "SessionStart": [
       {

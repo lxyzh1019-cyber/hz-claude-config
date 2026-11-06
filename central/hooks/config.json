@@ -7,7 +7,7 @@
   "features_file": "FEATURES.md",
   "auto_fix_max_rounds": 1,
   "fable_planner_min_triggers": 2,
-  "update_notice": "v3.3.6: the rules version ends the status line of every reply; no permission question for add, commit and push on the work branch; a merge request carries the code-made summary after the checks; scratch files stay out of git; the summary counts reading, checks and review fixes apart with steps; old setup worktrees are cleared. No setup pull request. claude.ai preferences: unchanged.",
+  "update_notice": "v3.3.7: no git questions on the work branch (the setup update removes the old ask rules); plan colour marks follow the plan file, also after a reworded title; the completion line and the summary come from facts; the check writes the report and a scorecard into the pull request text and shows the summary itself; fewer send-backs; cloud sessions work without gh pr; a feature check for apps; the status line no longer carries the rules version. A setup pull request comes with the next session start: merge it. claude.ai preferences: unchanged.",
   "dispatch": {
     "UserPromptSubmit": [
       "plan-gate.py",

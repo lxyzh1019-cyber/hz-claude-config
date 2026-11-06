@@ -4,6 +4,9 @@
   "fable" — is removed; any other value, which only the user can have chosen, is kept
 - permissions.defaultMode: shared wins
 - permissions.allow/ask/deny: union (existing order kept, shared entries appended)
+- v3.3.7: after the union, every "ask" entry listed in retired-permissions.json (next to this script; a built-in copy
+  when the file is missing) is removed, except the deploy asks (owner: keep deploy asks). An ask rule makes Claude Code
+  ask even when an allow rule matches, also in auto mode (Builds 2-4: 10 git questions). "deny" is never touched.
 - hooks: entries whose command contains the managed marker (default .claude/hooks/) are managed and replaced by the shared set;
   any other hook entries the repo has are kept
 - any other keys: existing kept; shared keys added if missing
@@ -39,6 +42,18 @@ for key in ("allow", "ask", "deny"):
     merged += [x for x in sp.get(key, []) if x not in merged]
     if merged:
         perm[key] = merged
+# v3.3.7 (X48 G1 reopened): remove the retired ask rules; keep the deploy asks
+RETIRED_ASK = ["Bash(git commit:*)", "Bash(git push:*)", "Bash(git merge:*)", "Bash(gh pr merge:*)"]
+KEEP_ASK = ("Bash(firebase deploy:*)", "Bash(npm run deploy:*)")
+try:
+    RETIRED_ASK = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "retired-permissions.json"),
+                                 encoding="utf-8")).get("ask", RETIRED_ASK)
+except (OSError, ValueError, AttributeError):
+    pass
+if perm.get("ask"):
+    perm["ask"] = [x for x in perm["ask"] if x in KEEP_ASK or x not in RETIRED_ASK]
+    if not perm["ask"]:
+        perm.pop("ask")
 out["permissions"] = perm
 
 hooks = {}

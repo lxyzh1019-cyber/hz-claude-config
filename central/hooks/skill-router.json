@@ -51,7 +51,7 @@
         "v2 of",
         "v3 of"
       ],
-      "note": "central copy of hz-change-guard; manifest and content ledger before the edit, kept/changed/removed and the coverage gate after"
+      "note": "account skill anthropic-skills:hz-change-guard (v3.3.7: Claude Code loads account skills in local and cloud sessions); manifest and content ledger before the edit, kept/changed/removed and the coverage gate after"
     },
     "hz-planner": {
       "keywords": [
