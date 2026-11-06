@@ -3105,6 +3105,16 @@ open(TP, "w").write("\n".join(json.dumps(r) for r in R) + "\n")
 o = subprocess.run([PY, os.path.join(H, "scorecard.py"), TP], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env(V)).stdout
 res("v3.3.7: the scorecard counts an answer's tokens once by its message id (1.0 M, not 2.0 M)", "of 1.0 M tokens" in o, o[-400:])
 res("  ...and a 70-minute step is worked time, as in the summary (80.0 min worked)", "of 80.0 min worked" in o, o[-400:])
+# owner, 6 Nov: an idle gap over 60 minutes with no tool call waiting is away, also when a hook record ends it, not my
+# message (Build 2: 872.7 and 268.9 min counted as work, 1252.0 min instead of about 110)
+TP = os.path.join(V, "sc3.jsonl")
+R = [{"type": "user", "timestamp": "2026-11-04T10:00:00Z", "message": {"role": "user", "content": "build it"}},
+     {"type": "assistant", "timestamp": "2026-11-04T10:05:00Z", "message": {"id": "m1", "role": "assistant", "model": "claude-opus-5-5", "usage": {"input_tokens": 1}, "content": [{"type": "text", "text": "Built."}]}},
+     {"type": "attachment", "timestamp": "2026-11-04T13:05:00Z", "attachment": {"type": "hook_system_message", "content": "notice"}},
+     {"type": "assistant", "timestamp": "2026-11-04T13:06:00Z", "message": {"id": "m2", "role": "assistant", "model": "claude-opus-5-5", "usage": {"input_tokens": 1}, "content": [{"type": "text", "text": "Done."}]}}]
+open(TP, "w").write("\n".join(json.dumps(r) for r in R) + "\n")
+o = subprocess.run([PY, os.path.join(H, "scorecard.py"), TP], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env(V)).stdout
+res("v3.3.7: an idle gap over 60 minutes that a hook record ends is away, not work (6.0 min worked, not 186.0)", "of 6.0 min worked" in o, o[-400:])
 print("END")
 PYV37
 )

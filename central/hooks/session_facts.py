@@ -180,11 +180,26 @@ def session_time(recs, away_seconds=3600, pw=None, is_test=None):
     wall = ts(tl[-1]) - ts(tl[0])
     limit, stops, you, workers, gh, tests, away, away_n = 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0
     last_a, in_stop = None, None
-    uses = {}
+    uses, pending, prev_t = {}, set(), None
     for r in tl:
         t_ = ts(r)
         m = r.get("message") or {}
         c = m.get("content")
+        _raw0 = json.dumps(r, ensure_ascii=False) if r.get("type") in ("user", "attachment", "queue-operation") else ""
+        # v3.3.7 (owner, 6 Nov): a gap over away_seconds with no tool call waiting for its result is away, whatever
+        # record ends it (Build 2: 872.7 min ending in a hook attachment, 268.9 min ending in a pr-link record, both
+        # counted as work). A long-running tool step stays worked time; a gap that ends in my message or in a
+        # background worker's finish notice keeps its own rule below.
+        if prev_t is not None and t_ - prev_t > away_seconds and not pending and in_stop is None                 and not owner_prompt(r) and "<task-notification>" not in _raw0:
+            away += t_ - prev_t
+            away_n += 1
+            left.append((prev_t, t_ - prev_t, "idle gap ending in a " + str(r.get("subtype") or r.get("type"))
+                         + " record"))
+            last_a = t_ if last_a is not None else last_a
+        prev_t = t_
+        for b in c if isinstance(c, list) else []:
+            if isinstance(b, dict) and b.get("type") == "tool_result":
+                pending.discard(b.get("tool_use_id"))
         if r.get("type") == "assistant":
             if "hit your session limit" in json.dumps(c or "", ensure_ascii=False):
                 in_stop, stops = t_, stops + 1
@@ -192,6 +207,7 @@ def session_time(recs, away_seconds=3600, pw=None, is_test=None):
             for b in c if isinstance(c, list) else []:
                 if isinstance(b, dict) and b.get("type") == "tool_use":
                     uses[b.get("id")] = (t_, b)
+                    pending.add(b.get("id"))
         _cs = (r.get("message") or {}).get("content")
         _raw = json.dumps(r, ensure_ascii=False) if r.get("type") in ("user", "attachment", "queue-operation") else ""
         if "<task-notification>" in _raw and r.get("operation") != "remove" \
