@@ -32,8 +32,18 @@ def _m(s):
     return f"{s / 60:.1f} min"
 
 
-def _tok(r):
-    u = (r.get("message") or {}).get("usage") or {}
+def _tok(r, seen=None):
+    """An answer's tokens, once per message id, as stats.py counts them: Claude Code writes one record per content
+    block, each with the whole answer's usage (Build 3: 191.8 M counted per record, 83.1 M per answer)."""
+    m = r.get("message") or {}
+    if str(m.get("model") or "") == "<synthetic>":
+        return 0
+    if seen is not None:
+        mid = m.get("id") or id(r)
+        if mid in seen:
+            return 0
+        seen.add(mid)
+    u = m.get("usage") or {}
     return sum(int(u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens",
                                              "cache_read_input_tokens"))
 
@@ -71,7 +81,7 @@ def check2(recs, uses, res):
         rtxt = (out or (0, ""))[1]
         prev_sent_back = bool(out) and ("doesn't want to proceed" in rtxt or sf.is_hook_refusal(rtxt, out[3]))
     return (not bad, f"{n_after - len(bad)} of {n_after} re-showings marked and numbered right"
-            + (" · wrong: " + "; ".join(bad[:4]) if bad else ""))
+            + (" · wrong: " + "; ".join(bad) if bad else ""))
 
 
 def _turns(recs):
@@ -148,29 +158,32 @@ def check4(recs, uses, res):
 
 
 def check5(recs, uses, res, tp):
-    tl = [r for r in recs if sf.ts(r) is not None and r.get("type") in ("user", "assistant", "system", "attachment")]
-    worked = 0.0
-    for a, b in zip(tl, tl[1:]):
-        g = sf.ts(b) - sf.ts(a)
-        if 0 < g <= AWAY:
-            worked += g
-    main_tok = sum(_tok(r) for r in recs if r.get("type") == "assistant")
+    # worked time: the summary's own definition (session_facts.session_time, also used by stats.py)
+    try:
+        from _common import is_test_run as _itr
+    except Exception:
+        _itr = None
+    st = sf.session_time(recs, AWAY, sf.wait_secs_by_id(recs, uses, res), _itr)
+    worked = st["active"] if st else 0.0
+    left = st["left_out"] if st else []
+    seen = set()
+    main_tok = sum(_tok(r, seen) for r in recs if r.get("type") == "assistant")
     helpers = sf.helper_files(tp)
-    help_tok = sum(_tok(r) for _, _, hr in helpers for r in hr if r.get("type") == "assistant")
+    help_tok = sum(_tok(r, seen) for _, _, hr in helpers for r in hr if r.get("type") == "assistant")
     total_tok = main_tok + help_tok
-    w_sec, w_tok = 0.0, 0
+    w_sec, w_tok, w_seen = 0.0, 0, set()
     # hook-refused steps: the step after the refusal
     for rf in sf.refusals(recs, uses, res):
         i = next((k for k, r in enumerate(recs) if sf.ts(r) == rf["ts"]), None)
         nxt = next((x for x in recs[(i or 0) + 1:] if x.get("type") == "assistant"), None) if i is not None else None
         if nxt:
-            w_tok += _tok(nxt); w_sec += max((sf.ts(nxt) or 0) - (rf["ts"] or 0), 0)
+            w_tok += _tok(nxt, w_seen); w_sec += max((sf.ts(nxt) or 0) - (rf["ts"] or 0), 0)
     # send-back turns: from the Stop block to the next Stop
     idx = [k for k, r in enumerate(recs) if r.get("type") == "user" and _text(r).lstrip().startswith("Stop hook feedback")]
     for k in idx:
         end = next((j for j in range(k + 1, len(recs)) if recs[j].get("subtype") == "stop_hook_summary"), len(recs) - 1)
         seg = recs[k:end + 1]
-        w_tok += sum(_tok(r) for r in seg if r.get("type") == "assistant")
+        w_tok += sum(_tok(r, w_seen) for r in seg if r.get("type") == "assistant")
         t0, t1 = sf.ts(recs[k]), sf.ts(recs[end])
         if t0 and t1:
             w_sec += max(t1 - t0, 0)
@@ -182,10 +195,12 @@ def check5(recs, uses, res, tp):
     pk = 100 * w_tok / total_tok if total_tok else 0
     rev = [(k, hr) for k, _, hr in helpers if k.startswith("reviewer")]
     rv_sec = sum((max(sf.ts(r) or 0 for r in hr) - min(sf.ts(r) or 0 for r in hr if sf.ts(r))) for _, hr in rev if hr)
-    rv_tok = sum(_tok(r) for _, hr in rev for r in hr if r.get("type") == "assistant")
+    rv_seen = set()
+    rv_tok = sum(_tok(r, rv_seen) for _, hr in rev for r in hr if r.get("type") == "assistant")
     return (pt <= 10 and pk <= 10,
             f"{_m(w_sec)} of {_m(worked)} worked ({pt:.0f}%) · {w_tok / 1e6:.1f} M of {total_tok / 1e6:.1f} M tokens ({pk:.0f}%)"
-            f" — refused steps, send-back turns, {len(cw)} setup permission waits",
+            f" — refused steps, send-back turns, {len(cw)} setup permission waits"
+            + (f" · left out as away (as in the summary): " + "; ".join(f"{k} {_m(sec)}" for _, sec, k in left) if left else ""),
             f"Review pass (the check step, not waste): {len(rev)} reviewer run(s), {_m(rv_sec)}, {rv_tok / 1e6:.1f} M tokens")
 
 

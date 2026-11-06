@@ -425,6 +425,32 @@ for k, exp in EXP.items():
         ok = f"· {want} ·" in got and (num is None or got.split("· ")[-1].startswith(f"{num} git"))
         res(9, f"scorecard {k} check {n}", want + (f" ({num})" if num else ""), got[:120], ok)
     print("        " + (L.get(5) or "")[:150])
+    # owner, 6 Nov: the scorecard's tokens and worked time are the summary's (stats.py) numbers; every failed
+    # re-showing has its reason
+    # the summary shows only after a finished answer: a copy of the session file ends at the last one (with its helpers)
+    Pq = proj(); Lq = open(SESS[k], encoding="utf-8").read().splitlines()
+    end = max((i for i, l in enumerate(Lq) if '"type":"assistant"' in l.replace(" ", "") and re.search(r"Status: (Checked|Validated)", l)), default=len(Lq) - 1)
+    cut = os.path.join(Pq, "cut.jsonl"); open(cut, "w", encoding="utf-8").write("\n".join(Lq[:end + 1]) + "\n")
+    if os.path.isdir(os.path.splitext(SESS[k])[0]):
+        shutil.copytree(os.path.splitext(SESS[k])[0], os.path.join(Pq, "cut"))
+    so = subprocess.run([PY, os.path.join(NEW, "central", "hooks", "stats.py")], input=json.dumps({"transcript_path": cut, "session_id": "sq"}),
+                        capture_output=True, text=True, encoding="utf-8", env=env(Pq), cwd=Pq).stdout.strip()
+    so = json.loads(so).get("systemMessage", "") if so else ""
+    out = subprocess.run([PY, os.path.join(NEW, "tools", "scorecard.py"), cut], capture_output=True, text=True, encoding="utf-8").stdout
+    L = {int(l[0]): l for l in out.splitlines() if l[:1].isdigit()}
+    st_tok = re.search(r"Tokens: ([\d.]+ M)", so); sc_tok = re.search(r"of ([\d.]+ M) tokens", L.get(5, ""))
+    st_w = re.search(r"· (?:(\d+) h )?(\d+) min worked", so); sc_w = re.search(r"of ([\d.]+) min worked", L.get(5, ""))
+    stw = (int(st_w.group(1) or 0) * 60 + int(st_w.group(2))) if st_w else None
+    if not st_tok:   # the summary waits while a background command still runs (Builds 2 and 4: servers never ended)
+        print(f"NOTE  [9]   ...{k}: no summary to compare (stats.py shows none while a background command still runs)")
+    else:
+      res(9, f"  ...{k}: scorecard tokens and worked time = the summary's", "same tokens · same minutes (±1)",
+        f"tokens {sc_tok and sc_tok.group(1)} vs {st_tok and st_tok.group(1)} · worked {sc_w and sc_w.group(1)} vs {stw} min",
+        bool(sc_tok and st_tok and sc_tok.group(1) == st_tok.group(1) and sc_w and stw is not None and abs(float(sc_w.group(1)) - stw) <= 1))
+    m2 = re.search(r"(\d+) of (\d+) re-showings", L.get(2, ""))
+    n_bad = (int(m2.group(2)) - int(m2.group(1))) if m2 else 0
+    n_why = len(L.get(2, "").split(" · wrong: ", 1)[1].split("; ")) if " · wrong: " in L.get(2, "") else 0
+    res(9, f"  ...{k}: every failed re-showing has its reason", "failed = reasons", f"failed {n_bad} · reasons {n_why}", n_bad == n_why)
 
 # ---------------------------------------------------------------------------------------------------------------- other cases
 # two sessions in one folder: each gets its own one reminder; another session's pull request is not touched

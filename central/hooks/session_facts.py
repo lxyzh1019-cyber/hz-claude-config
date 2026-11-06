@@ -160,3 +160,85 @@ def helper_secs(transcript_path):
         if tt:
             out[kind] = out.get(kind, 0) + max(tt) - min(tt)
     return out
+
+def owner_prompt(r):
+    c = (r.get("message") or {}).get("content")
+    return r.get("type") == "user" and isinstance(c, str) and not c.lstrip().startswith(("<", "Another Claude session"))
+
+
+def session_time(recs, away_seconds=3600, pw=None, is_test=None):
+    """v3.3.7: worked time, the one definition (the summary in stats.py and scorecard check 5 use it).
+    worked = actual - usage-limit stops - away (waits over away_seconds for me: an owner prompt after a long gap,
+    a permission click, a question or a plan approval). Short waits for me count as worked. 'left_out' lists
+    each wait taken out: (start, seconds, kind)."""
+    pw = pw or {}
+    is_test = is_test or (lambda c: False)
+    left = []
+    tl = [r for r in recs if ts(r) is not None]
+    if len(tl) < 2:
+        return None
+    wall = ts(tl[-1]) - ts(tl[0])
+    limit, stops, you, workers, gh, tests, away, away_n = 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0
+    last_a, in_stop = None, None
+    uses = {}
+    for r in tl:
+        t_ = ts(r)
+        m = r.get("message") or {}
+        c = m.get("content")
+        if r.get("type") == "assistant":
+            if "hit your session limit" in json.dumps(c or "", ensure_ascii=False):
+                in_stop, stops = t_, stops + 1
+            last_a = t_
+            for b in c if isinstance(c, list) else []:
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    uses[b.get("id")] = (t_, b)
+        _cs = (r.get("message") or {}).get("content")
+        _raw = json.dumps(r, ensure_ascii=False) if r.get("type") in ("user", "attachment", "queue-operation") else ""
+        if "<task-notification>" in _raw and r.get("operation") != "remove" \
+                and last_a is not None and in_stop is None:
+            workers += max(t_ - last_a, 0)     # v3.2.0: the main session idles until a background worker reports
+            last_a = t_
+        if owner_prompt(r):
+            if in_stop is not None:
+                limit += t_ - in_stop
+                in_stop = None
+            elif last_a is not None:
+                if t_ - last_a > away_seconds:     # v3.2.0: sleep or out — shown apart, left out of the shares
+                    away += t_ - last_a
+                    away_n += 1
+                    left.append((last_a, t_ - last_a, "gap before my next message"))
+                else:
+                    you += t_ - last_a
+        for b in c if isinstance(c, list) else []:
+            if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") in uses:
+                t0, u = uses[b["tool_use_id"]]
+                d = max(t_ - t0, 0)
+                n, cmd = u.get("name"), str((u.get("input") or {}).get("command") or "")
+                _w = min(pw.get(b["tool_use_id"], 0), d)   # v3.3.7: a permission click is a wait for me
+                if _w and n not in ("AskUserQuestion", "ExitPlanMode"):
+                    if _w > away_seconds:
+                        away += _w
+                        away_n += 1
+                        left.append((t0, _w, "permission click on " + str(n)))
+                    else:
+                        you += _w
+                    d -= _w
+                if n in ("AskUserQuestion", "ExitPlanMode"):
+                    if d > away_seconds:
+                        away += d
+                        away_n += 1
+                        left.append((t0, d, "answer to " + str(n)))
+                    else:
+                        you += d
+                elif n in ("Agent", "Task"):
+                    workers += d
+                elif n == "Bash" and re.search(r"\bgh\s+run\b", cmd):
+                    gh += d
+                elif n == "Bash" and is_test(cmd):
+                    tests += d
+    active = max(wall - limit - away, 1)
+    other = max(active - you - workers - gh - tests, 0)
+    return {"wall": wall, "limit": limit, "stops": stops, "active": active, "away": away, "away_n": away_n,
+            "left_out": left,
+            "parts": [("short waits for you", you), ("workers", workers), ("GitHub waits", gh),
+                      ("main session test runs", tests), ("main session other", other)]}

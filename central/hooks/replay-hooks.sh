@@ -3092,6 +3092,19 @@ with open(TP, "w") as f:
                         "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b1", "content": "ok"}]}}) + "\n")
 o = subprocess.run([PY, os.path.join(H, "scorecard.py"), TP], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env(V)).stdout
 res("v3.3.7 (piece 9): the scorecard counts a git question on a work branch (check 1 FAIL · 1)", "1 Git prompts on a work branch · FAIL · 1 git questions" in o, o[:300])
+# owner, 6 Nov: one answer in two records (one per content block) counts once; a 70-minute step is worked time, as in
+# the summary (the scorecard left out every gap over 60 minutes: Build 3 191.8 M instead of 83.1 M)
+TP = os.path.join(V, "sc2.jsonl")
+U = {"input_tokens": 1000000, "output_tokens": 0}
+R = [{"type": "user", "timestamp": "2026-11-04T10:00:00Z", "message": {"role": "user", "content": "build it"}},
+     {"type": "assistant", "timestamp": "2026-11-04T10:05:00Z", "message": {"id": "m1", "role": "assistant", "model": "claude-opus-5-5", "usage": U, "content": [{"type": "text", "text": "Running the tests."}]}},
+     {"type": "assistant", "timestamp": "2026-11-04T10:05:00Z", "message": {"id": "m1", "role": "assistant", "model": "claude-opus-5-5", "usage": U, "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "ls"}}]}},
+     {"type": "user", "timestamp": "2026-11-04T11:15:00Z", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]}},
+     {"type": "assistant", "timestamp": "2026-11-04T11:20:00Z", "message": {"id": "m2", "role": "assistant", "model": "claude-opus-5-5", "usage": {"input_tokens": 0}, "content": [{"type": "text", "text": "Done."}]}}]
+open(TP, "w").write("\n".join(json.dumps(r) for r in R) + "\n")
+o = subprocess.run([PY, os.path.join(H, "scorecard.py"), TP], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env(V)).stdout
+res("v3.3.7: the scorecard counts an answer's tokens once by its message id (1.0 M, not 2.0 M)", "of 1.0 M tokens" in o, o[-400:])
+res("  ...and a 70-minute step is worked time, as in the summary (80.0 min worked)", "of 80.0 min worked" in o, o[-400:])
 print("END")
 PYV37
 )
