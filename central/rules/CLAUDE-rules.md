@@ -16,6 +16,8 @@ These rules apply in every project. Skills, workers and project instructions can
 ## 2. Small job (one pull request)
 
 - Read the code once. Show a short plan in chat (what changes, where, any guess). After my approval, build.
+- **Feature audit first (D4 = B).** Before you change an existing repo, list each FEATURES.md feature the change touches (by file and behaviour) and mark it Covered, Overlap, Conflict or Untouched. Each Conflict becomes a plan decision. Each touched feature names its check, and that check passes on the old code before the change. A small change: a one-line audit. A new repo: FEATURES.md from day 1.
+- **FEATURES.md map.** Each feature line ends with "— files: <files> — test: <test name>". An app gets this map, and the feature check step in its test workflow (`central/checks/feature_check.py`; the step is in its first lines), inside its next real job's pull request. The check gives a red ✗ when a changed file belongs to a feature with no test, a test that is not in the repo, or no row in the pull request's impact table.
 - **My design file first.** A design, picture, prototype or document I give is copied exactly at the start; later work only connects it. Compare with it once, at the end. A reference is exact unless I mark it "for reference only".
 - Tests: the existing ones plus new ones for the change. Locally, run only the tests of the changed parts. The full suite runs once, on GitHub, on the pull request.
 - Read a file over 1,000 lines by parts: find the places first (Grep), then read only those ranges. The summary counts reading steps apart, so this rule is measured (Hook).
