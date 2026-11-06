@@ -1,6 +1,6 @@
 # Earlier checks that v3.3.7 changes on purpose (owner, 5 Nov: "Build hz-claude-config 3.3.7 … the approved scope").
 replay-hooks.sh · "router points to central skill file" · the central copy of hz-change-guard is removed (piece 7, D7 = B); the check now expects the account skill anthropic-skills:hz-change-guard
-replay-hooks.sh · "v3.2.2: the workers' regression guard carries the content ledger" and "...and its coverage gate names a missing phrase and fails" · they read the removed central copy; replaced by "v3.3.7: no central copy of hz-change-guard" and "...and the workers get the feature list in the hand-over" (helpers cannot load skills)
+replay-hooks.sh · the two v3.2.2 checks of the workers' regression guard (its ledger line and its gate script) · they read the removed central copy; replaced by "v3.3.7: no central copy of hz-change-guard" and "...and the workers get the feature list in the hand-over" (helpers cannot load skills)
 tools/test_v3212_items.py · item 4 ("repo copy of hz-change-guard has the revision gate", "...and the revision-record format") · the copy is removed; item 4 now checks that it is gone and that the router names the account skill
 tools/test_v336_items.py · item 1 V1 ("the status line ends with ' · Rules v<version>'", a missing one is a saved fix) · piece 5: the status line no longer carries the version; the Stop notice shows it
 tools/test_v336_items.py · item 2 G1 proof (scenario_v336_git.py wrote a settings.json with no ask rules) · replaced by tools/real-harness/scenario_v337_git.py on the real Trout settings d70bc8a
