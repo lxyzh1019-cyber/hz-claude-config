@@ -325,22 +325,45 @@ if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
 # twice, for "git add … && git commit … && git push -u origin <work branch>". Every check above has passed by now, so a
 # command made only of add, commit, push to the branch it is on (never main, never force) and read-only git is
 # approved here, and Claude Code does not ask. Anything else is left to Claude Code's own question.
+# v3.3.7 (X48 G1 reopened): the real git steps of Builds 1b-4 carry extras, so 3.3.6 approved none of them and the
+# app's old ask rule asked: "2>&1 | tail -3", "GIT_AUTHOR_EMAIL=… GIT_COMMITTER_EMAIL=… git commit", "git -c
+# user.email=… commit", a commit message from a here-document ("-F - <<'EOF'"), and "git merge" of a helper's branch
+# into the work branch. Those shapes pass now; anything else (a python step, --amend, force) is still not approved here.
+_GIT_ENV = re.compile(r"^(?:GIT_(?:AUTHOR|COMMITTER)_(?:NAME|EMAIL|DATE)=\S*\s+)+")
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2\s*(?=\n|$)", re.S)
+
+
 def _safe_git_only(c, branch):
     if not branch or branch in ("main", "master", "HEAD"):
         return False
-    t = re.sub(r'"(?:\\.|[^"\\])*"', '""', c, flags=re.S)
+    t = _HEREDOC.sub(" @HEREDOC@ ", c.replace("\r\n", "\n"))
+    t = re.sub(r'"(?:\\.|[^"\\])*"', '""', t, flags=re.S)
     t = re.sub(r"'[^']*'", "''", t)
+    t = re.sub(r"\s2>&1(?=\s|$)", " ", t)
     if re.search(r"[<>`]|\$\(", t):
         return False
     parts = [p.strip() for p in re.split(r"&&|;|\n", t) if p.strip()]
     if not parts:
         return False
     for p in parts:
-        w = p.split()
-        if w[0] != "git":
+        if "||" in p:
             return False
+        segs = [s.strip() for s in p.split("|")]
+        if any(not re.fullmatch(r"(tail|head)(\s+-n)?(\s+-?\d+)?", s) for s in segs[1:]):
+            return False
+        w = _GIT_ENV.sub("", segs[0]).split()
+        if not w or w[0] != "git":
+            return False
+        while len(w) > 2 and w[1] == "-c" and re.fullmatch(r"user\.(email|name)=\S*", w[2]):
+            w = [w[0]] + w[3:]
+        if "@HEREDOC@" in w:
+            i = w.index("-F") if "-F" in w else -1
+            if not (len(w) > 1 and w[1] == "commit" and i > 0 and w[i + 1:i + 2] == ["-"]):
+                return False
         sub = w[1] if len(w) > 1 else ""
-        rest = w[2:]
+        rest = [x for x in w[2:] if x != "@HEREDOC@"]
+        if sub == "merge" and not any(x.startswith(("--abort", "-s", "--strategy", "-X")) for x in rest):
+            continue
         if sub in ("status", "log", "diff", "show", "fetch", "rev-parse", "branch") and \
                 not any(x in ("-d", "-D", "-m", "-M", "--delete") for x in rest):
             continue

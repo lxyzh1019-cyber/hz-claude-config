@@ -64,13 +64,19 @@ DEFAULT_CONFIG = {
     "report_top_labels": _F.CLOSING_LABELS,
     # what a current stub looks like (session-start.py); names are shown to the user in plain words
     "stub_expect": {
-        "version": "3.3.1",
+        "version": "3.3.7",
         "files": {".claude/agents/sonnet-worker.md": "Sonnet worker",
                   ".claude/agents/planner.md": "planner on the first-choice model (v3.1.30)",
                   ".claude/agents/planner-opus.md": "planner fallback on Opus (v3.1.30)",
                   ".claude/agents/reviewer.md": "reviewer on call (v3.1.28)",
                   ".claude/agents/explore.md": "explorer on Sonnet (v3.1.28)"},
-        "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"]},
+        "settings": {"plansDirectory": ["./plans", "plan files saved in the repository"],
+                     "showClearContextOnPlanAccept": [True, "clear-context option at plan approval (v3.3.7)"]},
+        # v3.3.7: ask rules that make Claude Code ask for git steps even when an allow rule matches
+        "ask_absent": {"Bash(git commit:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)",
+                       "Bash(git push:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)",
+                       "Bash(git merge:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)",
+                       "Bash(gh pr merge:*)": "no git questions on the work branch: old ask rules removed (v3.3.7)"},
         # keys the stub must NOT set, so the account's own default applies
         "settings_absent": {"model": "account default model (the stub must not set a session model)",
                             "advisorModel": "advisor off (the stub must not switch on the Fable advisor)"},
