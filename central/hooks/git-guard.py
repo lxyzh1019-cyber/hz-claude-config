@@ -251,10 +251,12 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
     # v3.2.10: a pull request on a work branch, not main. Weekly-Planner 9 Oct: PR 4 sat on the PR 3 branch; GitHub
     # closed it when that branch was deleted after the merge, and the work had to open again as #137. A warning, not a
     # refusal: night work stacks on purpose.
-    _bm = re.search(r"\bgh\s+pr\s+(?:create|edit)\b.*?(?:--base|-B)[=\s]+(\S+)", segment)
+    _bm = re.search(r"\bgh\s+pr\s+(?:create|edit)\b.*?(?:--base|-B)[=\s]+(\S+)", segment) or \
+        re.search(r"\bgh\s+api\b.*?/pulls\b.*?-[fF]\s+base=(\S+)", segment)   # v3.3.7: the REST way
     if _bm and _bm.group(1).strip("'\"") not in PROTECTED:
         _stack_warn = _bm.group(1).strip("'\"")
-    if re.match(r"^(\w+=\S+\s+)*gh\s+pr\s+create\b", segment.strip()):
+    if re.match(r"^(\w+=\S+\s+)*gh\s+pr\s+create\b", segment.strip()) or \
+            re.match(r"^gh\s+api\s+-X\s+POST\s+repos/[^/\s]+/[^/\s]+/pulls(\s|$)", segment.strip()):
         pr_last_check(segment)
         mark("ready")
     elif re.match(r"^(\w+=\S+\s+)*gh\s+pr\s+ready\b", segment.strip()):
@@ -283,6 +285,153 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
             branch = branch if branch is not None else current_branch(where)
             if branch in PROTECTED:
                 deny_tool(f"git-guard: this would push {branch}. Switch to a working branch first.")
+# ---- v3.3.7: the safe-step checks (defined before their first use) ----
+_GIT_ENV = re.compile(r"^(?:GIT_(?:AUTHOR|COMMITTER)_(?:NAME|EMAIL|DATE)=\S*\s+)+")
+_HD_OPEN = re.compile(r"<<-?[ \t]*(['\"])(\w+)\1")
+# options that run a program or write a file (review of 3.3.7, item 3)
+_BAD_OPT = re.compile(r"^(--receive-pack|--upload-pack|--exec|--output|--ext-diff|--textconv|--git-dir|--work-tree|"
+                      r"--config-env|--no-verify|-o$|-o\S)")
+
+
+def _strip_heredocs(c):
+    """v3.3.7: a here-document with a QUOTED delimiter is literal text: its body lines go, the rest of its opening line
+    stays and is checked like any command. An unquoted delimiter (the shell expands $(…) in the body) or a missing end
+    line returns None."""
+    out = c
+    while True:
+        m = _HD_OPEN.search(out)
+        if not m:
+            return None if re.search(r"<<", out) else out
+        nl = out.find("\n", m.end())
+        if nl < 0:
+            return None
+        e = re.compile(r"\n[ \t]*" + re.escape(m.group(2)) + r"[ \t]*(?=\n|$)").search(out, nl)
+        if not e:
+            return None
+        out = out[:m.start()] + " @HEREDOC@ " + out[m.end():nl] + out[e.end():]
+
+
+def _skeleton(c):
+    """v3.3.7: the command with every quoted text turned into x's, read left to right as the shell does. None when it
+    holds '$', a backtick or a backslash outside single quotes, or an unclosed quote (review of 3.3.7, item 3)."""
+    s, q = [], None
+    for ch in c:
+        if q == "'":
+            q = None if ch == "'" else q
+            s.append("'" if ch == "'" else "x")
+            continue
+        if q == '"':
+            if ch in "$`\\":
+                return None
+            q = None if ch == '"' else q
+            s.append('"' if ch == '"' else "x")
+            continue
+        if ch in "$`\\":
+            return None
+        if ch in "'\"":
+            q = ch
+        s.append(ch)
+    return None if q else "".join(s)
+
+
+def _safe_git_only(c, branch):
+    if not branch or branch in ("main", "master", "HEAD"):
+        return False
+    t = _strip_heredocs(c.replace("\r\n", "\n"))
+    t = _skeleton(t) if t is not None else None
+    if t is None:
+        return False
+    t = re.sub(r"[ \t]2>&1(?=\s|$)", " ", t)
+    if re.search(r"[<>]|\|\||&(?!&)|(?<!&)&(?!&)", t.replace("&&", "")):
+        return False
+    parts = [p.strip() for p in re.split(r"&&|;|\n", t) if p.strip()]
+    if not parts:
+        return False
+    for p in parts:
+        segs = [s.strip() for s in p.split("|")]
+        if any(not re.fullmatch(r"(tail|head)(\s+-n)?(\s+-?\d+)?", s) for s in segs[1:]):
+            return False
+        w = _GIT_ENV.sub("", segs[0]).split()
+        if not w or w[0] != "git":
+            return False
+        while len(w) > 2 and w[1] == "-c" and re.fullmatch(r"user\.(email|name)=\S*", w[2]):
+            w = [w[0]] + w[3:]
+        if any(_BAD_OPT.match(x) for x in w[1:]):
+            return False
+        if "@HEREDOC@" in w:
+            i = w.index("-F") if "-F" in w else -1
+            if not (len(w) > 1 and w[1] == "commit" and i > 0 and w[i + 1:i + 2] == ["-"]):
+                return False
+        sub = w[1] if len(w) > 1 else ""
+        rest = [x for x in w[2:] if x != "@HEREDOC@"]
+        if sub == "merge" and not any(x.startswith(("--abort", "-s", "--strategy", "-X")) for x in rest):
+            continue
+        if sub == "branch" and not any(x.startswith(("-d", "-D", "-m", "-M", "--delete", "-f", "--force", "-c", "-C",
+                                                     "--set-upstream", "-u", "--edit")) for x in rest):
+            continue
+        if sub in ("status", "log", "diff", "show", "fetch", "rev-parse"):
+            continue
+        if sub == "add" and not any(x in ("-f", "--force") for x in rest):
+            continue
+        if sub == "commit" and "--amend" not in rest:
+            continue
+        if sub == "push":
+            if any(x.startswith(("-f", "--force", "--delete", "-d", "--mirror", "--all", "--tags", "--prune")) or
+                   x.startswith("+") or x.startswith(":") for x in rest):
+                return False
+            targets = [x for x in rest if not x.startswith("-")]
+            if len(targets) <= 1 or (len(targets) == 2 and targets[1] in (branch, "HEAD", f"HEAD:{branch}")):
+                continue
+            return False
+        return False
+    return True
+
+
+def _safe_gh_rest(c):
+    """v3.3.7: the setup's own GitHub REST steps for THIS repository's pull requests (open one, change its text or base,
+    read it and its checks) and the check wait (pr_checks.py of the central hooks). Nothing else: no other method,
+    endpoint or repository, no field but title/body/head/base, no local file outside the project, no shell syntax."""
+    t = c.strip()
+    if re.search(r"[\n\r$`\\';&|<>]", t):
+        return False
+    try:
+        toks = shlex.split(t)
+    except ValueError:
+        return False
+    hooks = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
+    tt = toks[2:] if len(toks) > 2 and toks[0] == "timeout" and toks[1].isdigit() else toks
+    if len(tt) >= 2 and re.fullmatch(r"python3?", tt[0]) and tt[1].replace("\\", "/") == hooks + "/pr_checks.py":
+        a = tt[2:]
+        return all(re.fullmatch(r"\d+", x) for x in a[:1]) and len(a) <= 3 and \
+            (len(a) <= 1 or (a[1] == "--timeout" and len(a) == 3 and a[2].isdigit()))
+    try:
+        from _common import gh_repo as _gr
+        repo = _gr()
+    except Exception:
+        repo = None
+    if not repo or toks[:2] != ["gh", "api"]:
+        return False
+    i, method = 2, "GET"
+    if toks[i:i + 1] == ["-X"]:
+        method, i = (toks[i + 1] if len(toks) > i + 1 else ""), i + 2
+    if method not in ("GET", "POST", "PATCH") or len(toks) <= i or not toks[i].startswith(f"repos/{repo}/"):
+        return False
+    p, rest = toks[i][len(f"repos/{repo}/"):], toks[i + 1:]
+    if method == "GET":
+        return not rest and bool(re.fullmatch(r"pulls(/\d+)?|commits/[0-9a-f]{7,40}/(check-runs|status)(\?per_page=\d+)?", p))
+    if (method == "POST" and p != "pulls") or (method == "PATCH" and not re.fullmatch(r"pulls/\d+", p)) or len(rest) % 2:
+        return False
+    for k in range(0, len(rest), 2):
+        f, kv = rest[k], rest[k + 1]
+        if f not in ("-f", "-F") or not re.fullmatch(r"(title|body|head|base)=.*", kv, re.S):
+            return False
+        if f == "-F" and "=@" in kv:
+            v = kv.split("=@", 1)[1].replace("\\", "/")
+            if not v or v.startswith(("/", "~")) or ":" in v or ".." in v.split("/"):
+                return False
+    return True
+
+
 # v3.2.10: a commit of notes only (record, docs, plans) starts a full GitHub run of 8-13 minutes, and the app's
 # 'cancel-in-progress' stops the code run already going. '[skip ci]' in the message starts no run.
 _notes_hint = None
@@ -314,8 +463,13 @@ if _adds and re.search(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b", cmd) and "[skip ci]"
 # v3.3.0: add [skip ci] to the commit message itself instead of refusing the commit (a refused step costs a whole turn)
 if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT"):
     _m = re.search(r"(\bcommit\b[^\n]*?\s-m\s+)([\"'])(.*?)(\2)", cmd, re.S)
-    if _m and "$(" not in _m.group(3):
-        _new = cmd[:_m.start(3)] + _m.group(3) + " [skip ci]" + cmd[_m.end(3):]
+    _new = cmd[:_m.start(3)] + _m.group(3) + " [skip ci]" + cmd[_m.end(3):] if _m else None
+    try:   # v3.3.7 (review item 4): the rewrite is approved only when the whole rewritten command is a safe git step
+        _bn = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(data.get("cwd") or PROJECT_DIR),
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        _bn = ""
+    if _new and (_safe_git_only(_new, _bn) or os.environ.get("HZ_FULL_RULES")) and "$(" not in _m.group(3):
         import json as _j3
         from _common import log as _lg3
         _lg3("git-guard", {"notes_only_commit": "skip ci added"})
@@ -352,85 +506,6 @@ if _notes_hint and not os.environ.get("HZ_SKIP_CI_SOFT") and os.environ.get("HZ_
 # app's old ask rule asked: "2>&1 | tail -3", "GIT_AUTHOR_EMAIL=… GIT_COMMITTER_EMAIL=… git commit", "git -c
 # user.email=… commit", a commit message from a here-document ("-F - <<'EOF'"), and "git merge" of a helper's branch
 # into the work branch. Those shapes pass now; anything else (a python step, --amend, force) is still not approved here.
-_GIT_ENV = re.compile(r"^(?:GIT_(?:AUTHOR|COMMITTER)_(?:NAME|EMAIL|DATE)=\S*\s+)+")
-_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2\s*(?=\n|$)", re.S)
-
-
-def _safe_git_only(c, branch):
-    if not branch or branch in ("main", "master", "HEAD"):
-        return False
-    t = _HEREDOC.sub(" @HEREDOC@ ", c.replace("\r\n", "\n"))
-    t = re.sub(r'"(?:\\.|[^"\\])*"', '""', t, flags=re.S)
-    t = re.sub(r"'[^']*'", "''", t)
-    t = re.sub(r"\s2>&1(?=\s|$)", " ", t)
-    if re.search(r"[<>`]|\$\(", t):
-        return False
-    parts = [p.strip() for p in re.split(r"&&|;|\n", t) if p.strip()]
-    if not parts:
-        return False
-    for p in parts:
-        if "||" in p:
-            return False
-        segs = [s.strip() for s in p.split("|")]
-        if any(not re.fullmatch(r"(tail|head)(\s+-n)?(\s+-?\d+)?", s) for s in segs[1:]):
-            return False
-        w = _GIT_ENV.sub("", segs[0]).split()
-        if not w or w[0] != "git":
-            return False
-        while len(w) > 2 and w[1] == "-c" and re.fullmatch(r"user\.(email|name)=\S*", w[2]):
-            w = [w[0]] + w[3:]
-        if "@HEREDOC@" in w:
-            i = w.index("-F") if "-F" in w else -1
-            if not (len(w) > 1 and w[1] == "commit" and i > 0 and w[i + 1:i + 2] == ["-"]):
-                return False
-        sub = w[1] if len(w) > 1 else ""
-        rest = [x for x in w[2:] if x != "@HEREDOC@"]
-        if sub == "merge" and not any(x.startswith(("--abort", "-s", "--strategy", "-X")) for x in rest):
-            continue
-        if sub in ("status", "log", "diff", "show", "fetch", "rev-parse", "branch") and \
-                not any(x in ("-d", "-D", "-m", "-M", "--delete") for x in rest):
-            continue
-        if sub == "add" and not any(x in ("-f", "--force") for x in rest):
-            continue
-        if sub == "commit" and "--amend" not in rest:
-            continue
-        if sub == "push":
-            if any(x.startswith(("-f", "--force", "--delete", "--mirror", "--all", "--tags")) or x.startswith("+")
-                   or x.startswith(":") for x in rest):
-                return False
-            targets = [x for x in rest if not x.startswith("-")]
-            if len(targets) <= 1 or (len(targets) == 2 and targets[1] in (branch, "HEAD", f"HEAD:{branch}")):
-                continue
-            return False
-        return False
-    return True
-
-
-def _safe_gh_rest(c):
-    """v3.3.7: the setup's own GitHub REST steps for this repository's pull requests (open, change the text or base,
-    read state and checks) and the check wait (pr_checks.py from the central hooks). Nothing else: no DELETE, no other
-    endpoint, no other repository, no shell tricks."""
-    try:
-        from _common import gh_repo as _gr
-        repo = _gr()
-    except Exception:
-        repo = None
-    t = c.strip()
-    if re.search(r"[;&|<>`]|\$\(", re.sub(r'"[^"]*"', '""', t)):
-        return False
-    hooks = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
-    if re.fullmatch(r'(timeout\s+\d+\s+)?python3?\s+"?' + re.escape(hooks) + r'/pr_checks\.py"?(\s+\d+)?(\s+--timeout\s+\d+)?', t):
-        return True
-    if not repo:
-        return False
-    m = re.fullmatch(r"gh\s+api\s+(?:-X\s+(GET|POST|PATCH)\s+)?repos/" + re.escape(repo) +
-                     r"/(pulls(?:/\d+)?|pulls\?\S*|commits/[0-9a-f]{7,40}/check-runs\S*)(\s+.*)?", t, re.S)
-    if not m:
-        return False
-    rest = m.group(3) or ""
-    if (m.group(1) == "POST" and not re.fullmatch(r"pulls", m.group(2))) or re.search(r"draft=true", rest, re.I):
-        return False
-    return all(re.fullmatch(r"-[fF]|--input|[A-Za-z_]+=.*|@?\S+", x) for x in rest.split()) if rest.strip() else True
 
 
 if tool == "Bash" and not os.environ.get("HZ_FULL_RULES") and _safe_gh_rest(cmd):

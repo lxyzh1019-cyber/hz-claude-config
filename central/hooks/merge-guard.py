@@ -49,9 +49,9 @@ def _rest_checks():
         sha = _rt7(["git", "rev-parse", "HEAD"], timeout=10).stdout.strip()
         d = gh_rest(f"repos/{repo}/commits/{sha}/check-runs?per_page=100")
         runs = d.get("check_runs") if isinstance(d, dict) else None
-        if runs is None:
+        if not runs:   # review item 5: no runs (a [skip ci] push, an app with no checks) -> the older reading below
             return None
-        if not runs or any(r.get("status") != "completed" for r in runs):
+        if any(r.get("status") != "completed" for r in runs):
             return "pending"
         return "failed" if any(r.get("conclusion") not in ("success", "neutral", "skipped") for r in runs) else "passed"
     except Exception:
@@ -59,6 +59,8 @@ def _rest_checks():
 
 
 def _rest_gate():
+    if _o7.environ.get("HZ_FULL_RULES"):   # review item 10: the old method keeps the old reading
+        return
     _rc = _rest_checks()
     if _rc is None:
         return

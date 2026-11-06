@@ -12,7 +12,8 @@ A red ✗ (exit 1) for each feature whose file changed when:
 FEATURES.md with no map yet: a notice and a pass.
 
 The step in the app's test workflow (on pull_request):
-  - run: |
+  - if: github.event_name == 'pull_request'
+    run: |
       curl -fsSL https://raw.githubusercontent.com/lxyzh1019-cyber/hz-claude-config/main/central/checks/feature_check.py -o "$RUNNER_TEMP/feature_check.py"
       python3 "$RUNNER_TEMP/feature_check.py" --base "origin/${{ github.base_ref }}"
   (actions/checkout with fetch-depth: 0, so the base is there.)
@@ -80,14 +81,17 @@ def main():
     changed = [f.strip().replace("\\", "/") for f in git(repo, "diff", "--name-only", rng).splitlines() if f.strip()]
     if not changed and "..." in rng:
         changed = [f.strip() for f in git(repo, "diff", "--name-only", base, head).splitlines() if f.strip()]
-    body = ""
+    body, have_body = "", bool(arg("--pr-body"))
     if arg("--pr-body"):
         body = open(arg("--pr-body"), encoding="utf-8").read()
     elif os.environ.get("GITHUB_EVENT_PATH"):
         try:
-            body = (json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8")).get("pull_request") or {}).get("body") or ""
+            _pr = json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8")).get("pull_request")
+            body, have_body = ((_pr or {}).get("body") or ""), _pr is not None
         except (OSError, ValueError):
             body = ""
+    if not have_body:   # review item 11: a push run has no pull request text; the impact table is checked on the PR
+        print("::notice::feature check: no pull request text here (a push run); the impact table is checked on the pull request.")
     bad, ok = [], []
     for f in fmap:
         hit = [c for c in changed if any(c == x or c.startswith(x.rstrip("/") + "/") for x in f["files"])]
@@ -98,7 +102,7 @@ def main():
             why.append("its line names no test")
         elif not test_exists(repo, f["test"]):
             why.append(f"the test '{f['test']}' is not in the repository")
-        if not in_impact_table(body, f["name"]):
+        if have_body and not in_impact_table(body, f["name"]):
             why.append("it is missing from the pull request's impact table")
         (bad if why else ok).append((f["name"], hit, why))
     for name, hit, why in ok:

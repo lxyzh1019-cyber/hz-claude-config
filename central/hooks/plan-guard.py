@@ -219,8 +219,11 @@ except (AttributeError, TypeError, ValueError):
 _pf = os.path.basename(str(plan_file or "")).lower()
 if _pf and isinstance(_store.get("plans"), dict):
     for _k, _v in list(_store["plans"].items()):
-        if _k != _name and isinstance(_v, dict) \
-                and os.path.basename(str(_v.get("file") or "")).lower() == _pf:
+        if _k != _name and isinstance(_v, dict) and _name not in _store["plans"] \
+                and os.path.basename(str(_v.get("file") or "")).lower() == _pf \
+                and (not _v.get("approved") or __import__("difflib").SequenceMatcher(None, *[plan_norm(re.sub(
+                    r"(?m)^#*\s*Plan v\d+.*$", "", planmarks.strip_marks(x or ""), count=1))
+                    for x in (_v.get("text"), text)]).ratio() >= 0.5):   # review item 8: a different plan keeps its own
             live_proof("plan-guard", {"identity": "plan file", "old_name": _k, "new_title": _name})
             _name = _k
             break

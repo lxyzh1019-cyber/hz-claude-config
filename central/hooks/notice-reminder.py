@@ -13,7 +13,17 @@ if any(data.get(f) for f in (cfg.get("subagent_marker_fields") or ["agent_id"]))
 tool = str(data.get("tool_name") or "")
 inp = data.get("tool_input") or {}
 resp = json.dumps(data.get("tool_response") or "", ensure_ascii=False)[:2000].lower()
-if re.search(r'"is_error":\s*true|"interrupted":\s*true|\berror\b.*\bpull request\b|could not|failed', resp):
+# v3.3.7 (review item 6): a checks read is handled below even when the checks failed; a pull request opened with REST
+# is judged by its html_url, never by words in its own title or body
+_tr6 = data.get("tool_response")
+_out6 = str(_tr6.get("stdout") or "") if isinstance(_tr6, dict) else str(_tr6 or "")
+_cmd6 = str(inp.get("command") or "")
+_checks6 = (tool == "Bash" and re.search(r"\bgh\s+(pr\s+checks|run\s+watch)\b|pr_checks\.py", _cmd6)) or \
+    re.search(r"mcp__.*(check|status)", tool)
+_opened6 = bool(re.search(r'"html_url"\s*:\s*"https://github\.com/[^"]+/pull/\d+"', _out6))
+_err6 = json.dumps({k: v for k, v in _tr6.items() if k != "stdout"}, ensure_ascii=False).lower() \
+    if _opened6 and isinstance(_tr6, dict) else resp
+if not _checks6 and re.search(r'"is_error":\s*true|"interrupted":\s*true|\berror\b.*\bpull request\b|could not|failed', _err6):
     sys.exit(0)                                   # the pull request did not open
 def _write_report(pr_url, checks=""):
     """v3.3.5: the summary (bold lines) and the report part; written when the pull request opens and again after the

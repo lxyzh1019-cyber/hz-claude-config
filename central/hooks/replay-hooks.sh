@@ -3062,7 +3062,7 @@ q = {"hook_event_name": "PreToolUse", "tool_name": "AskUserQuestion", "session_i
 res("  ...ask-guard sends nothing back (a saved fix)", '"deny"' not in hook("ask-guard.py", q, P))
 P = proj("https://github.com/owner/app.git")
 ga = lambda c: "the setup's own GitHub REST step" in hook("git-guard.py", {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "g", "tool_input": {"command": c}}, P)
-res("  ...git-guard approves this repository's pull-request REST steps only", ga("gh api -X PATCH repos/owner/app/pulls/3 --input b.json")
+res("  ...git-guard approves this repository's pull-request REST steps only", ga("gh api -X PATCH repos/owner/app/pulls/3 -F body=@b.json")
     and ga("gh api -X POST repos/owner/app/pulls -f head=b -f base=main -f title=x") and not ga("gh api -X DELETE repos/owner/app/pulls/3")
     and not ga("gh api -X POST repos/owner/app/issues -f title=x") and not ga("gh api -X POST repos/owner/app/pulls -f draft=true"))
 os.environ["CLAUDE_CODE_REMOTE"] = "true"

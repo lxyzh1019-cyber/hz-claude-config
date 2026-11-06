@@ -5,3 +5,5 @@ tools/test_v3212_items.py · item 4 ("repo copy of hz-change-guard has the revis
 tools/test_v336_items.py · item 1 V1 ("the status line ends with ' · Rules v<version>'", a missing one is a saved fix) · piece 5: the status line no longer carries the version; the Stop notice shows it
 tools/test_v336_items.py · item 2 G1 proof (scenario_v336_git.py wrote a settings.json with no ask rules) · replaced by tools/real-harness/scenario_v337_git.py on the real Trout settings d70bc8a
 tools/test_v336_items.py · items 3 G2/G3/G4/G6 ("a merge request needs … the code-made summary pasted; one send-back") · piece 4: no paste send-back; the check writes the report into the pull request text and shows the summary as its own notice
+notice-reminder.py · the [report] steps after a pull request opens (gh pr checks --watch, gh pr edit --body-file, paste the summary) · replaced in every mode, also under HZ_FULL_RULES: the check writes the report itself and the steps name no gh pr (review of 3.3.7, item 10)
+plan-guard.py · repeated marks refusals for one showing · at most one marks refusal per showing in every mode, also under HZ_FULL_RULES (review of 3.3.7, item 10)

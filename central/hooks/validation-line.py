@@ -48,9 +48,11 @@ def _real_work(turn):
             if not isinstance(b, dict) or b.get("type") != "tool_use":
                 continue
             n, i = b.get("name"), (b.get("input") or {})
-            if n in ("Edit", "Write", "MultiEdit", "NotebookEdit", "ExitPlanMode", "Agent", "Task"):
+            if n in ("Edit", "Write", "MultiEdit", "NotebookEdit", "ExitPlanMode", "Agent", "Task") or \
+                    _re32.search(r"create_pull_request|update_pull_request", str(n or "")):
                 return True
-            if n == "Bash" and _re32.search(r"\bgit\s+(commit|push|merge)\b|\bgh\s+pr\s+(create|ready|merge)\b",
+            if n == "Bash" and _re32.search(r"\bgit\s+(commit|push|merge)\b|\bgh\s+pr\s+(create|ready|merge)\b|"
+                                            r"\bgh\s+api\b[^\n]*-X\s+(POST|PATCH)\b[^\n]*/pulls\b",
                                             str(i.get("command") or "")):
                 return True
     return False

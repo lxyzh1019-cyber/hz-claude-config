@@ -167,9 +167,10 @@ def _setup_pr_step(project_dir, branch, version):
         cloud, repo = is_cloud(), gh_repo()
     except Exception:
         cloud, repo = False, None
-    if cloud:
+    if cloud or not repo:   # review item 13: never a command with '<owner>/<repo>' in it
         return (f"open its pull request with the GitHub tool: create_pull_request with head {branch}, base main, title "
-                f"\"{title}\", body \"{body}\", draft false. If GitHub says it already exists, use that one.")
+                f"\"{title}\", body \"{body}\", draft false. If GitHub says it already exists, use that one."
+                + ("" if cloud else " Without the GitHub tool, ask me to open it on GitHub with 'Compare & pull request'."))
     return (f"open its pull request with exactly: gh api -X POST repos/{repo or '<owner>/<repo>'}/pulls -f head={branch} "
             f"-f base=main -f title=\"{title}\" -f body=\"{body}\" — if GitHub says it already exists, use that one.")
 
