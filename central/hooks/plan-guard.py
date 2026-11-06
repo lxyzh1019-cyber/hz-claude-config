@@ -214,6 +214,16 @@ try:
         live_proof("plan-guard", {"marks_trial": _store["marks_mode"]})
 except (AttributeError, TypeError, ValueError):
     pass
+# v3.3.7 (owner rule, 5 Nov: the plan title is not the identity and not a revision): a plan is known by its file. A
+# reworded title after a send-back is the same plan (Build 3: 2 re-showings got 0 marks when the title changed).
+_pf = os.path.basename(str(plan_file or "")).lower()
+if _pf and isinstance(_store.get("plans"), dict):
+    for _k, _v in list(_store["plans"].items()):
+        if _k != _name and isinstance(_v, dict) \
+                and os.path.basename(str(_v.get("file") or "")).lower() == _pf:
+            live_proof("plan-guard", {"identity": "plan file", "old_name": _k, "new_title": _name})
+            _name = _k
+            break
 _entry = (_store["plans"].get(_name) if _name else None) or None
 # v3.2.0: a new session (or the first session on 3.2.0) has no saved plan yet. The newest committed plan file with the
 # same plan name and a lower version (an approved one: approved plans are committed in plans/) becomes the base, so
@@ -245,7 +255,8 @@ if _name and _ver is not None and _rounds_on and _entry:
     # v3.3.3: the check's own rewrites (the change-list heading, "First version") are no change either
     _qr = lambda s: re.sub(r"(?im)^\s*-\s*first version\.?\s*$\n?", "", re.sub(
         r"(?i)(what changed since)[^\n*]*", r"\1", re.sub(r"(\*\*Quick read\*\*)\s*·[^\n]*", r"\1", _pm0.strip_marks(s or ""))))
-    _same = plan_norm(_qr(_entry.get("text"))) == plan_norm(_qr(text))
+    _nt = lambda s: re.sub(r"(?m)^#*\s*Plan v\d+.*$", "", s or "", count=1)   # v3.3.7: the title is no revision
+    _same = plan_norm(_nt(_qr(_entry.get("text")))) == plan_norm(_nt(_qr(text)))
     if _entry.get("preview") and _ver == _ev:
         # v3.3.3 "C": marked when written, not shown yet. Every later write and the showing compare with the same base
         # and keep the same Rev, so two writes before one showing never count as two Revs.
@@ -325,6 +336,9 @@ if problems:
 _cur = {"rev": _rev, "n": 0, "since": _since if _rev == 1 and _base is not None else ""}
 _final = text
 if _base is not None:
+    _tl = re.search(r"(?m)^#*\s*Plan v\d+.*$", text or "")   # v3.3.7: the title line is never marked
+    if _tl and isinstance(_base, str):
+        _base = re.sub(r"(?m)^#*\s*Plan v\d+.*$", lambda m: _tl.group(0), _base, count=1)
     _final, (_n, _g) = planmarks.apply(text, _base, _ver, _rev, _hist, _since)
     _cur = {"rev": _rev, "n": _n, "gist": _g}
     # v3.3.0 (owner, choice A): one change list. Under "What changed since …" one line from the check names the colours.
@@ -388,12 +402,26 @@ if _base is not None:
             _final = "\n".join(_L)
         except Exception:
             pass
+# v3.3.7 (D3, colour-review fixes): the plan says "What changed since Rev N" (N > 1), but the check has no earlier
+# showing to compare with. One reason line in the plan says why nothing is marked (no refusal).
+NO_BASE_LINE = "🎨 No earlier showing of this plan was found, so the check marks nothing in this showing."
+if _base is None and NO_BASE_LINE not in (text or ""):
+    _mb = re.search(r"(?im)^([^\n]*what changed since\s*\**\s*rev\s*(\d+)[^\n]*)$", text or "")
+    if _mb and int(_mb.group(2)) > 1:
+        _final = text.replace(_mb.group(1), _mb.group(1) + "\n" + NO_BASE_LINE, 1)
+        live_proof("plan-guard", {"no_base": f"What changed since Rev {_mb.group(2)}"})
 # v3.3.3: the marked text the check made last time is accepted as it is. Marking is not exact when repeated (the check
 # also rewrites the Quick read count and the change list), so the real program refused the marked plan again (16 Oct).
+# v3.3.7: one number. The session's own "What changed since Rev N" follows the marks: N is one below the newest mark.
+if _final and _base is not None and int(_rev or 1) > 1:
+    _final = re.sub(r"(What changed since\s*)Rev\s*\d+", lambda m: m.group(1) + f"Rev {int(_rev) - 1}", _final, count=1)
 _made = (_entry or {}).get("final") if _entry and _ver is not None and int(_entry.get("version") or 0) == _ver else None
 if _made and plan_norm(shown_text) == plan_norm(_made):
     _final = shown_text
 if PREVIEW:
+    if _base is None and _final != text:   # v3.3.7 D3: the reason line goes in when the file is written
+        print(json.dumps({"hz_preview_final": _final}))
+        raise SystemExit(0)
     if _base is not None and plan_norm(shown_text) != plan_norm(_final) and _name and _ver is not None and _rounds_on:
         _store["plans"][_name] = {"version": _ver, "rev": _rev, "text": text, "base": _base, "since": _since,
                                   "history": _hist, "cur": _cur, "approved": False, "file": plan_file, "preview": True,
@@ -403,6 +431,27 @@ if PREVIEW:
         live_proof("plan-guard", {"marks": "added when written", "version": _ver, "rev": _rev})
         print(json.dumps({"hz_preview_final": _final}))
     raise SystemExit(0)
+if _base is None and _final != text and plan_file:   # v3.3.7 D3: written into the file, the window reads it
+    try:
+        with open(plan_file, "w", encoding="utf-8") as _f:
+            _f.write(_final)
+    except OSError:
+        pass
+# v3.3.7: at most one refusal for marks per plan showing (Rev). A second one lets the plan through as it is.
+_mk = f"{_name}|v{_ver}|r{_rev}"
+_mr = _store.get("marks_refusals") if isinstance(_store.get("marks_refusals"), dict) else {}
+_marks_cap = int(_mr.get(_mk, 0)) >= 1
+
+
+def _marks_refused():
+    _mr[_mk] = int(_mr.get(_mk, 0)) + 1
+    _store["marks_refusals"] = dict(list(_mr.items())[-40:])
+    plan_store_save(_store)
+
+
+if _base is not None and plan_norm(shown_text) != plan_norm(_final) and _marks_cap:
+    live_proof("plan-guard", {"marks": "one refusal used; shown as it is", "version": _ver, "rev": _rev})
+    shown_text = _final
 if _base is not None and plan_norm(shown_text) != plan_norm(_final):
     if plan_file:
         try:
@@ -424,6 +473,7 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
                                               "final": _final}
                     _store["last"] = _name
                     plan_store_save(_store)
+                _marks_refused()
                 deny_tool(f"The plan check added the coloured change marks (Plan v{_ver} · Rev {_rev}) to the plan "
                           f"file {plan_file}. Read that file and show the plan again with exactly its text. Change nothing. "
                           "Do not write the plan in the chat: the plan window shows it.")
@@ -435,6 +485,7 @@ if _base is not None and plan_norm(shown_text) != plan_norm(_final):
             pass
     if plan_norm(shown_text) != plan_norm(_final):   # v3.2.15: skipped when the marks went on with the plan
       live_proof("plan-guard", {"marks": "asked to paste", "version": _ver, "rev": _rev})
+      _marks_refused()
       deny_tool("Replace the plan with this text, exactly as given, then show it again. It has the coloured change "
               "marks.\n\n" + _final)
 if _name and _ver is not None and _rounds_on:

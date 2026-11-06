@@ -9,6 +9,7 @@ Every package: Windows line endings (CRLF); the dry-run starts from a Windows-st
 
 Proof rule (owner, 5 Nov): every fix's test starts from real files (an app's real settings, the owner's real session files). It must fail on the old version and pass on the new one.
 Fix-round limit (owner, 5 Nov): a fix that failed is "attempt N" of its item; attempt 3 needs a rewrite-or-repair comparison before any code.
+Owner rule (5 Nov): the plan title is not the identity of a plan and not part of its revision. A plan is known by its file; a reworded title is the same plan, and the title line is never marked.
 
 ## Features (each phrase must stay in this repo's files; one line per FEATURES.md item)
 F01 MANIFEST.txt: first line version: X.Y.Z (the only place the version li | MANIFEST.txt
@@ -91,6 +92,7 @@ F75 v3.3.6: a merge request needs the code-made summary after the checks | merge
 - Soft hand-back notice for a worker at 150 k tokens (3.2.11 list item 3) | reason: 3.2.9 switched the memory limit off because restarts re-read the same files and cost more; on 10 Oct only 1 of 5 workers passed 150 k | approved: owner, 10 Oct ("yes, drop item 3")
 
 ## Open problems (stay until fixed with proof or he drops them)
+X49 Re-showings after a send-back got no colour marks when the title was reworded (Build 3: 0 marks at 9:02 and 9:08 PM), and the session's own "What changed since Rev N" gave a second number | attempt 1 (3.3.7): plan-guard knows a plan by its file; the title is no change and never marked; "What changed since Rev N" follows the marks; a reason line when the plan names an earlier Rev the check has not seen; at most one marks refusal per showing; an edit of the approved plan file is its next Rev (no refusal) | proof: tools/real-harness/replay_plan_showings.py — Build 3 on 3.3.6: 0 and 0 marks; on 3.3.7: 19 and 33, each "since" one below the newest mark; Build 4: 8 and 18 on both; synthetic 4 showings: Rev 1, Rev 1 no marks, Rev 2 (1 mark), Rev 3 (1 mark), Plan v2 at Rev 1, title never marked (3.3.6: 0 marks on all) | Open until scorecard check 2 passes in the first real job
 P04 X48 G1 reopened (git questions on the work branch): the 3.3.6 proof wrote a settings.json with no ask rules, a setup no app has. Builds 2–4: 10 questions, 260 min, all reasonCode rule:projectSettings; the real steps carried "2>&1 | tail", "GIT_AUTHOR_EMAIL=…", "git -c user.email=…" or a here-document, so the hook approved none of them and the old ask rule asked | found: 2026-11-05 | attempt 1 (3.3.7): the settings merge removes the retired ask rules (deploy asks kept, gh pr merge stays denied); git-guard approves those real shapes | proof so far: tools/real-harness/scenario_v337_git.py 7/7 on the real Trout settings d70bc8a (3.3.6 asks on 4 of 4 real step shapes, 3.3.7 on 0 of 4 and pushes) | stays Open until scorecard check 1 passes in the first real job
 P02 Model-dependent solutions (one review per pull request, lean main session, Part names, report link copied, short test output) are proven only by a live session | found: 2026-10-11 campaign | next: the live scorecard in each end report shows works / does not work
 

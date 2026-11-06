@@ -41,6 +41,11 @@ if nv == ver and (plan_rev_of(new) or 1) > (plan_rev_of(old) or 1):   # v3.2.17:
     raise SystemExit(0)
 if plan_norm(strip_change_block(new)) == plan_norm(strip_change_block(old)):
     raise SystemExit(0)
+# v3.3.7 (piece 2): the plan is known by its file, so a change to the approved plan file is its next Rev: the plan check
+# counts it and marks it. No refusal by default (the old method keeps it: HZ_FULL_RULES).
+if not os.environ.get("HZ_FULL_RULES"):
+    log("plan-edit-guard", {"next_rev": os.path.basename(path), "version": ver})
+    raise SystemExit(0)
 log("plan-edit-guard", {"refused": os.path.basename(path), "version": ver})
 live_proof("plan-edit-guard", {"refused": os.path.basename(path), "version": ver})
 _r = plan_rev_of(old) or 1
