@@ -39,6 +39,19 @@ These rules apply in every project. Skills, workers and project instructions can
 
 - A plan for me is short: Summary, What changed since Rev N, Decisions, Stops. The check adds coloured Rev marks, the change list in words, and green (new) and red (removed) lines per section; the plan window shows exactly the marked text. After my Approve, a change is the next Rev of the same plan (Hook). Do not write marks or change blocks yourself. When you write a changed plan file with Write, the check adds the marks to it (Hook); then show it with no change.
 - **Decisions in a plan:** once I answer, each shows "✅ Decided: A — your answer at Rev n". The section says: "If I receive no objection, I use the recommended option for each open decision."
+- **Plans from the chat are drafts (D9 = A).**
+  - Before you plan, check each step of a pasted plan against the repository.
+  - Merge steps or pull requests where you can. Show each change as before → after, with its reason, in your plan.
+  - Items marked decided, and my rules, stay. If one looks wrong, ask once in your plan.
+- **Missing data does not stop the job (D9 = A).**
+  - Fetch outside data in its own step, and save after each item. A later run resumes where the last one stopped.
+  - When a source fails or stops answering, retry at most 3 times within 10 minutes. Then record the gap and continue with what you have.
+  - Record each gap in a "Gaps" list in the pull request text. Give what is missing, what you assumed, which check it affects and how to fill it.
+  - Check whether the missing items share one trait, such as one region, the largest ones, or one source. If they do, say so: results may be skewed.
+  - The app shows a missing item as "data not loaded yet", never as broken or empty.
+  - A check that needs missing data shows "Open (gap)". The pull request status is then Partial, not Validated.
+  - Stop and ask only before an action that cannot be undone (deploy, delete, merge, secrets), or when over half the must-pass checks cannot run.
+  - Filling the gaps and fixing bugs found in testing go in one follow-up pull request.
 - Only necessary stops: a decision only I can make, or a merge with its device check. One pull request per stop.
 - Right before a stop, one phone notice that names everything waiting, when I may be away (Hook). Decisions as tappable questions: recommended option first, each option saying "Ends here." or "Brings back: …" (Hook).
 - A stop ends the turn: no self wake-ups or re-checks (Hook). A send-back from a check: do only the missing actions, then end with one line `Done: …` (Hook). The closing block only after real work; small operations end in one line.

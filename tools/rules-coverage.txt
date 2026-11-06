@@ -314,3 +314,14 @@ Bigger job method (v3.3.2) | R | ## 3. Bigger job (a new app, many sessions)
 One review pass before the merge (v3.3.2) | R | **One review pass before my merge:**
 My design file first (v3.3.2) | R | **My design file first.**
 Closing block only after real work (v3.3.2) | R | The closing block only after real work
+Plans from the chat are drafts: check each step against the repository (v3.3.7, D9 = A) | R | check each step of a pasted plan against the repository
+  ...merge steps, show before → after with its reason (v3.3.7) | R | Show each change as before → after, with its reason, in your plan.
+  ...decided items and my rules stay; ask once (v3.3.7) | R | Items marked decided, and my rules, stay. If one looks wrong, ask once in your plan.
+Missing data does not stop the job: own fetch step, save after each item (v3.3.7, D9 = A) | R | Fetch outside data in its own step, and save after each item.
+  ...at most 3 retries in 10 minutes, then record the gap (v3.3.7) | R | retry at most 3 times within 10 minutes
+  ...Gaps list in the pull request text (v3.3.7) | R | Record each gap in a "Gaps" list in the pull request text.
+  ...say when the missing items share one trait (v3.3.7) | R | If they do, say so: results may be skewed.
+  ...the app shows 'data not loaded yet' (v3.3.7) | R | "data not loaded yet", never as broken or empty
+  ...'Open (gap)' and status Partial (v3.3.7) | R | The pull request status is then Partial, not Validated.
+  ...stop only before an action that cannot be undone, or over half the must-pass checks blocked (v3.3.7) | R | or when over half the must-pass checks cannot run
+  ...gaps and test bugs in one follow-up pull request (v3.3.7) | R | Filling the gaps and fixing bugs found in testing go in one follow-up pull request.
