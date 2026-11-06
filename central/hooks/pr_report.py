@@ -114,6 +114,12 @@ def measure(transcript_path):
     def add(kind, sec):
         kinds[kind] = kinds.get(kind, 0) + sec
 
+    try:   # v3.3.7 (piece 3): permission waits are waits for me, from the session file
+        import session_facts as _sf
+        _pw = _sf.wait_secs_by_id(main)
+        _sbc = _sf.sendback_count(main)
+    except Exception:
+        _pw, _sbc = {}, {"refusals": 0, "stop_blocks": 0, "total": 0}
     for i in range(len(recs) - 1):
         a, b = recs[i], recs[i + 1]
         sec = _ts(b) - _ts(a)
@@ -137,6 +143,10 @@ def measure(transcript_path):
                     if isinstance(blk, dict) and blk.get("type") == "tool_result" and blk.get("tool_use_id") in uses:
                         t0, name, inp = uses[blk["tool_use_id"]]
                         cmd = str(inp.get("command") or "")
+                        _w = min(_pw.get(blk["tool_use_id"], 0), sec)
+                        if _w:
+                            add("your time (answers, approvals)", _w)
+                            sec -= _w
                         if name in ("ExitPlanMode", "AskUserQuestion"):
                             kind = "your time (answers, approvals)"
                         elif name in ("Agent", "Task"):
@@ -168,7 +178,8 @@ def measure(transcript_path):
         for mod, v in bm.items():
             by_model[mod] = by_model.get(mod, 0) + v
     clock = _ts(recs[-1]) - _ts(recs[0]) if len(recs) > 1 else 0
-    return {"kinds": kinds, "steps": sorted(steps, reverse=True)[:5], "refused": refused, "gh_waits": gh_waits,
+    return {"sendbacks": _sbc, "perm_waits": (len(_pw), sum(_pw.values())),
+            "kinds": kinds, "steps": sorted(steps, reverse=True)[:5], "refused": refused, "gh_waits": gh_waits,
             "pictures": pictures, "tool_calls": tool_calls, "tok_main": tok_main, "tok_help": tok_help,
             "by_model": by_model, "clock": clock, "ctx": (ctx[0] if ctx else 0, max(ctx) if ctx else 0),
             "build_helpers": sum(n for k, (n, _) in tok_help.items() if not re.search(r"review|explore", k, re.I))}
@@ -241,6 +252,9 @@ def measured_part(transcript_path, project_dir=None):
             f"| Tokens | {total_tok / 1e6:.2f} M |", f"| Tool calls | {m['tool_calls']} |",
             f"| Helpers | {sum(n for n, _ in m['tok_help'].values())} |",
             f"| Refused steps | {sum(m['refused'].values())} |",
+            f"| Send-backs (hook refusals + Stop blocks, from the session file) | {m['sendbacks']['total']} "
+            f"({m['sendbacks']['refusals']} + {m['sendbacks']['stop_blocks']}) |",
+            f"| Permission waits (waits for you, not work) | {m['perm_waits'][0]} ({mins(m['perm_waits'][1])}) |",
             f"| Main context at start / peak | {m['ctx'][0] // 1000} k / {m['ctx'][1] // 1000} k |"]
     if m["steps"]:
         out += ["", "**Slowest steps (60 s or more, your time left out):**"]
@@ -321,6 +335,13 @@ def summary_data(transcript_path):
         for b in _blocks(r):
             if b.get("type") == "tool_use":
                 uses[b.get("id")] = (str(b.get("name") or ""), (b.get("input") or {}))
+    try:   # v3.3.7 (piece 3): permission waits, send-backs and helper time from the session files
+        import session_facts as _sf
+        _pw = _sf.wait_secs_by_id(main)
+        _sbc = _sf.sendback_count(main)
+        _hfs = _sf.helper_secs(tp)
+    except Exception:
+        _pw, _sbc, _hfs = {}, {"refusals": 0, "stop_blocks": 0, "total": 0}, {}
     for i, r in enumerate(recs):
         if r.get("type") == "assistant":
             m = r.get("message") or {}
@@ -363,6 +384,10 @@ def summary_data(transcript_path):
                 for blk in c or []:
                     if isinstance(blk, dict) and blk.get("type") == "tool_result":
                         name, hin = uses.get(blk.get("tool_use_id"), ("", {}))
+                        _w = min(_pw.get(blk.get("tool_use_id"), 0), gap)
+                        if _w:
+                            mine += _w
+                            gap -= _w
                         if name in ("ExitPlanMode", "AskUserQuestion"):
                             mine += gap
                             kind = None
@@ -395,7 +420,10 @@ def summary_data(transcript_path):
         for mod, v in _tokens(_load(f))[1].items():
             by_model[mod] = by_model.get(mod, 0) + v
     clock = _ts(recs[-1]) - _ts(recs[0])
-    return {"tok": tok, "sec": sec, "mine": mine, "hsec": hsec, "steps": steps, "ctxs": ctxs, "clock": clock, "helpers": helpers, "by_model": by_model,
+    for _k, _v in _hfs.items():   # v3.3.7: a helper's time is its own file's span (a background helper shows 0 otherwise)
+        hsec[_k] = max(hsec.get(_k, 0), _v)
+    return {"sendbacks": _sbc, "perm_waits": (len(_pw), sum(_pw.values())),
+            "tok": tok, "sec": sec, "mine": mine, "hsec": hsec, "steps": steps, "ctxs": ctxs, "clock": clock, "helpers": helpers, "by_model": by_model,
             "main_tok": sum(v for k, v in tok.items() if k != "helpers")}
 
 
@@ -439,4 +467,8 @@ def summary_block(transcript_path, pr_url="", rev=None, plan_name="", checks="")
     parts = [f"your answers {_p(d['mine'], clock)} ({_m(d['mine'])})"] + [
         f"{k} {_p(v, clock)} ({_m(v)})" for k, v in sorted(d["sec"].items(), key=lambda kv: -kv[1]) if v >= 1]
     out.append(f"**Session time:** {_m(clock)} on the clock · " + " · ".join(parts))
+    _sb = d.get("sendbacks") or {}
+    _pw = d.get("perm_waits") or (0, 0)
+    out.append(f"**Send-backs:** {_sb.get('total', 0)} (hook refusals {_sb.get('refusals', 0)} · Stop blocks "
+               f"{_sb.get('stop_blocks', 0)}) · **Permission waits:** {_pw[0]} ({_m(_pw[1])}, waits for you, not work)")
     return "\n".join(out)

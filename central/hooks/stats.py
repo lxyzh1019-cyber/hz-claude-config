@@ -433,6 +433,14 @@ def _owner_prompt(r):
 AWAY_SECONDS = int(cfg.get("away_minutes", 60)) * 60
 
 
+try:   # v3.3.7 (piece 3): permission waits and send-backs from the session file
+    import session_facts as _sf
+    _PW = _sf.wait_secs_by_id(main)
+    _SBC = _sf.sendback_count(main)
+except Exception:
+    _PW, _SBC = {}, None
+
+
 def session_time(recs):
     tl = [r for r in recs if _ts(r) is not None]
     if len(tl) < 2:
@@ -473,6 +481,14 @@ def session_time(recs):
                 t0, u = uses[b["tool_use_id"]]
                 d = max(t_ - t0, 0)
                 n, cmd = u.get("name"), str((u.get("input") or {}).get("command") or "")
+                _w = min(_PW.get(b["tool_use_id"], 0), d)   # v3.3.7: a permission click is a wait for me
+                if _w and n not in ("AskUserQuestion", "ExitPlanMode"):
+                    if _w > AWAY_SECONDS:
+                        away += _w
+                        away_n += 1
+                    else:
+                        you += _w
+                    d -= _w
                 if n in ("AskUserQuestion", "ExitPlanMode"):
                     if d > AWAY_SECONDS:
                         away += d
@@ -512,6 +528,7 @@ for r in _tl:
                 _d = str(_i.get("description") or (_m.group(1) if _m else "") or "")[:40]
                 slowest.append((d, f"{ROLE_NAME.get(k, k)}" + (f" \"{_d}\"" if _d else "")))
             elif u.get("name") == "Bash":
+                d = max(d - _PW.get(b["tool_use_id"], 0), 0)   # v3.3.7: my permission click is not the step's time
                 slowest.append((d, "main: " + str((u.get("input") or {}).get("description") or
                                                   (u.get("input") or {}).get("command") or "")[:40]))
 slowest.sort(key=lambda x: -x[0])
@@ -715,6 +732,9 @@ ho = " · ".join(f"{names.get(k, k)} {v}" for k, v in sorted(handovers.items()))
 st = read_stats(sid)
 sb = (" (" + " · ".join(f"{NAMES.get(k[9:], k[9:])} {v}" for k, v in sorted(st.items()) if k.startswith("sendback:") and v) + ")"
       if any(k.startswith("sendback:") and v for k, v in st.items()) else "")
+if _SBC is not None:   # v3.3.7: send-backs counted from the session file (hook refusals + Stop blocks)
+    st = dict(st, sendbacks=_SBC["total"])
+    sb = f" (hook refusals {_SBC['refusals']} · Stop blocks {_SBC['stop_blocks']})" if _SBC["total"] else ""
 lines.append(f"Counts: hand-overs {ho}" + (f" (escalated {escalated})" if escalated else "")
              + f" · test runs {test_runs[0]} · in-between messages {between}"
              + (f" · worker steps {helper_steps['tool']} (one tool per step {round(100 * helper_steps['one'] / helper_steps['tool'])}%)"

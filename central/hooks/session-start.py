@@ -157,10 +157,13 @@ if os.path.exists(os.path.join(PROJECT_DIR, "tools", "build_manifest.py")) and c
     facts.append("[update] " + cfg["update_notice"] + " Say this in one sentence in your first reply. Put it in the 'I need from you' line only if it asks me to do something.")
 facts.append(f"Note: routing guard mode: {cfg.get('routing_guard_mode', 'observe')}")
 facts += [f"[hotspot] {a}" for a in hotspot_alerts(cfg)]
-comp = completion_summary(cfg)
+comp = completion_summary(cfg, live=True)   # v3.3.7: merge state from git (origin/main) or gh api REST
 if comp["total"] and comp["open"]:
     facts.append("[completion] " + comp["display"] + "\nThese are the rows of this branch. Read the deliverable ledger "
                  "before you say anything is done. Show these lines in your first reply.")
+elif comp["total"] and comp.get("merged"):
+    facts.append(f"[completion] {comp['line']} · {len(comp['merged'])} of {comp['total']} merged on GitHub main "
+                 f"({', '.join(comp['merged'])}). Nothing of this branch is open.")
 try:
     from _common import edmonton_time
     facts.append(f"Times for me are in Edmonton time. It is now {edmonton_time()}. Change any UTC time: MDT is UTC-6 "

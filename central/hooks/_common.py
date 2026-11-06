@@ -693,7 +693,7 @@ def deliverable_ledger(cfg, text=None):
     return out
 
 
-def completion_summary(cfg):
+def completion_summary(cfg, live=False):
     """{total, complete, blocked, open, waiting, queued, no_evidence, pct, line, display, scoped, plan}.
 
     Counted by PLAN when the ledger has plan stage rows ("<plan name> · Stage k of M — …"): every stage of the
@@ -720,6 +720,18 @@ def completion_summary(cfg):
     else:
         items = changed
     items = [i for i in items if not i.get("superseded")]   # v3.1.24: dropped by an approval, so not counted
+    # v3.3.7 (piece 3): merge state from facts. A row is done when its row on GitHub main is done, or when GitHub main
+    # has the merge commit of its branch. live=True (session start) fetches origin first.
+    merged = []
+    if live and not os.environ.get("HZ_PR_LIVE_OFF"):
+        fetch_origin()
+        base = base_record_text(cfg) or base
+        _base_done = {i["name"] for i in deliverable_ledger(cfg, base) if i["complete"]} if base else set()
+        for i in items:
+            if not i["complete"] and (i["name"] in _base_done or merged_on_main(row_branch(i["name"]), fetch=False)):
+                i["complete"], i["blocked"], i["waiting"], i["queued"] = True, False, False, False
+                i["evidence"] = i["evidence"] or "merged on GitHub main"
+                merged.append(i["name"])
     checks = [i for i in items if i.get("check")]
     if plan and checks:   # v3.1.24: Build (the work) and Check (confirming it) are counted apart
         build = [i for i in items if not i.get("check")]
@@ -758,7 +770,8 @@ def completion_summary(cfg):
         if not open_ and not blocked and not waiting and not queued and check_open:
             display += ("\nBuild is done; the rest is checking. If a check finds a problem, tell this session. It "
                         "becomes a new Build row.")
-    return {"total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
+    return {"merged": merged,
+            "total": total, "complete": len(done), "blocked": len(blocked), "open": open_, "no_evidence": no_ev,
             "waiting": waiting, "queued": queued, "pct": pct, "line": line, "plan": plan, "display": display,
             "scoped": scoped, "check_open": check_open, "check_total": len(checks),
             "build_done": total > 0 and len(done) == total,
@@ -1074,16 +1087,81 @@ def restart_line(comp, branch=None):
     return f"Continue {plan} on branch {branch or current_branch()}; next: {next_stage(comp)}."
 
 
-def branch_merged_on_github(branch):
-    """v3.2.13: True when GitHub shows a merged pull request from this branch. Weekly-Planner 10 Oct: a restart line
-    named claude/consistency-5 after the owner had merged it at 6:52 PM. False when gh is not reachable."""
+# ---- GitHub facts without `gh pr` (v3.3.7) -------------------------------------------------------------------------
+# Cloud sessions: the GitHub proxy rejects GraphQL, so `gh pr …` and `gh issue …` answer 403 there, while `gh api` REST
+# calls for attached repositories work (code.claude.com cloud-environments page). Facts come from git first
+# (git fetch origin, merge commits on origin/main), then from `gh api repos/{owner}/{repo}/…`.
+_FETCHED = {}
+
+
+def fetch_origin(timeout=20):
+    """git fetch origin once per process; True when it worked."""
+    if "ok" not in _FETCHED:
+        try:
+            _FETCHED["ok"] = run_text(["git", "fetch", "-q", "origin"], timeout=timeout).returncode == 0
+        except Exception:
+            _FETCHED["ok"] = False
+    return _FETCHED["ok"]
+
+
+def gh_repo():
+    """'owner/repo' of origin on GitHub, or None."""
+    try:
+        url = run_text(["git", "remote", "get-url", "origin"], timeout=5).stdout.strip()
+    except Exception:
+        return None
+    m = re.search(r"github\.com[:/]+([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url)
+    if not m:
+        m = re.search(r"/git/([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url)   # the cloud proxy's remote form
+    return f"{m.group(1)}/{m.group(2)}" if m else None
+
+
+def gh_rest(path, method="GET", fields=None, timeout=15):
+    """`gh api` REST call (never GraphQL). Returns the parsed JSON, or None on any error (403 included)."""
+    cmd = ["gh", "api", "-X", method, path]
+    for k, v in (fields or {}).items():
+        cmd += ["-f", f"{k}={v}"]
+    try:
+        r = run_text(cmd, timeout=timeout)
+        return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else None
+    except Exception:
+        return None
+
+
+def merged_on_main(branch, fetch=True):
+    """v3.3.7: True when the branch is merged into GitHub main: a merge commit of it on origin/main (after git fetch
+    origin), else a merged pull request from it read with `gh api` REST. Build 4 (4 Nov): the session start said
+    '0 of 2 done — Build 2, Build 3' after #19 and #20 had merged."""
     if not branch or branch in ("main", "master") or os.environ.get("HZ_PR_LIVE_OFF"):
         return False
+    if fetch:
+        fetch_origin()
     try:
-        out = run_text(["gh", "pr", "list", "--head", branch, "--state", "merged", "--json", "number"], timeout=15).stdout
-        return bool(json.loads(out or "[]"))
+        log_ = run_text(["git", "log", "origin/main", "--merges", "--format=%s", "-500"], timeout=10).stdout
     except Exception:
-        return False
+        log_ = ""
+    b = re.escape(branch)
+    if re.search(rf"(?m)^Merge (pull request #\d+ from [^\s/]+/{b}|branch '{b}'|remote-tracking branch 'origin/{b}')\s*$", log_):
+        return True
+    repo = gh_repo()
+    if repo:
+        owner = repo.split("/")[0]
+        prs = gh_rest(f"repos/{repo}/pulls?head={owner}:{branch}&state=closed&per_page=10")
+        if isinstance(prs, list) and any(p.get("merged_at") for p in prs if isinstance(p, dict)):
+            return True
+    return False
+
+
+def row_branch(name):
+    """The branch name a ledger row usually has: 'Build 2' -> 'build-2'."""
+    return re.sub(r"[^a-z0-9]+", "-", str(name or "").lower()).strip("-")
+
+
+def branch_merged_on_github(branch):
+    """v3.2.13: True when GitHub shows a merged pull request from this branch. Weekly-Planner 10 Oct: a restart line
+    named claude/consistency-5 after the owner had merged it at 6:52 PM. v3.3.7: read with git and REST, never
+    `gh pr list` (403 in a cloud session)."""
+    return merged_on_main(branch)
 
 
 def handoff_text(cfg, comp, after_build=False, lessons=False):
