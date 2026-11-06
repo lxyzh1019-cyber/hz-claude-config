@@ -1165,13 +1165,18 @@ def is_cloud():
 
 
 def pr_open_text(branch, title, body_hint="the pull request text"):
-    """v3.3.7: how the session opens a pull request, never with `gh pr` (403 in a cloud session)."""
-    repo = gh_repo()
-    if is_cloud() or not repo:
+    """How the session opens a pull request: locally gh pr create (Claude Code shows the pull request card); in a cloud
+    session, where gh pr answers 403, the GitHub tool (v3.3.7)."""
+    if is_cloud():
         return (f"Open the pull request with the GitHub tool (create_pull_request: head {branch}, base main, title "
                 f"\"{title}\", draft false), with {body_hint}.")
-    return (f"Open the pull request with one REST call: gh api -X POST repos/{repo}/pulls -f head={branch} -f base=main "
-            f"-f title=\"{title}\" -F body=@<file with {body_hint}> (in a cloud session: the GitHub tool).")
+    return f"Open the pull request with: gh pr create --base main --head {branch} --title \"{title}\" --body-file <file with {body_hint}>."
+
+
+def pr_step(local, cloud):
+    """v3.3.7 (owner, 6 Nov): an instruction to the session names gh pr in a local session and the GitHub tool or gh api
+    REST only in a cloud session (CLAUDE_CODE_REMOTE=true). The hooks' own reads never use gh pr."""
+    return cloud if is_cloud() else local
 
 
 def merged_on_main(branch, fetch=True, since=None):
@@ -1623,6 +1628,7 @@ def test_script_key(cmd):
             p = re.sub(r"^([A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|\S+)\s+)+", "", p)
             p = re.sub(r"^(time\s+|timeout\s+\d+[smh]?\s+)", "", p)
         if is_test_run(p):
+            p = re.split(r"\s+\d?[<>]", " " + p)[0]   # an output file is not part of the script ('npm test > log')
             w = [re.split(r"[\\/]", x)[-1] if re.search(r"\.(sh|py|js|mjs|cjs|ts)$", x) else x for x in p.split()]
             return " ".join(w[:3]).lower()
     return ""

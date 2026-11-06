@@ -159,20 +159,20 @@ def _pr_link(project_dir, branch):
 
 
 def _setup_pr_step(project_dir, branch, version):
-    """v3.3.7: the setup pull request, never with `gh pr` (403 in a cloud session). In a cloud session (CLAUDE_CODE_REMOTE
-    =true) the GitHub tool; locally one GitHub REST call."""
+    """The setup pull request. Locally gh pr create, so Claude Code shows the pull request card (owner, 6 Nov). Only in a
+    cloud session (CLAUDE_CODE_REMOTE=true, where gh pr answers 403) the GitHub tool (v3.3.7)."""
     title, body = f"Setup update (automatic, v{version})", "Automatic setup update from hz-claude-config."
     try:
-        from _common import is_cloud, gh_repo
-        cloud, repo = is_cloud(), gh_repo()
+        from _common import is_cloud
+        cloud = is_cloud()
     except Exception:
-        cloud, repo = False, None
-    if cloud or not repo:   # review item 13: never a command with '<owner>/<repo>' in it
+        cloud = False
+    if cloud:
         return (f"open its pull request with the GitHub tool: create_pull_request with head {branch}, base main, title "
-                f"\"{title}\", body \"{body}\", draft false. If GitHub says it already exists, use that one."
-                + ("" if cloud else " Without the GitHub tool, ask me to open it on GitHub with 'Compare & pull request'."))
-    return (f"open its pull request with exactly: gh api -X POST repos/{repo or '<owner>/<repo>'}/pulls -f head={branch} "
-            f"-f base=main -f title=\"{title}\" -f body=\"{body}\" — if GitHub says it already exists, use that one.")
+                f"\"{title}\", body \"{body}\", draft false. If GitHub says it already exists, use that one.")
+    return (f"open its pull request with exactly: gh pr create --base main --head {branch} --title \"{title}\" "
+            f"--body \"{body}\" — if gh says it already exists, run instead: gh pr edit {branch} --title \"{title}\". "
+            "Claude Code then shows the pull request card.")
 
 
 def update(cfg, project_dir):
@@ -195,10 +195,21 @@ def update(cfg, project_dir):
                 "open a pull request ready for review, then switch back to the branch you started on. If the switch is "
                 "refused, stop and tell me. In your first reply's 'I need from you' line, ask me to merge that pull request.")
     if kind == "waiting":
+        try:
+            from _common import is_cloud
+            _cloud = is_cloud()
+        except Exception:
+            _cloud = False
+        if _cloud:   # v3.3.7: gh pr answers 403 in a cloud session
+            return ("waiting for you to merge the setup update (branch " + branch + ")",
+                    f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
+                    f"Do not make another one. In your first reply's 'I need from you' line, ask me to merge it, with its "
+                    f"link ({_pr_link(project_dir, branch)}).")
         return ("waiting for you to merge the setup update (branch " + branch + ")",
                 f"[setup-update] This repository's setup update is already waiting in a pull request (branch {branch}). "
-                f"Do not make another one. In your first reply's 'I need from you' line, ask me to merge it, with its "
-                f"link ({_pr_link(project_dir, branch)}).")
+                f"Do not make another one. As your first step run once: gh pr edit {branch} --title \"Setup update (automatic, "
+                f"v{version})\" — it changes nothing on GitHub, and Claude Code then shows the pull request card. In your "
+                "first reply's 'I need from you' line, ask me to merge it.")
 
     changed, skipped, staged = [], [], {}    # v3.2.6: staged = new file texts by path; written to disk only as a fallback
     _git(project_dir, "fetch", "-q", "origin", "main", timeout=15)   # v3.2.7: decide on fresh GitHub facts

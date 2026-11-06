@@ -149,6 +149,10 @@ for e in entries:
         continue
     if obj.get("decision") == "block" or hso.get("permissionDecision") in ("deny", "ask"):
         bump_stat(sid, "refused:" + e["script"].replace(".py", ""))
+        _tg = "[" + e["script"].replace(".py", "") + "] "   # v3.3.7: the tag names the check in the session file
+        for _d, _k in ((obj, "reason"), (hso, "permissionDecisionReason")):
+            if isinstance(_d.get(_k), str) and _d[_k].strip() and not _d[_k].startswith(_tg):
+                _d[_k] = _tg + _d[_k]
         if notes:
             obj["systemMessage"] = "\n".join(notes)
         print(json.dumps(obj))
@@ -201,6 +205,8 @@ if reasons and "work" not in kinds:
     print(json.dumps(out))
     sys.exit(0)
 if reasons:
+    # v3.3.7: each reason starts with its check's tag, so the summary names the check from the session file
+    reasons = [f"[{s_.replace('.py', '')}] {r_}" for r_, s_ in zip(reasons, scripts)]
     body = reasons[0] if len(reasons) == 1 else "Fix all of these in one reply:\n" + "\n".join(
         f"{i}. {r}" for i, r in enumerate(reasons, 1))
     # v3.3.0: one clear instruction. When every problem is a missing action (notice, report, checks, record), the

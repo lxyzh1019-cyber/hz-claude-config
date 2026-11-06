@@ -115,10 +115,23 @@ def refusals(recs, uses=None, res=None):
     return sorted(out, key=lambda x: x["ts"] or 0)
 
 
+_TAG = re.compile(r"\n\s*(?:\d+\.\s*)?\[([a-z][a-z0-9-]*)\]")
+_LEAD = re.compile(r"^\W*(?:Stop hook feedback:|PreToolUse:\S+ hook (?:blocking )?error:)\s*")
+
+
+def check_tags(text):
+    """The check names from a send-back's message tags ('[completion-guard] ...'); 3.3.6 and older wrote none."""
+    return list(dict.fromkeys(_TAG.findall("\n" + _LEAD.sub("", str(text or "")))))
+
+
 def sendback_count(recs):
-    """Hook refusals plus Stop blocks, from the session file."""
+    """Hook refusals plus Stop blocks, from the session file; by_check names each check from its message tag."""
     rf, sb = refusals(recs), stop_blocks(recs)
-    return {"refusals": len(rf), "stop_blocks": len(sb), "total": len(rf) + len(sb)}
+    by = {}
+    for x in rf + sb:
+        for name in check_tags(x["text"]) or ["untagged"]:
+            by[name] = by.get(name, 0) + 1
+    return {"refusals": len(rf), "stop_blocks": len(sb), "total": len(rf) + len(sb), "by_check": by}
 
 
 def helper_files(transcript_path):

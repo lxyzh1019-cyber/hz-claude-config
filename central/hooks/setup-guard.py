@@ -29,8 +29,13 @@ if _pr and str(_pr.get("session") or "") == str(data.get("session_id") or ""):
         except OSError:
             pass
     elif ((lambda r: r[1] if r is not None else not data.get("stop_hook_active"))(use_round("setup-pr", data.get("session_id"), 1))):
-        from stubupdate import _setup_pr_step as _sps
-        block(f"Setup update first: {_sps(PROJECT_DIR, _pr.get('branch'), _pr.get('version') or 'latest')} "
+        from _common import is_cloud as _icl
+        if _icl():   # v3.3.7: gh pr answers 403 in a cloud session
+            from stubupdate import _setup_pr_step as _sps
+            block(f"Open the setup pull request now: {_sps(PROJECT_DIR, _pr.get('branch'), _pr.get('version') or 'latest')} "
+                  "Then answer again, with 'merge it' in the 'I need from you' line.", kind="work")
+        block(f"Open the setup pull request now with the gh command from the session start (gh pr create … --head "
+              f"{_pr.get('branch')} …, or gh pr edit {_pr.get('branch')} … if it exists). Claude Code then shows its card. "
               "Then answer again, with 'merge it' in the 'I need from you' line.", kind="work")
 path = os.path.join(PROJECT_DIR, ".claude", "state", "setup-pending.json")
 try:

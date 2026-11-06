@@ -322,19 +322,32 @@ res(5, "ask-guard: a question with shape problems reaches me (saved fix, no refu
     "deny" in hook(OLD, "ask-guard.py", q, P) and "deny" not in hook(NEW, "ask-guard.py", q, P))
 F7 = load_mod(NEW, "formats")
 res(5, "no ' · Rules v<version>' in the validation line shape", "absent", F7.VALIDATION_SHAPE, "Rules v" not in F7.VALIDATION_SHAPE)
-# every gh pr / gh issue instruction gone from the hooks' texts (not counting module docstrings, permission rule names
-# or the detection of commands the session ran)
-texts = []
-for f in glob.glob(os.path.join(NEW, "central", "hooks", "*.py")) + glob.glob(os.path.join(NEW, "central", "agents", "*.md")):
-    src = open(f, encoding="utf-8").read()
-    if f.endswith(".py") and src.lstrip().startswith(("#!", '"""')):
-        _d = src.find('"""'); _e = src.find('"""', _d + 3)
-        src = src[:_d] + "\n" * src[_d:_e + 3].count("\n") + src[_e + 3:] if _d >= 0 and _e > _d else src
-    for i, l in enumerate(src.splitlines(), 1):
-        if re.search(r"\bgh pr (create|edit|checks|view|ready|list)\b|\bgh issue\b", l) and not re.search(
-                r"Bash\(gh pr|never|not `gh|403|toks|re\.search|re\.compile|r\"|r'|#|detect|PUSH|CHECKS|ready =|gh\\\\s", l):
-            texts.append(f"{os.path.basename(f)}:{i}")
-res(5, "no hook or helper text tells the session to run gh pr … or gh issue …", "none", texts or "none", not texts)
+# owner, 6 Nov: a local session keeps gh pr create / edit / checks (Claude Code shows the pull request card); only a
+# cloud session (CLAUDE_CODE_REMOTE=true, gh pr answers 403) gets the GitHub tool or gh api REST
+P = proj()
+SU7 = load_mod(NEW, "stubupdate")
+_old_remote, _old_common = os.environ.get("CLAUDE_CODE_REMOTE"), sys.modules.pop("_common", None)
+sys.path.insert(0, os.path.join(NEW, "central", "hooks"))   # the 3.3.7 _common, not one loaded earlier from 3.3.6
+os.environ["CLAUDE_CODE_REMOTE"] = ""; loc = SU7._setup_pr_step(P, "hz-setup-update-x", "3.3.7")
+os.environ["CLAUDE_CODE_REMOTE"] = "true"; cld = SU7._setup_pr_step(P, "hz-setup-update-x", "3.3.7")
+sys.path.pop(0); sys.modules.pop("_common", None)
+if _old_common is not None:
+    sys.modules["_common"] = _old_common
+os.environ.pop("CLAUDE_CODE_REMOTE") if _old_remote is None else os.environ.__setitem__("CLAUDE_CODE_REMOTE", _old_remote)
+res(5, "the setup pull request: gh pr create locally, the GitHub tool in a cloud session", "local gh pr create · cloud no gh pr",
+    f"local {'gh pr create --base main --head hz-setup-update-x' in loc} · cloud {'GitHub tool' in cld and 'gh pr' not in cld}",
+    "gh pr create --base main --head hz-setup-update-x" in loc and "GitHub tool" in cld and "gh pr" not in cld)
+_gd = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "g",
+       "tool_input": {"command": "gh pr create --draft --base main --head work-1 --title x --body y"}}
+dl, dc = hook(NEW, "git-guard.py", _gd, P, CLAUDE_CODE_REMOTE=""), hook(NEW, "git-guard.py", _gd, P, CLAUDE_CODE_REMOTE="true")
+res(5, "  ...a draft refusal names gh pr ready locally, the GitHub tool in a cloud session", "local gh pr ready · cloud no gh pr",
+    f"local {'gh pr ready' in dl} · cloud {'update_pull_request' in dc and 'gh pr ready' not in dc}",
+    "gh pr ready" in dl and "update_pull_request" in dc and "gh pr ready" not in dc)
+_gs = dict(_gd, tool_input={"command": "gh pr create --base work-0 --head work-1 --title x --body y"})
+sl, sc = hook(NEW, "git-guard.py", _gs, P, CLAUDE_CODE_REMOTE=""), hook(NEW, "git-guard.py", _gs, P, CLAUDE_CODE_REMOTE="true")
+res(5, "  ...the move-to-main warning names gh pr edit locally, the GitHub tool in a cloud session", "local gh pr edit · cloud no gh pr",
+    f"local {'gh pr edit <number> --base main' in sl} · cloud {'GitHub tool' in sc and 'gh pr edit' not in sc}",
+    "gh pr edit <number> --base main" in sl and "GitHub tool" in sc and "gh pr edit" not in sc)
 # git-guard approves the setup's own REST steps (the real hook, in a project whose origin is on GitHub)
 P = proj(remote="https://github.com/owner/app.git")
 ga = lambda c: "the setup's own GitHub REST step" in hook(NEW, "git-guard.py", {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "g", "tool_input": {"command": c}}, P)

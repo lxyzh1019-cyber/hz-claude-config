@@ -21,7 +21,8 @@ if not m or not re.search(r"\bmerge\b", m.group(1), re.I):
 # and writes the report into the pull request text itself.
 import os as _o7
 HOOKS = _o7.path.dirname(_o7.path.abspath(__file__)).replace("\\", "/")
-CHECKS_CMD = f'python3 "{HOOKS}/pr_checks.py" <number>'
+CHECKS_CMD = f'python3 "{HOOKS}/pr_checks.py" <number>'   # cloud sessions (gh pr checks answers 403 there)
+from _common import pr_step as _pr_step   # v3.3.7 (owner, 6 Nov): locally the session uses gh pr
 
 
 def _scorecard_at_merge_stop():
@@ -71,9 +72,10 @@ def _rest_gate():
     if _r7 is None or _r7[1]:
         block(("The checks of your last push failed. Fix them first, or say plainly in the reply that they are red "
                "and why I should merge anyway." if _rc == "failed" else
-               f"Before you ask me to merge, wait once for the checks of your last push: {CHECKS_CMD} (Bash timeout "
-               "600000; in a cloud session the GitHub tool's check status works too). Then report the result in one "
-               "line."), kind="work")
+               "Before you ask me to merge, read the checks of your last push: " + _pr_step(
+                   "gh pr checks <number> --watch (or gh run watch)",
+                   f"{CHECKS_CMD} (Bash timeout 600000; the GitHub tool's check status works too)")
+               + ". Then report the result in one line."), kind="work")
     sys.exit(0)
 PUSH = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?push\b|\bgh\s+pr\s+create\b|\bgh\s+api\b[^\n]*-X\s+POST\b[^\n]*/pulls\b")
 CHECKS = re.compile(r"\bgh\s+pr\s+checks\b|\bgh\s+run\s+(?:watch|view)\b|pr_checks\.py")
@@ -179,5 +181,6 @@ r = use_round("merge-checks", data.get("session_id"), 1)
 if (r[1] if r is not None else not data.get("stop_hook_active")):
     block(("The checks of your last push failed. Fix them first, or say plainly in the reply that they are red and why "
            "I should merge anyway." if checks else
-           f"Before you ask me to merge, wait once for the checks of your last push: {CHECKS_CMD} (or gh run watch; in "
-           "a cloud session, the GitHub tool's check status). Then report the result in one line."), kind="work")
+           "Before you ask me to merge, read the checks of your last push: " + _pr_step(
+               "gh pr checks <number> --watch (or gh run watch)",
+               f"{CHECKS_CMD} (or the GitHub tool's check status)") + ". Then report the result in one line."), kind="work")

@@ -734,7 +734,9 @@ sb = (" (" + " · ".join(f"{NAMES.get(k[9:], k[9:])} {v}" for k, v in sorted(st.
       if any(k.startswith("sendback:") and v for k, v in st.items()) else "")
 if _SBC is not None:   # v3.3.7: send-backs counted from the session file (hook refusals + Stop blocks)
     st = dict(st, sendbacks=_SBC["total"])
-    sb = f" (hook refusals {_SBC['refusals']} · Stop blocks {_SBC['stop_blocks']})" if _SBC["total"] else ""
+    _nm = lambda k: NAMES.get(k, k)
+    sb = (" (" + " · ".join(f"{_nm(k)} {v}" for k, v in sorted((_SBC.get("by_check") or {}).items(), key=lambda kv: _nm(kv[0])))
+          + ")") if _SBC["total"] else ""
 lines.append(f"Counts: hand-overs {ho}" + (f" (escalated {escalated})" if escalated else "")
              + f" · test runs {test_runs[0]} · in-between messages {between}"
              + (f" · worker steps {helper_steps['tool']} (one tool per step {round(100 * helper_steps['one'] / helper_steps['tool'])}%)"

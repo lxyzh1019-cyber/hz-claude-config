@@ -245,9 +245,12 @@ for segment in re.split(r"&&|\|\||;|\n", cmd):
     if _gc:
         where, branch = os.path.join(PROJECT_DIR, _wp8(_gc.group(1))), None
     if is_draft_pr(segment.strip()):
-        deny_tool("git-guard: pull requests open ready for review, not as drafts. Open it again without the draft "
-                  "setting. If a draft already exists, mark it ready with the GitHub tool (update_pull_request, draft "
-                  "false), or ask me to click 'Ready for review'.")
+        from _common import pr_step as _ps
+        deny_tool(_ps("git-guard: pull requests open ready for review, not as drafts. Run the same gh pr create without "
+                      "--draft/-d. If a draft PR already exists, mark it ready with gh pr ready <number>.",
+                      "git-guard: pull requests open ready for review, not as drafts. Open it again without the draft "
+                      "setting. If a draft already exists, mark it ready with the GitHub tool (update_pull_request, draft "
+                      "false), or ask me to click 'Ready for review'."))
     # v3.2.10: a pull request on a work branch, not main. Weekly-Planner 9 Oct: PR 4 sat on the PR 3 branch; GitHub
     # closed it when that branch was deleted after the merge, and the work had to open again as #137. A warning, not a
     # refusal: night work stacks on purpose.
@@ -528,8 +531,9 @@ if _stack_warn or _notes_hint:   # after every other check of this command (add_
     from _common import add_context as _ac, log as _lg
     _lg("git-guard", {"stacked_base": _stack_warn, "notes_only_commit": bool(_notes_hint)})
     _ac("PreToolUse", ((f"[git-guard] This pull request's base is {_stack_warn}, not main. Do this only when the plan or "
-        "night work stacks it. When the base pull request merges, change this base to main at once (gh api -X PATCH "
-        "repos/<owner>/<repo>/pulls/<number> -f base=main; in a cloud session, the GitHub tool), before the base "
+        "night work stacks it. When the base pull request merges, change this base to main at once ("
+        + __import__("_common").pr_step("gh pr edit <number> --base main", "the GitHub tool, or gh api -X PATCH "
+                                        "repos/<owner>/<repo>/pulls/<number> -f base=main") + "), before the base "
         "branch is deleted: GitHub closes a pull request whose base branch is "
         "gone. ") if _stack_warn else "") + ("[git-guard] This commit has notes only. Put [skip ci] in its message, so "
         "GitHub starts no run and does not cancel the run of your code." if _notes_hint else ""))

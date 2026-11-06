@@ -138,7 +138,7 @@ facts.append("[stub] " + stub)
 if setup_note:
     facts.append(setup_note)
     import re as _re8
-    _m8 = _re8.search(r"(?:head[= ]|--head )(hz-setup-update-[\w.-]+)", setup_note)   # v3.3.7: REST or the GitHub tool
+    _m8 = _re8.search(r"(?:head[= ]|--head |gh pr edit )(hz-setup-update-[\w.-]+)", setup_note)   # v3.3.7: also the GitHub tool
     if _m8:   # v3.2.8: the end-of-reply check sees that the session opened or linked the setup pull request
         try:
             import json as _j8

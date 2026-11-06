@@ -198,7 +198,10 @@ touch WORKING_RECORD.md
 # --- v3.1.6: git-guard (no prompts; main protected)
 gg(){ printf '%s' "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")}}" | python3 $H/git-guard.py; }
 git checkout -q -B claude/topic 2>/dev/null
-check "commit on a working branch passes" "^$" "$(gg 'git add -A && git commit -m x')"
+# v3.3.7: here only WORKING_RECORD.md is changed and nothing is staged, so 'git add -A' commits notes only
+o=$(gg 'git add -A && git commit -m x'); check "commit on a working branch passes" "notes only" "$o"
+check "  ...v3.3.7: with notes only it gets the [skip ci] hint, not a refusal" "clean" "$(echo "$o" | grep -c '"deny"' | sed 's/^0$/clean/')"
+printf 'x\n' > app-v337.js; check "  ...v3.3.7: with a code change (a new file) it passes with no hint" "^$" "$(gg 'git add -A && git commit -m x')"; rm -f app-v337.js
 check "push of the working branch passes" "^$" "$(gg 'git push -u origin claude/topic')"
 check "plain push from a working branch passes" "^$" "$(gg 'git push')"
 check "push to main is blocked" '"deny"' "$(gg 'git push origin claude/topic:main')"
@@ -801,7 +804,7 @@ o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import
 check "a stub without the plan folder shows OUTDATED" "OUTDATED.*plan files saved in the repository" "$o"
 python3 "$H/../../stub/merge_settings.py" "$H/../../stub/settings.json" "$S3/.claude/settings.json" "hz-loader.py"
 o=$(cd "$H" && python3 -c "import sys;sys.path.insert(0,'.');from _common import load_config;from stubcheck import stub_status;print(stub_status(load_config(),'$S3'))")
-check "the self-update adds the plan folder and the stub is current again" "current (matches v3.3.1)" "$o"
+check "the self-update adds the plan folder and the stub is current again" "current (matches v3.3.7)" "$o"
 o=$(echo '{}' | python3 $H/session-start.py); check "v3.3.3: a one-pull-request job keeps its plan in the pull request text" "keeps its plan in the pull request text" "$o"
 check "session start describes the closing lines at the end" "Closing block, after a line with just ---" "$o"
 # --- v3.1.24: plan file carries every revision, hand-off done by the session, blocked items listed
@@ -1162,11 +1165,12 @@ check "other shell commands are untouched" "^$" "$o"
 check "the setup allows the Read tool on the rules copy" "Read(~/.cache/hz-rules/\*\*)" "$(cat $H/../../stub/settings.json)"
 check "v3.2.15: reads no longer start the checks (the matcher starts at Edit)" "\"Edit|Write" "$(cat $H/../../stub/settings.json)"
 # 3 which check sent a reply back
-o=$(echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sb26\"}" | python3 $H/stats.py >/dev/null; python3 -c "
-import sys;sys.path.insert(0,'$H');import os;os.environ['CLAUDE_PROJECT_DIR']='$PROJ'
-from _common import bump_stat
-bump_stat('sb26','sendbacks');bump_stat('sb26','sendback:validation-line');bump_stat('sb26','sendbacks');bump_stat('sb26','sendback:completion-guard')"; rm -f "$PROJ/.claude/state/version-shown.json"; echo "{\"transcript_path\":\"$T/stats.jsonl\",\"session_id\":\"sb26\"}" | python3 $H/stats.py | sm)
+# v3.3.7: counted from the session file; each check is named from its message tag (the switchboard writes it)
+{ cat "$T/stats.jsonl"; printf '%s\n' '{"type":"user","timestamp":"2026-10-01T10:22:30Z","message":{"role":"user","content":"Stop hook feedback:\n[completion-guard] Not done: this branch still has 1 open item."}}' '{"type":"user","timestamp":"2026-10-01T10:23:00Z","message":{"role":"user","content":"Stop hook feedback:\n[validation-line] Add the validation line."}}'; } > "$T/sb26.jsonl"
+rm -f "$PROJ/.claude/state/version-shown.json"; o=$(echo "{\"transcript_path\":\"$T/sb26.jsonl\",\"session_id\":\"sb26\"}" | python3 $H/stats.py | sm)
 check "the summary says which check sent a reply back" "send-backs 2 (completion 1 · format 1)" "$o"
+o=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"v=$(cat ~/.cache/hz-rules/current); cat ~/.cache/hz-rules/$v/rules/CLAUDE-rules.md"}}' | python3 $H/dispatch.py)
+check "  ...v3.3.7: a refusal starts with its check's tag" "\[rules-read-guard\] Read the central rules" "$o"
 # 4 worker step limit (v3.1.28: 80 / 100; without the worker's record file the hook-call count is used)
 rm -f "$PROJ/.claude/state/worker-steps.json"
 wb(){ echo "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"session_id\":\"main1\",\"agent_id\":\"$1\",\"tool_input\":{}}" | python3 $H/worker-budget.py; }

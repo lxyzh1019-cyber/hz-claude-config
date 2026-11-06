@@ -96,7 +96,9 @@ if (tool == "Bash" and re.search(r"\bgh\s+(pr\s+checks|run\s+watch)\b|pr_checks\
             json.dump(_st5, open(os.path.join(_SD5, "pr-summary.json"), "w", encoding="utf-8"))
             _out5["hookSpecificOutput"] = {"hookEventName": "PostToolUse", "additionalContext": (
                 f"[report] The check could not write the pull request text ({_why5}). Write the parts of the file "
-                f"{_pt5.saved_path()} into the pull request text with the GitHub tool, as they are. One step; no reply.")}
+                f"{_pt5.saved_path()} into the pull request text "
+                + __import__("_common").pr_step("with gh pr edit <number> --body-file", "with the GitHub tool")
+                + ", as they are. One step; no reply.")}
         print(json.dumps(_out5))
     except (OSError, ValueError, ImportError):
         pass
@@ -157,9 +159,12 @@ try:   # v3.3.5: the summary in the Weekly-Planner shape (bold lines) and the re
     # summary as its own notice after the checks are read. The session pastes nothing.
     _rep = ("\n[report] " + ("The check wrote the report into the pull request text. " if _ok else
             f"The check could not write the pull request text ({_why}): write the parts of the file "
-            f"{__import__('pr_text').saved_path()} into it with the GitHub tool, as they are. ") +
-            f"1. Wait once for the checks, in the foreground: {_cc} (Bash timeout 600000; in a cloud session the "
-            "GitHub tool's check status works too). The check then writes the report again and shows the summary as "
+            f"{__import__('pr_text').saved_path()} into it "
+            + __import__("_common").pr_step(f"with gh pr edit {_n.group(1) if _n else '<number>'} --body-file",
+                                            "with the GitHub tool") + ", as they are. ") +
+            "1. Wait once for the checks, in the foreground: " + __import__("_common").pr_step(
+                f"gh pr checks {_n.group(1) if _n else '<number>'} --watch",
+                f"{_cc} (Bash timeout 600000; the GitHub tool's check status works too)") + ". The check then writes the report again and shows the summary as "
             "its own notice. 2. Your own part of the pull request text — '## Quick read' (What changed from the plan; "
             "Decisions during the work; Suggestions, each with a recommendation, naming any setup rule that was the "
             "bottleneck), '## Evidence', '## Regression table' — goes above the report part; keep every <!-- hz-… --> "
