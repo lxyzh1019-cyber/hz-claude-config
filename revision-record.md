@@ -2,9 +2,9 @@
 
 Version: 3.3.6
 Built on: 3.3.5
-Owner: the newest "Claude Code Plan Work Strategy" chat (only the owner builds the next package; other chats send P-lines here)
+Owner: the newest "Claude Code Plan Work Strategy" chat: the owner chat writes the paste block; Claude Code builds and tests (owner D2, 28 Oct). Other chats send P-lines here.
 
-Run before every package: `python3 /mnt/skills/plugins/hz-change-guard/scripts/revision_gate.py <new-folder> <fresh clone of GitHub main>`. Any FAIL stops the zip.
+Run before every pull request: `revision_gate.py <new-folder> <fresh clone of GitHub main>` from the account skill `anthropic-skills:hz-change-guard`. Any FAIL stops the pull request.
 Every package: Windows line endings (CRLF); the dry-run starts from a Windows-style copy of the owner's real folder state, and its count must match GitHub Desktop.
 
 ## Features (each phrase must stay in this repo's files; one line per FEATURES.md item)
