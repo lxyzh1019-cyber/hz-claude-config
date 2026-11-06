@@ -16,35 +16,65 @@ text = last_assistant_text(records) or ""
 m = re.search(r"I need from you:?\**:?(.*)", text)
 if not m or not re.search(r"\bmerge\b", m.group(1), re.I):
     sys.exit(0)
-# v3.3.6 (G2, G3, G4, G6 in one gate, owner 16 Oct: "find the root"). Their shared root: the last step depended on the
-# session obeying a notice (run #15: no summary, and the merge request came before the checks were read). Now code
-# decides: a merge request needs the summary file made after the checks, pasted as it is. One send-back at most.
-try:
-    import os as _o6
-    from _common import STATE_DIR as _SD6
-    _jf, _sf = _o6.path.join(_SD6, "pr-summary.json"), _o6.path.join(_SD6, "pr-summary.md")
-    if _o6.path.exists(_jf) and _o6.path.exists(_sf) and not _o6.environ.get("HZ_FULL_RULES"):
-        _st6 = json.load(open(_jf, encoding="utf-8"))
-        _need6 = None
-        if _st6.get("session") and _st6.get("session") != str(data.get("session_id") or ""):
-            pass                                    # another session's pull request
-        elif not _st6.get("checks"):
-            _need6 = ("Before you ask me to merge, read the pull request's checks once (gh pr checks <number> --watch; in "
-                      "a cloud session, the GitHub tool). The summary file " + _sf.replace("\\", "/") + " is then made "
-                      "again with the result. Paste it as it is, after the browser pictures, above the closing lines.")
-        elif f"**GitHub checks:** {_st6.get('checks')}" not in text:
-            _need6 = ("Paste the summary file " + _sf.replace("\\", "/") + " as it is, after the browser pictures and "
-                      "above the closing lines. Do not write your own summary.")
-        if _need6:
-            _r6 = use_round("merge-summary", data.get("session_id"), 1)
-            if (_r6[1] if _r6 is not None else not data.get("stop_hook_active")):
-                block(_need6, kind="work")
-except SystemExit:
-    raise
-except Exception:
-    pass
-PUSH = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?push\b|\bgh\s+pr\s+create\b")
-CHECKS = re.compile(r"\bgh\s+pr\s+checks\b|\bgh\s+run\s+(?:watch|view)\b")
+# v3.3.7 (piece 4): the 3.3.6 send-back that asked the session to paste the summary file is gone (Build 4: twice, and
+# the summary landed after the closing lines). The check shows the summary as its own notice after the checks are read
+# and writes the report into the pull request text itself.
+import os as _o7
+HOOKS = _o7.path.dirname(_o7.path.abspath(__file__)).replace("\\", "/")
+CHECKS_CMD = f'python3 "{HOOKS}/pr_checks.py" <number>'
+
+
+def _scorecard_at_merge_stop():
+    """Piece 9: the scorecard lines go into the pull request text again at the merge stop (GitHub REST)."""
+    try:
+        from _common import STATE_DIR as _SD7
+        _st7 = json.load(open(_o7.path.join(_SD7, "pr-summary.json"), encoding="utf-8"))
+        if _st7.get("session") and _st7.get("session") != str(data.get("session_id") or ""):
+            return
+        import pr_text as _pt7, scorecard as _sc7
+        _pt7.update(_pt7.pr_number(_st7.get("url") or ""), {"scorecard": _sc7.pr_text(data.get("transcript_path"))})
+    except Exception:
+        pass
+
+
+# v3.3.7 (piece 5): the pull request's checks are read from GitHub with REST (the head commit's check runs), not from
+# what the session ran. Passed: no reminder. Failed: one reminder unless the reply says so. Pending or none: one reminder
+# with the REST wait command. REST not reachable: the old reading of this turn's steps below.
+def _rest_checks():
+    try:
+        from _common import gh_repo, gh_rest, run_text as _rt7
+        repo = gh_repo()
+        if not repo or _o7.environ.get("HZ_PR_LIVE_OFF"):
+            return None
+        sha = _rt7(["git", "rev-parse", "HEAD"], timeout=10).stdout.strip()
+        d = gh_rest(f"repos/{repo}/commits/{sha}/check-runs?per_page=100")
+        runs = d.get("check_runs") if isinstance(d, dict) else None
+        if runs is None:
+            return None
+        if not runs or any(r.get("status") != "completed" for r in runs):
+            return "pending"
+        return "failed" if any(r.get("conclusion") not in ("success", "neutral", "skipped") for r in runs) else "passed"
+    except Exception:
+        return None
+
+
+def _rest_gate():
+    _rc = _rest_checks()
+    if _rc is None:
+        return
+    _scorecard_at_merge_stop()
+    if _rc == "passed" or (_rc == "failed" and re.search(r"\b(red|fail(?:ed|ing|s)?)\b", text, re.I)):
+        sys.exit(0)
+    _r7 = use_round("merge-checks", data.get("session_id"), 1)
+    if _r7 is None or _r7[1]:
+        block(("The checks of your last push failed. Fix them first, or say plainly in the reply that they are red "
+               "and why I should merge anyway." if _rc == "failed" else
+               f"Before you ask me to merge, wait once for the checks of your last push: {CHECKS_CMD} (Bash timeout "
+               "600000; in a cloud session the GitHub tool's check status works too). Then report the result in one "
+               "line."), kind="work")
+    sys.exit(0)
+PUSH = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?push\b|\bgh\s+pr\s+create\b|\bgh\s+api\b[^\n]*-X\s+POST\b[^\n]*/pulls\b")
+CHECKS = re.compile(r"\bgh\s+pr\s+checks\b|\bgh\s+run\s+(?:watch|view)\b|pr_checks\.py")
 last_push, checks, setup = None, [], False
 checked_before = False   # v3.2.10: checks were read after an earlier push of this turn
 results = {}
@@ -72,6 +102,7 @@ for r in turn:
             results[b.get("tool_use_id")] = json.dumps(b.get("content"), ensure_ascii=False)
 if not last_push or setup or refused_by_safety_check(turn):
     sys.exit(0)
+_rest_gate()
 # v3.2.17: checks read by a worker in this turn count too. Weekly-Planner 12 Oct: the worker read the green code run, the
 # main session then pushed record notes only ([skip ci]), and this check sent the answer back, so it showed twice.
 if not checks and not checked_before:
@@ -140,10 +171,11 @@ except Exception:
     pass
 says_red = re.search(r"\b(red|fail(?:ed|ing|s)?)\b", text, re.I)
 if checks and (not failed or says_red):
+    _scorecard_at_merge_stop()
     sys.exit(0)
 r = use_round("merge-checks", data.get("session_id"), 1)
 if (r[1] if r is not None else not data.get("stop_hook_active")):
     block(("The checks of your last push failed. Fix them first, or say plainly in the reply that they are red and why "
            "I should merge anyway." if checks else
-           "Before you ask me to merge, read the checks of your last push: gh pr checks <number> --watch (or gh run "
-           "watch; in a cloud session, the GitHub tool's check status). Then report the result in one line."), kind="work")
+           f"Before you ask me to merge, wait once for the checks of your last push: {CHECKS_CMD} (or gh run watch; in "
+           "a cloud session, the GitHub tool's check status). Then report the result in one line."), kind="work")

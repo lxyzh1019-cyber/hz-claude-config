@@ -1116,16 +1116,56 @@ def gh_repo():
     return f"{m.group(1)}/{m.group(2)}" if m else None
 
 
-def gh_rest(path, method="GET", fields=None, timeout=15):
-    """`gh api` REST call (never GraphQL). Returns the parsed JSON, or None on any error (403 included)."""
-    cmd = ["gh", "api", "-X", method, path]
+def gh_cmd():
+    """The gh program as a list. HZ_GH_CMD (a JSON list) is a stand-in for tests, e.g. a cloud gh that answers 403."""
+    try:
+        v = json.loads(os.environ.get("HZ_GH_CMD") or "null")
+        if isinstance(v, list) and v:
+            return [str(x) for x in v]
+    except ValueError:
+        pass
+    return ["gh"]
+
+
+def gh_rest(path, method="GET", fields=None, timeout=15, input_json=None):
+    """`gh api` REST call (never GraphQL). Returns the parsed JSON, or None on any error (403 included).
+    input_json: a dict sent as the request body (gh api --input), for long texts such as a pull request body."""
+    cmd = gh_cmd() + ["api", "-X", method, path]
     for k, v in (fields or {}).items():
         cmd += ["-f", f"{k}={v}"]
+    tmp = None
     try:
+        if input_json is not None:
+            import tempfile as _tf
+            fd, tmp = _tf.mkstemp(suffix=".json")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(input_json, f)
+            cmd += ["--input", tmp]
         r = run_text(cmd, timeout=timeout)
         return json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else None
     except Exception:
         return None
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def is_cloud():
+    """A Claude Code cloud session (CLAUDE_CODE_REMOTE=true)."""
+    return str(os.environ.get("CLAUDE_CODE_REMOTE") or "").lower() in ("1", "true", "yes")
+
+
+def pr_open_text(branch, title, body_hint="the pull request text"):
+    """v3.3.7: how the session opens a pull request, never with `gh pr` (403 in a cloud session)."""
+    repo = gh_repo() or "<owner>/<repo>"
+    if is_cloud():
+        return (f"Open the pull request with the GitHub tool (create_pull_request: head {branch}, base main, title "
+                f"\"{title}\", draft false), with {body_hint}.")
+    return (f"Open the pull request with one REST call: gh api -X POST repos/{repo}/pulls -f head={branch} -f base=main "
+            f"-f title=\"{title}\" -F body=@<file with {body_hint}> (in a cloud session: the GitHub tool).")
 
 
 def merged_on_main(branch, fetch=True):

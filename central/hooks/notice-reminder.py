@@ -39,9 +39,31 @@ def _write_report(pr_url, checks=""):
     return os.path.join(_SD, "pr-summary.md").replace("\\", "/"), os.path.join(_SD, "pr-report.md").replace("\\", "/")
 
 
+def _deliver(pr_url):
+    """v3.3.7 (piece 4): the check puts the report and the scorecard into the pull request text itself (GitHub REST,
+    never `gh pr`); Build 4 was sent back twice to paste the summary, and it landed after the closing lines.
+    Returns (ok, why)."""
+    import pr_text as _pt
+    from _common import STATE_DIR as _SD
+    _n = _pt.pr_number(pr_url)
+    _parts = {"report": open(os.path.join(_SD, "pr-report.md"), encoding="utf-8").read()}
+    try:   # piece 9: the scorecard lines, from the session's own file
+        import scorecard as _sc
+        _parts["scorecard"] = _sc.pr_text(data.get("transcript_path"))
+    except Exception:
+        pass
+    _ok, _why = _pt.update(_n, _parts)
+    log("notice-reminder", {"pr_text": _why, "number": _n})
+    return _ok, _why
+
+
+HOOKS = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
+CHECKS_CMD = f'python3 "{HOOKS}/pr_checks.py" <number>'
+
+
 # v3.3.5: after the checks are read, the summary and the report are made again with the result and the time so far
 _cmd5 = str(inp.get("command") or "")
-if (tool == "Bash" and re.search(r"\bgh\s+(pr\s+checks|run\s+watch)\b", _cmd5)) or re.search(r"mcp__.*(check|status)", tool):
+if (tool == "Bash" and re.search(r"\bgh\s+(pr\s+checks|run\s+watch)\b|pr_checks\.py", _cmd5)) or re.search(r"mcp__.*(check|status)", tool):
     try:
         from _common import STATE_DIR as _SD5
         _st5 = json.load(open(os.path.join(_SD5, "pr-summary.json"), encoding="utf-8"))
@@ -50,9 +72,22 @@ if (tool == "Bash" and re.search(r"\bgh\s+(pr\s+checks|run\s+watch)\b", _cmd5)) 
                 " ".join(_flat(v) for v in x) if isinstance(x, list) else str(x)
         _res = _flat(data.get("tool_response") or "")
         _chk = ("failed" if re.search(r"\bfail(?:ed|ure|ing)?\b|\u2717|\bX\b", _res, re.I) else
+                "pending" if re.search(r"checks: (pending|unknown)", _res) else
                 "passed" if re.search(r"\bpass(?:ed)?\b|success|\u2713", _res, re.I) else "read")
-        _write_report(_st5.get("url") or "", _chk)
+        _fs5, _ = _write_report(_st5.get("url") or "", _chk)
         log("notice-reminder", {"summary_after_checks": _chk})
+        # v3.3.7 (piece 4): the check delivers both: the report into the pull request text, the summary as its own
+        # notice (no AI turn, no send-back, never after the closing lines)
+        _ok5, _why5 = _deliver(_st5.get("url") or "")
+        _out5 = {"systemMessage": open(_fs5, encoding="utf-8").read().strip()}
+        if not _ok5 and not _st5.get("told_tool"):
+            import pr_text as _pt5
+            _st5["told_tool"] = True
+            json.dump(_st5, open(os.path.join(_SD5, "pr-summary.json"), "w", encoding="utf-8"))
+            _out5["hookSpecificOutput"] = {"hookEventName": "PostToolUse", "additionalContext": (
+                f"[report] The check could not write the pull request text ({_why5}). Write the parts of the file "
+                f"{_pt5.saved_path()} into the pull request text with the GitHub tool, as they are. One step; no reply.")}
+        print(json.dumps(_out5))
     except (OSError, ValueError, ImportError):
         pass
     sys.exit(0)
@@ -61,7 +96,10 @@ ready = False
 if tool == "Bash":
     cmd = str(inp.get("command") or "")
     ready = bool(re.search(r"(^|[;&|\n]\s*)gh\s+pr\s+create\b", cmd) or
-                 re.search(r"(^|[;&|\n]\s*)gh\s+pr\s+ready\b(?![^;&|\n]*--undo)", cmd))
+                 re.search(r"(^|[;&|\n]\s*)gh\s+pr\s+ready\b(?![^;&|\n]*--undo)", cmd) or
+                 # v3.3.7: the REST way (works in a cloud session too)
+                 (re.search(r"(^|[;&|\n]\s*)gh\s+api\b[^;&|\n]*-X\s+POST\b[^;&|\n]*repos/[^\s/]+/[^\s/]+/pulls\b(?!/)", cmd)
+                  and not re.search(r"draft=true", cmd)))
 elif re.match(r"^mcp__.*create_pull_request$", tool):
     ready = inp.get("draft") is not True
 elif re.match(r"^mcp__.*update_pull_request$", tool):
@@ -102,14 +140,21 @@ try:   # v3.3.5: the summary in the Weekly-Planner shape (bold lines) and the re
     _um = re.search(r"https://github\.com/[^\s\"'\\]+/pull/\d+", json.dumps(data.get("tool_response") or ""))
     _url = _um.group(0) if _um else ""
     _fs, _fr = _write_report(_url)
-    _rep = ("\n[report] 1. Wait once for this pull request's checks (gh pr checks <number> --watch; in a cloud session, "
-            "the GitHub tool). The summary and report files are made again with the result. 2. Put the report into "
-            "the pull request text (gh pr edit <number> --body-file; in a cloud session, the GitHub tool): first "
-            "'## Quick read' (What changed from the plan; Decisions during the work; Suggestions, each with a "
-            "recommendation, naming any setup rule that was the bottleneck); then '## Evidence' (tests, the GitHub "
-            "run, review findings and fixes, browser pictures); then '## Regression table'; then the file " + _fr +
-            " as it is. 3. Your final answer: the browser pictures first, if you took any; then the file " + _fs +
-            " as it is, copied after step 1; then the closing lines.")
+    _ok, _why = _deliver(_url)
+    _n = re.search(r"/pull/(\d+)", _url)
+    _cc = CHECKS_CMD.replace("<number>", _n.group(1) if _n else "<number>")
+    # v3.3.7 (piece 4): the check writes the report and the scorecard into the pull request text and shows the
+    # summary as its own notice after the checks are read. The session pastes nothing.
+    _rep = ("\n[report] " + ("The check wrote the report into the pull request text. " if _ok else
+            f"The check could not write the pull request text ({_why}): write the parts of the file "
+            f"{__import__('pr_text').saved_path()} into it with the GitHub tool, as they are. ") +
+            f"1. Wait once for the checks, in the foreground: {_cc} (Bash timeout 600000; in a cloud session the "
+            "GitHub tool's check status works too). The check then writes the report again and shows the summary as "
+            "its own notice. 2. Your own part of the pull request text — '## Quick read' (What changed from the plan; "
+            "Decisions during the work; Suggestions, each with a recommendation, naming any setup rule that was the "
+            "bottleneck), '## Evidence', '## Regression table' — goes above the report part; keep every <!-- hz-… --> "
+            "part as it is. 3. Your final answer: the browser pictures first, if you took any, then the closing lines. "
+            "Do not paste the summary.")
 except Exception:
     pass
 add_context("PostToolUse", "[notice] A pull request is now ready for review. Right before your final answer, send me "
